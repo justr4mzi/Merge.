@@ -163,7 +163,7 @@
     if (!state.user || kvOff) return false; kvAt = Date.now();
     let r; try { r = await sb.from("user_kv").select("key,value,updated_at").eq("user_id", state.user.id); } catch (e) { return false; }
     if (r.error) { if (/user_kv|schema cache|does not exist/i.test(r.error.message || "")) kvOff = true; return false; }
-    let changed = false; const remote = {};
+    state.kvOk = true; let changed = false; const remote = {};
     (r.data || []).forEach(row => {
       const ts = Date.parse(row.updated_at) || 0; remote[row.key] = ts; if (!SYNC.test(row.key)) return;
       if (!kvTs[row.key] || ts > kvTs[row.key]) { try { if (localStorage.getItem(row.key) !== row.value) { localStorage.setItem(row.key, row.value); changed = true; } } catch (e) { /* rien */ } kvTs[row.key] = ts; }
@@ -319,9 +319,11 @@
   // pour qu'un chapitre ou une matière mis à la corbeille sur un autre appareil disparaisse partout ici aussi.
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState !== "visible" || !state.user || !state.profile || state.offline || Date.now() - (state.loadedAt || 0) < 60000) return;
-    if (Object.values(IMPORTS).some(d => d.busy) || document.getElementById("sheet")) return;
-    const h = location.hash; try { await loadAll(); } catch (e) { return; }
-    if (location.hash === h && /^#?(accueil|matieres|calendrier|progres|perso|matiere-.*|dossier-.*|chapitre-.*)?$/.test(h)) route();
+    // Seulement sur les écrans de listes : jamais pendant une session de cartes, un quiz, un import ou un minuteur.
+    const LIST = /^#?(accueil|matieres|calendrier|progres|perso|matiere-.*|dossier-.*|chapitre-.*)?$/, h = location.hash;
+    if (!LIST.test(h) || Object.values(IMPORTS).some(d => d.busy) || document.getElementById("sheet")) return;
+    try { await loadAll(); } catch (e) { return; }
+    if (location.hash === h) route();
   });
   // Hors ligne complet : résumés et contenus déjà générés (quiz, fiche, carte mentale…) copiés sur l'appareil, au plus toutes les 30 min.
   function offlineKeep(k, v) { const t = JSON.stringify(v); try { if (localStorage.getItem(k) !== t) localStorage.setItem(k, t); return true; } catch (e) { return false; } }
@@ -731,47 +733,47 @@
   // ---------- boutique : articles achetés avec les pièces (gagnées en révisant) ----------
   // price = prix en pièces. Les cadeaux en vrai (type « cadeau ») n'apparaissent que sur les comptes activés dans /admin.
   const SHOP = [
-    { id: "c-sakura", type: "couleur", n: "Sakura", price: 150, v: "#e0609f" }, { id: "c-lagon", type: "couleur", n: "Lagon", price: 150, v: "#0aa5bd" }, { id: "c-citron", type: "couleur", n: "Citron vert", price: 200, v: "#4f9e22" },
-    { id: "c-framboise", type: "couleur", n: "Framboise", price: 200, v: "#d23369" }, { id: "c-ardoise", type: "couleur", n: "Ardoise", price: 200, v: "#55657d" }, { id: "c-ambre", type: "couleur", n: "Ambre", price: 250, v: "#d9801a" },
-    { id: "c-nuit", type: "couleur", n: "Nuit bleue", price: 250, v: "#3949c9" }, { id: "c-turquoise", type: "couleur", n: "Turquoise", price: 250, v: "#0f9f90" }, { id: "c-prune", type: "couleur", n: "Prune", price: 300, v: "#8e44ad" }, { id: "c-cerise", type: "couleur", n: "Cerise", price: 300, v: "#df3a3a" },
-    { id: "f-nuages", type: "fond", n: "Nuages", price: 350, v: "nuages" }, { id: "f-neige", type: "fond", n: "Neige", price: 400, v: "neige" }, { id: "f-bulles", type: "fond", n: "Bulles", price: 400, v: "bulles" }, { id: "f-pluie", type: "fond", n: "Pluie", price: 450, v: "pluie" },
-    { id: "f-lucioles", type: "fond", n: "Lucioles", price: 500, v: "lucioles" }, { id: "f-sakura", type: "fond", n: "Pétales de sakura", price: 600, v: "sakura" }, { id: "f-coucher", type: "fond", n: "Coucher de soleil", price: 650, v: "coucher" }, { id: "f-galaxie", type: "fond", n: "Galaxie", price: 800, v: "galaxie" },
-    { id: "m-noeud", type: "mascotte", n: "Mergo nœud papillon", price: 200, v: "noeud" }, { id: "m-fleur", type: "mascotte", n: "Mergo à la fleur", price: 250, v: "fleur" }, { id: "m-casquette", type: "mascotte", n: "Mergo casquette", price: 250, v: "casquette" },
-    { id: "m-casque", type: "mascotte", n: "Mergo au casque audio", price: 300, v: "casque" }, { id: "m-bonnet", type: "mascotte", n: "Mergo de Noël", price: 350, v: "bonnet" }, { id: "m-soleil", type: "mascotte", n: "Mergo lunettes de soleil", price: 400, v: "soleil" },
-    { id: "m-chapeau", type: "mascotte", n: "Mergo haut-de-forme", price: 500, v: "chapeau" }, { id: "m-sorcier", type: "mascotte", n: "Mergo sorcier", price: 600, v: "sorcier" }, { id: "m-aureole", type: "mascotte", n: "Mergo l'ange", price: 700, v: "aureole" },
-    { id: "d-papier", type: "carte", n: "Cartes papier", price: 300, v: "papier" }, { id: "d-bonbon", type: "carte", n: "Cartes bonbon", price: 350, v: "bonbon" }, { id: "d-tableau", type: "carte", n: "Cartes tableau noir", price: 400, v: "tableau" },
-    { id: "d-coucher", type: "carte", n: "Cartes coucher de soleil", price: 450, v: "coucher" }, { id: "d-neon", type: "carte", n: "Cartes néon", price: 500, v: "neon" }, { id: "d-galaxie", type: "carte", n: "Cartes galaxie", price: 700, v: "galaxie" },
-    { id: "l-bleue", type: "flamme", n: "Flamme bleue", price: 250, v: "bleue" }, { id: "l-verte", type: "flamme", n: "Flamme verte", price: 250, v: "verte" }, { id: "l-rose", type: "flamme", n: "Flamme rose", price: 300, v: "rose" },
-    { id: "l-or", type: "flamme", n: "Flamme dorée", price: 500, v: "or" }, { id: "l-arc", type: "flamme", n: "Flamme arc-en-ciel", price: 800, v: "arc" },
-    { id: "t-feu", type: "titre", n: "Cerveau en feu", price: 150 }, { id: "t-turbo", type: "titre", n: "Mode turbo", price: 200 }, { id: "t-machine", type: "titre", n: "Machine à réviser", price: 250 },
-    { id: "t-prof", type: "titre", n: "Prof en herbe", price: 300 }, { id: "t-ninja", type: "titre", n: "Ninja des flashcards", price: 350 }, { id: "t-reine", type: "titre", n: "Reine des fiches", price: 400 },
-    { id: "t-roi", type: "titre", n: "Roi des fiches", price: 400 }, { id: "t-zero", type: "titre", n: "Zéro oubli", price: 600 }, { id: "t-legende", type: "titre", n: "Légende du bac", price: 900 },
-    { id: "k-pluie", type: "confettis", n: "Toujours la pluie de confettis", price: 200, v: "pluie" }, { id: "k-serpentins", type: "confettis", n: "Toujours les serpentins", price: 250, v: "serpentins" }, { id: "k-explosion", type: "confettis", n: "Toujours l'explosion", price: 300, v: "explosion" },
+    { id: "c-sakura", type: "couleur", n: "Sakura", price: 100, v: "#e0609f" }, { id: "c-lagon", type: "couleur", n: "Lagon", price: 100, v: "#0aa5bd" }, { id: "c-citron", type: "couleur", n: "Citron vert", price: 130, v: "#4f9e22" },
+    { id: "c-framboise", type: "couleur", n: "Framboise", price: 130, v: "#d23369" }, { id: "c-ardoise", type: "couleur", n: "Ardoise", price: 130, v: "#55657d" }, { id: "c-ambre", type: "couleur", n: "Ambre", price: 170, v: "#d9801a" },
+    { id: "c-nuit", type: "couleur", n: "Nuit bleue", price: 170, v: "#3949c9" }, { id: "c-turquoise", type: "couleur", n: "Turquoise", price: 170, v: "#0f9f90" }, { id: "c-prune", type: "couleur", n: "Prune", price: 200, v: "#8e44ad" }, { id: "c-cerise", type: "couleur", n: "Cerise", price: 200, v: "#df3a3a" },
+    { id: "f-nuages", type: "fond", n: "Nuages", price: 230, v: "nuages" }, { id: "f-neige", type: "fond", n: "Neige", price: 270, v: "neige" }, { id: "f-bulles", type: "fond", n: "Bulles", price: 270, v: "bulles" }, { id: "f-pluie", type: "fond", n: "Pluie", price: 300, v: "pluie" },
+    { id: "f-lucioles", type: "fond", n: "Lucioles", price: 330, v: "lucioles" }, { id: "f-sakura", type: "fond", n: "Pétales de sakura", price: 400, v: "sakura" }, { id: "f-coucher", type: "fond", n: "Coucher de soleil", price: 430, v: "coucher" }, { id: "f-galaxie", type: "fond", n: "Galaxie", price: 530, v: "galaxie" },
+    { id: "m-noeud", type: "mascotte", n: "Mergo nœud papillon", price: 130, v: "noeud" }, { id: "m-fleur", type: "mascotte", n: "Mergo à la fleur", price: 170, v: "fleur" }, { id: "m-casquette", type: "mascotte", n: "Mergo casquette", price: 170, v: "casquette" },
+    { id: "m-casque", type: "mascotte", n: "Mergo au casque audio", price: 200, v: "casque" }, { id: "m-bonnet", type: "mascotte", n: "Mergo de Noël", price: 230, v: "bonnet" }, { id: "m-soleil", type: "mascotte", n: "Mergo lunettes de soleil", price: 270, v: "soleil" },
+    { id: "m-chapeau", type: "mascotte", n: "Mergo haut-de-forme", price: 330, v: "chapeau" }, { id: "m-sorcier", type: "mascotte", n: "Mergo sorcier", price: 400, v: "sorcier" }, { id: "m-aureole", type: "mascotte", n: "Mergo l'ange", price: 470, v: "aureole" },
+    { id: "d-papier", type: "carte", n: "Cartes papier", price: 200, v: "papier" }, { id: "d-bonbon", type: "carte", n: "Cartes bonbon", price: 230, v: "bonbon" }, { id: "d-tableau", type: "carte", n: "Cartes tableau noir", price: 270, v: "tableau" },
+    { id: "d-coucher", type: "carte", n: "Cartes coucher de soleil", price: 300, v: "coucher" }, { id: "d-neon", type: "carte", n: "Cartes néon", price: 330, v: "neon" }, { id: "d-galaxie", type: "carte", n: "Cartes galaxie", price: 470, v: "galaxie" },
+    { id: "l-bleue", type: "flamme", n: "Flamme bleue", price: 170, v: "bleue" }, { id: "l-verte", type: "flamme", n: "Flamme verte", price: 170, v: "verte" }, { id: "l-rose", type: "flamme", n: "Flamme rose", price: 200, v: "rose" },
+    { id: "l-or", type: "flamme", n: "Flamme dorée", price: 330, v: "or" }, { id: "l-arc", type: "flamme", n: "Flamme arc-en-ciel", price: 530, v: "arc" },
+    { id: "t-feu", type: "titre", n: "Cerveau en feu", price: 100 }, { id: "t-turbo", type: "titre", n: "Mode turbo", price: 130 }, { id: "t-machine", type: "titre", n: "Machine à réviser", price: 170 },
+    { id: "t-prof", type: "titre", n: "Prof en herbe", price: 200 }, { id: "t-ninja", type: "titre", n: "Ninja des flashcards", price: 230 }, { id: "t-reine", type: "titre", n: "Reine des fiches", price: 270 },
+    { id: "t-roi", type: "titre", n: "Roi des fiches", price: 270 }, { id: "t-zero", type: "titre", n: "Zéro oubli", price: 400 }, { id: "t-legende", type: "titre", n: "Légende du bac", price: 600 },
+    { id: "k-pluie", type: "confettis", n: "Toujours la pluie de confettis", price: 130, v: "pluie" }, { id: "k-serpentins", type: "confettis", n: "Toujours les serpentins", price: 170, v: "serpentins" }, { id: "k-explosion", type: "confettis", n: "Toujours l'explosion", price: 200, v: "explosion" },
     // Grosse mise à jour de la boutique : need = niveau minimum pour acheter (de quoi viser loin).
-    ...[["pistache", "Pistache", 150, "#6fa315"], ["lavande", "Lavande", 150, "#7c6cf0"], ["peche", "Pêche", 150, "#ee7a5f"], ["ciel", "Bleu ciel", 150, "#2f96dd"], ["chewing", "Chewing-gum", 200, "#e4569f"],
-      ["foret", "Forêt", 200, "#2f8f4e"], ["cuivre", "Cuivre", 250, "#c2662d"], ["indigo", "Indigo", 250, "#4f46e5"], ["sable", "Sable", 250, "#a8824c"], ["olive", "Olive", 300, "#6b8e23"],
-      ["chocolat", "Chocolat", 300, "#8b5a2b"], ["glacier", "Glacier", 300, "#1ea7b5"], ["magenta", "Magenta", 300, "#c026d3"], ["acier", "Bleu acier", 350, "#4a6fa5"], ["emeraude", "Émeraude", 350, "#059669"],
-      ["rubis", "Rubis", 350, "#be123c"], ["saphir", "Saphir", 350, "#1d4ed8"], ["mangue", "Mangue", 400, "#e08a00", 5], ["orchidee", "Orchidée", 400, "#a855f7", 5], ["fuchsia", "Fuchsia", 400, "#e11d74", 5],
-      ["jade", "Jade", 450, "#0e9a78", 6], ["grenat", "Grenat", 450, "#9f1239", 6], ["cobalt", "Cobalt", 500, "#2457d6", 7], ["aubergine", "Aubergine", 500, "#6b21a8", 7], ["corailvif", "Corail vif", 550, "#f2463a", 8],
-      ["tropical", "Tropical", 600, "#00a884", 9], ["flamant", "Flamant rose", 600, "#f05a95", 9], ["ultraviolet", "Ultraviolet", 700, "#7b2ff7", 10], ["minuit", "Minuit", 800, "#312e81", 12], ["platine", "Platine", 1000, "#6b7a90", 15]]
+    ...[["pistache", "Pistache", 100, "#6fa315"], ["lavande", "Lavande", 100, "#7c6cf0"], ["peche", "Pêche", 100, "#ee7a5f"], ["ciel", "Bleu ciel", 100, "#2f96dd"], ["chewing", "Chewing-gum", 130, "#e4569f"],
+      ["foret", "Forêt", 130, "#2f8f4e"], ["cuivre", "Cuivre", 170, "#c2662d"], ["indigo", "Indigo", 170, "#4f46e5"], ["sable", "Sable", 170, "#a8824c"], ["olive", "Olive", 200, "#6b8e23"],
+      ["chocolat", "Chocolat", 200, "#8b5a2b"], ["glacier", "Glacier", 200, "#1ea7b5"], ["magenta", "Magenta", 200, "#c026d3"], ["acier", "Bleu acier", 230, "#4a6fa5"], ["emeraude", "Émeraude", 230, "#059669"],
+      ["rubis", "Rubis", 230, "#be123c"], ["saphir", "Saphir", 230, "#1d4ed8"], ["mangue", "Mangue", 270, "#e08a00", 5], ["orchidee", "Orchidée", 270, "#a855f7", 5], ["fuchsia", "Fuchsia", 270, "#e11d74", 5],
+      ["jade", "Jade", 300, "#0e9a78", 6], ["grenat", "Grenat", 300, "#9f1239", 6], ["cobalt", "Cobalt", 330, "#2457d6", 7], ["aubergine", "Aubergine", 330, "#6b21a8", 7], ["corailvif", "Corail vif", 370, "#f2463a", 8],
+      ["tropical", "Tropical", 400, "#00a884", 9], ["flamant", "Flamant rose", 400, "#f05a95", 9], ["ultraviolet", "Ultraviolet", 470, "#7b2ff7", 10], ["minuit", "Minuit", 530, "#312e81", 12], ["platine", "Platine", 670, "#6b7a90", 15]]
       .map(([k, n, price, v, need]) => ({ id: "c-" + k, type: "couleur", n, price, v, need })),
-    ...[["pois", "Pois", 450], ["grille", "Cahier quadrillé", 500], ["rayures", "Rayures", 550, 4], ["coeurs", "Petits cœurs", 650, 5], ["braises", "Braises", 700, 6], ["ocean", "Fond de l'océan", 750, 7], ["arcenciel", "Arc-en-ciel", 900, 8], ["matrice", "Matrice", 1000, 10]]
+    ...[["pois", "Pois", 300], ["grille", "Cahier quadrillé", 330], ["rayures", "Rayures", 370, 4], ["coeurs", "Petits cœurs", 430, 5], ["braises", "Braises", 470, 6], ["ocean", "Fond de l'océan", 500, 7], ["arcenciel", "Arc-en-ciel", 600, 8], ["matrice", "Matrice", 670, 10]]
       .map(([v, n, price, need]) => ({ id: "f-" + v, type: "fond", n, price, v, need })),
-    ...[["moustache", "Mergo moustachu", 200], ["chat", "Mergo oreilles de chat", 300], ["lapin", "Mergo oreilles de lapin", 300], ["toque", "Mergo cuisinier", 300], ["echarpe", "Mergo à l'écharpe", 350], ["etoile", "Mergo la star", 400],
-      ["diplome", "Mergo diplômé", 450, 4], ["masque", "Mergo super-héros", 500, 5], ["viking", "Mergo viking", 550, 6], ["pirate", "Mergo pirate", 600, 7]]
+    ...[["moustache", "Mergo moustachu", 130], ["chat", "Mergo oreilles de chat", 200], ["lapin", "Mergo oreilles de lapin", 200], ["toque", "Mergo cuisinier", 200], ["echarpe", "Mergo à l'écharpe", 230], ["etoile", "Mergo la star", 270],
+      ["diplome", "Mergo diplômé", 300, 4], ["masque", "Mergo super-héros", 330, 5], ["viking", "Mergo viking", 370, 6], ["pirate", "Mergo pirate", 400, 7]]
       .map(([v, n, price, need]) => ({ id: "m-" + v, type: "mascotte", n, price, v, need })),
-    ...[["pastel", "Cartes pastel", 300], ["kraft", "Cartes kraft", 350], ["foret", "Cartes forêt", 400], ["bois", "Cartes bois", 400], ["ocean", "Cartes océan", 450], ["glace", "Cartes de glace", 500, 5], ["lave", "Cartes de lave", 600, 6], ["minuit", "Cartes minuit", 650, 7]]
+    ...[["pastel", "Cartes pastel", 200], ["kraft", "Cartes kraft", 230], ["foret", "Cartes forêt", 270], ["bois", "Cartes bois", 270], ["ocean", "Cartes océan", 300], ["glace", "Cartes de glace", 330, 5], ["lave", "Cartes de lave", 400, 6], ["minuit", "Cartes minuit", 430, 7]]
       .map(([v, n, price, need]) => ({ id: "d-" + v, type: "carte", n, price, v, need })),
-    ...[["violette", "Flamme violette", 300], ["menthe", "Flamme menthe", 300], ["glace", "Flamme de glace", 400], ["lave", "Flamme de lave", 500, 5], ["neon", "Flamme néon", 600, 6], ["galaxie", "Flamme galaxie", 900, 9]]
+    ...[["violette", "Flamme violette", 200], ["menthe", "Flamme menthe", 200], ["glace", "Flamme de glace", 270], ["lave", "Flamme de lave", 330, 5], ["neon", "Flamme néon", 400, 6], ["galaxie", "Flamme galaxie", 600, 9]]
       .map(([v, n, price, need]) => ({ id: "l-" + v, type: "flamme", n, price, v, need })),
-    ...[["genie", "Petit génie", 150], ["fiche", "Fiche après fiche", 150], ["zen", "Zéro stress", 200], ["cafe", "Café et flashcards", 200], ["chill", "Chill mais efficace", 250], ["parcoeur", "Pro du par cœur", 250],
-      ["elephant", "Mémoire d'éléphant", 300], ["nuit", "Couche-tard studieux", 350], ["matin", "Lève-tôt motivé", 350], ["qcm", "As du QCM", 400], ["stop", "Inarrêtable", 300, 4], ["xxl", "Cerveau XXL", 400, 5],
-      ["boss", "Boss final", 500, 6], ["mention", "Mention très bien", 600, 7], ["sansfaute", "Sans faute", 600, 7], ["guerre", "Machine de guerre", 750, 8], ["orchestre", "Chef d'orchestre", 700, 8], ["profprof", "Prof de mes profs", 800, 9],
-      ["encyclo", "Encyclopédie vivante", 900, 10], ["bac", "Bac en poche", 1000, 10], ["phenix", "Phénix", 1200, 12], ["prodige", "Prodige", 1500, 14], ["absolu", "Génie absolu", 2000, 18], ["major", "Major de promo", 2500, 20]]
+    ...[["genie", "Petit génie", 100], ["fiche", "Fiche après fiche", 100], ["zen", "Zéro stress", 130], ["cafe", "Café et flashcards", 130], ["chill", "Chill mais efficace", 170], ["parcoeur", "Pro du par cœur", 170],
+      ["elephant", "Mémoire d'éléphant", 200], ["nuit", "Couche-tard studieux", 230], ["matin", "Lève-tôt motivé", 230], ["qcm", "As du QCM", 270], ["stop", "Inarrêtable", 200, 4], ["xxl", "Cerveau XXL", 270, 5],
+      ["boss", "Boss final", 330, 6], ["mention", "Mention très bien", 400, 7], ["sansfaute", "Sans faute", 400, 7], ["guerre", "Machine de guerre", 500, 8], ["orchestre", "Chef d'orchestre", 470, 8], ["profprof", "Prof de mes profs", 530, 9],
+      ["encyclo", "Encyclopédie vivante", 600, 10], ["bac", "Bac en poche", 670, 10], ["phenix", "Phénix", 800, 12], ["prodige", "Prodige", 1000, 14], ["absolu", "Génie absolu", 1330, 18], ["major", "Major de promo", 1670, 20]]
       .map(([k, n, price, need]) => ({ id: "t-" + k, type: "titre", n, price, need })),
     // Articles personnalisés : on écrit ou on choisit soi-même (rayon « Perso »).
-    { id: "t-perso", type: "titre", n: "Titre personnalisé", price: 1200, need: 5, perso: "titre" }, { id: "c-perso", type: "couleur", n: "Couleur sur mesure", price: 1500, need: 6, perso: "couleur" },
-    { id: "p-phrase", type: "phrase", n: "Ta phrase d'accueil", price: 800, need: 4, perso: "phrase" },
+    { id: "t-perso", type: "titre", n: "Titre personnalisé", price: 800, need: 5, perso: "titre" }, { id: "c-perso", type: "couleur", n: "Couleur sur mesure", price: 1000, need: 6, perso: "couleur" },
+    { id: "p-phrase", type: "phrase", n: "Ta phrase d'accueil", price: 530, need: 4, perso: "phrase" },
   ];
   // Exclusivités de niveau : impossibles à acheter, offertes en atteignant le niveau (objectifs à long terme).
   const LEVEL_ITEMS = [
@@ -785,28 +787,28 @@
   // À échanger avec Ramzi : le bon affiché sert de capture d'écran à lui envoyer, et la demande apparaît dans /admin.
   const GIFT_GIVER = "Ramzi";
   const GIFTS = [
-    { id: "bisou", n: "Un gros bisou", d: "Le plus doux des cadeaux. À réclamer quand tu veux.", price: 300 },
-    { id: "milkyway", n: "Un Milky Way", d: "Une petite pause sucrée bien méritée.", price: 500 },
-    { id: "kinder", n: "Des Kinder", d: "Un paquet de Kinder rien que pour toi.", price: 500 },
-    { id: "reeses", n: "Des Reese's", d: "Un paquet de Reese's, puisque je sais que t'aimes ça.", price: 500 },
-    { id: "icedtea", n: "Un Ice Tea", d: "Pour une pause rafraîchissante.", price: 550 },
-    { id: "cocazero", n: "Un Coca Zéro", d: "Bien frais.", price: 550 },
-    { id: "redbull", n: "Une Red Bull pêche", d: "(T'inquiète, ça fait du bien.)", price: 600 },
-    { id: "bretznature", n: "Des chips Bretz crêpe nature", d: "Le paquet de chips Bretz saveur crêpe nature.", price: 750 },
-    { id: "bretzpesto", n: "Des chips Bretz pesto mozzarella", d: "Le paquet de chips Bretz pesto mozzarella.", price: 750 },
-    { id: "crepes", n: "Des crêpes maison à l'El Mordjene", d: "Faites maison par Ramzi (ou Siryne), avec de l'El Mordjene.", price: 800 },
-    { id: "gout", n: "Ramzi goûte un truc qu'il n'aime pas", d: "Tu choisis le truc, je goûte. (S'il te plaît, pas un truc que je déteste.)", price: 1000 },
-    { id: "massage", n: "Un massage", d: "Avec les finitions en option.", price: 1000 },
-    { id: "tacoscoq", n: "Un tacos aux coquillettes", d: "Puisque je sais que t'adores ça.", price: 1200 },
-    { id: "kazdal", n: "Un repas à la Kazdalerie", d: "(Je vais te le chercher, car tu ne peux pas aller à la Guillotière.)", price: 1500 },
-    { id: "tasty", n: "Un Tasty Crousty", d: "Sucré, bien sûr, car tu n'aimes pas le piquant.", price: 1500 },
-    { id: "pizza", n: "Une pizza lyonnaise à la Tasty Pizza", d: "Une bonne pizza de chez Tasty Pizza.", price: 1500 },
-    { id: "blackwhite", n: "Un Black and White", d: "Un repas au Black and White, offert.", price: 2000 },
-    { id: "cinema", n: "Une place de cinéma", d: "Le film de ton choix, sur grand écran. (Et on pourra bien se câliner.)", price: 2000 },
-    { id: "surprise", n: "La surprise", d: "Le plus gros palier. On ne dit rien : c'est une surprise.", price: 5000 },
-    { id: "balade", n: "Une balade en voiture", d: "(Quand j'aurai le permis.) Je t'emmène où tu veux.", price: 9999 },
+    { id: "bisou", n: "Un gros bisou", d: "Le plus doux des cadeaux. À réclamer quand tu veux.", price: 200 },
+    { id: "milkyway", n: "Un Milky Way", d: "Une petite pause sucrée bien méritée.", price: 350 },
+    { id: "kinder", n: "Des Kinder", d: "Un paquet de Kinder rien que pour toi.", price: 350 },
+    { id: "reeses", n: "Des Reese's", d: "Un paquet de Reese's, puisque je sais que t'aimes ça.", price: 350 },
+    { id: "icedtea", n: "Un Ice Tea", d: "Pour une pause rafraîchissante.", price: 350 },
+    { id: "cocazero", n: "Un Coca Zéro", d: "Bien frais.", price: 350 },
+    { id: "redbull", n: "Une Red Bull pêche", d: "(T'inquiète, ça fait du bien.)", price: 400 },
+    { id: "bretznature", n: "Des chips Bretz crêpe nature", d: "Le paquet de chips Bretz saveur crêpe nature.", price: 500 },
+    { id: "bretzpesto", n: "Des chips Bretz pesto mozzarella", d: "Le paquet de chips Bretz pesto mozzarella.", price: 500 },
+    { id: "crepes", n: "Des crêpes maison à l'El Mordjene", d: "Faites maison par Ramzi (ou Siryne), avec de l'El Mordjene.", price: 550 },
+    { id: "gout", n: "Ramzi goûte un truc qu'il n'aime pas", d: "Tu choisis le truc, je goûte. (S'il te plaît, pas un truc que je déteste.)", price: 650 },
+    { id: "massage", n: "Un massage", d: "Avec les finitions en option.", price: 650 },
+    { id: "tacoscoq", n: "Un tacos aux coquillettes", d: "Puisque je sais que t'adores ça.", price: 800 },
+    { id: "kazdal", n: "Un repas à la Kazdalerie", d: "(Je vais te le chercher, car tu ne peux pas aller à la Guillotière.)", price: 1000 },
+    { id: "tasty", n: "Un Tasty Crousty", d: "Sucré, bien sûr, car tu n'aimes pas le piquant.", price: 1000 },
+    { id: "pizza", n: "Une pizza lyonnaise à la Tasty Pizza", d: "Une bonne pizza de chez Tasty Pizza.", price: 1000 },
+    { id: "blackwhite", n: "Un Black and White", d: "Un repas au Black and White, offert.", price: 1350 },
+    { id: "cinema", n: "Une place de cinéma", d: "Le film de ton choix, sur grand écran. (Et on pourra bien se câliner.)", price: 1350 },
+    { id: "surprise", n: "La surprise", d: "Le plus gros palier. On ne dit rien : c'est une surprise.", price: 3350 },
+    { id: "balade", n: "Une balade en voiture", d: "(Quand j'aurai le permis.) Je t'emmène où tu veux.", price: 6666 },
   ];
-  const GIFT_SHELVES = [["Petits plaisirs", 0, 999], ["Cadeaux", 1000, 1999], ["Gros cadeaux", 2000, Infinity]];
+  const GIFT_SHELVES = [["Petits plaisirs", 0, 649], ["Cadeaux", 650, 1349], ["Gros cadeaux", 1350, Infinity]];
   // Bon à envoyer en capture d'écran : nom du cadeau, prénom, date, numéro du bon.
   function voucherHtml(c, g) {
     const who = String((state.profile && state.profile.display_name) || "").trim();
@@ -815,7 +817,7 @@
       <span class="vstate${c.given_at ? " ok" : ""}">${c.given_at ? "Offert" : "Gagné avec " + c.price + " pièces"}</span></div>
       ${c.given_at ? "" : `<p class="vsend">Fais une capture de ce bon et envoie-la à ${GIFT_GIVER} pour qu'il te le fasse.</p>`}`;
   }
-  const CHEST_PRICE = 250;
+  const CHEST_PRICE = 170;
   SHOP.forEach(x => REWARDS.push(x)); LEVEL_ITEMS.forEach(x => REWARDS.push(x));
   REWARDS.push({ id: "d-classique", type: "carte", n: "Cartes classiques", pts: 0, v: "" }, { id: "l-classique", type: "flamme", n: "Flamme classique", pts: 0, v: "" });
   const RTYPES = [["titre", "Titres"], ["couleur", "Couleurs"], ["fond", "Fonds animés"], ["mascotte", "Mascotte"], ["carte", "Style des flashcards"], ["flamme", "Flamme de série"], ["son", "Sons"], ["confettis", "Animations de réussite"]];
@@ -825,6 +827,8 @@
   // Les cartes et leur progression ne changent pas ; seuls les points de jeu repartent de zéro (xp0). Les bons cadeaux déjà demandés restent dans « Mes bons ».
   const SEASON = 2;
   function seasonReset() {
+    // Seulement après avoir lu la sauvegarde du compte (sinon un appareil sans réseau effacerait les progrès faits ailleurs).
+    if (!state.kvOk && !kvOff) return false;
     const d = jget("merge.rewards", null) || {}; if ((+d.season || 0) >= SEASON || !state.cards) return false;
     jset("merge.rewards", { season: SEASON, xp0: rawXp(), equip: {}, chest: [], opened: 0, buys: [], lvl: 1, freeChests: 0, custom: {} });
     jset("merge.level", 1); applyRewards(); walletSync(); return true;
@@ -1613,8 +1617,8 @@
       if (d.doneHtml) { const h = d.doneHtml; d.doneHtml = null; d.ready = false; d.files = []; d.shots = []; app.innerHTML = h; chipUpdate(); confetti(); return; }
       app.innerHTML = `<div class="row"><a class="iconbtn" href="#chapitre-${id}" aria-label="Retour au chapitre">${I.back}</a><span class="small muted">${esc(ch.name)}</span></div>
         <h1>Importer un cours</h1>
-        <div class="seg" role="group" aria-label="Type d'import"><button data-tab="files" aria-pressed="${d.tab === "files"}">Fichiers et photos</button><button data-tab="text" aria-pressed="${d.tab === "text"}">Texte</button><button data-tab="link" aria-pressed="${d.tab === "link"}">Genially</button></div>
-        ${d.tab === "files" ? `<div class="drop" id="drop">${I.up}<p><b>Glisse tes fichiers ici</b></p><p class="small muted">PDF, photos de cahier (iPhone compris), PowerPoint (.pptx, .ppt), LibreOffice (.odp, .odt), Word (.docx), texte (.txt, .rtf). Ajoute autant de fichiers que tu veux : tout est converti et lu en entier, images des diapositives comprises.</p>
+        <div class="seg" role="group" aria-label="Type d'import"><button data-tab="files" aria-pressed="${d.tab === "files"}">Fichiers et photos</button><button data-tab="text" aria-pressed="${d.tab === "text"}">Texte</button></div>
+        ${d.tab === "files" ? `<div class="drop" id="drop">${I.up}<p><b>Glisse tes fichiers ici</b></p><p class="small muted">PDF, photos de cahier (iPhone compris), PowerPoint (.pptx, .ppt), LibreOffice (.odp, .odt), Word (.docx), texte (.txt, .rtf). Ajoute autant de fichiers que tu veux : tout est converti et lu en entier, images des diapositives comprises. Un Genially ? Fais une capture d'écran de chaque page et ajoute-les ici : l'IA lit les textes et les schémas.</p>
           <div class="row" style="flex-wrap:wrap;justify-content:center"><label class="btn sm ghost" for="pick">Parcourir les fichiers</label><label class="btn sm ghost" for="cam">Prendre une photo</label></div>
           <button class="switch" id="redsw" role="switch" aria-checked="${safeGet("merge.redresse") !== "0"}" type="button"><i></i>Redresser et recadrer les photos de feuilles</button>
           <input id="pick" type="file" multiple accept=".pdf,.pptx,.ppsx,.ppt,.pps,.odp,.docx,.odt,.rtf,.txt,.md,.csv,image/*" hidden><input id="cam" type="file" accept="image/*" capture="environment" hidden></div>
@@ -1780,7 +1784,6 @@
     }
     async function run() {
       if (d.busy) return; keep();
-      if (d.tab === "link" || (d.tab === "text" && isGenially(d.text))) { const ok = await fetchLink(d.tab === "link" ? d.link : d.text); if (!ok) return; draw(); }
       if (d.tab === "files" && !d.files.length) return toast("Ajoute au moins un fichier ou une photo.");
       if (d.tab === "text" && d.text.trim().length < 80) return toast("Colle un texte de cours plus long.");
       d.busy = true; d.local = true; d.ready = false; d.failed = null; d.canResume = false; d.jobId = null; d.shown = 0; d.target = 1; d.t0 = Date.now(); d.stage = "read"; d.msg = "Je démarre…";

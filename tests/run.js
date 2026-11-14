@@ -947,17 +947,17 @@ async function pomodoroReglable(browser) {
 async function boutique(browser) {
   for (const [w, h] of [[390, 844], [1280, 800]]) {
     const page = await open(browser, { w, h, theme: "dark" }), tag = "boutique " + w;
-    await page.evaluate(() => { localStorage.setItem("fake.gifts", "1"); localStorage.setItem("merge.rewards", JSON.stringify({ season: 2, xp0: 0, buys: [{ id: "test-bonus", price: -4600 }] })); location.reload(); });
+    await page.evaluate(() => { localStorage.setItem("fake.gifts", "1"); localStorage.setItem("merge.rewards", JSON.stringify({ season: 2, xp0: 0, buys: [{ id: "test-bonus", price: -2900 }] })); location.reload(); });
     await page.waitForSelector("#app > *"); await go(page, "#boutique", 600);
     const bal0 = await page.evaluate(() => parseInt(document.querySelector(".coinhero b.big").textContent, 10));
-    ok(bal0 >= 4600 && bal0 < 5000, tag + " : solde de pièces affiché", String(bal0));
+    ok(bal0 >= 2900 && bal0 < 3300, tag + " : solde de pièces affiché", String(bal0));
     ok(await page.locator(".giftcard").count() === 20 && await page.locator('[data-gift="bisou"]:not([disabled])').count() === 1 && await page.locator('[data-gift="cinema"]:not([disabled])').count() === 1 && await page.locator('[data-gift="surprise"][disabled]').count() === 1 && await page.locator('[data-gift="balade"][disabled]').count() === 1, tag + " : 20 cadeaux en vrai sur 3 rayons, cinéma à portée, surprise et balade trop chères");
     ok((await txt(page)).includes("Petits plaisirs") && (await txt(page)).includes("Gros cadeaux") && (await txt(page)).includes("El Mordjene") && (await txt(page)).includes("Black and White") && (await txt(page)).includes("Kazdalerie") && (await txt(page)).includes("coquillettes"), tag + " : rayons et nouveaux cadeaux affichés");
     let sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px minimum", sm.join(" | "));
     let o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
     if (w === 390) await page.screenshot({ path: path.join(SHOTS, "boutique-390.png"), fullPage: true });
     await page.click('[data-st="fond"]'); await page.click('[data-buy="f-neige"]'); await page.waitForTimeout(200);
-    ok(await page.evaluate(() => document.body.dataset.bg) === "neige" && await page.evaluate(() => parseInt(document.querySelector(".coinhero b.big").textContent, 10)) === bal0 - 400, tag + " : fond acheté (400 pièces) et équipé");
+    ok(await page.evaluate(() => document.body.dataset.bg) === "neige" && await page.evaluate(() => parseInt(document.querySelector(".coinhero b.big").textContent, 10)) === bal0 - 270, tag + " : fond acheté (270 pièces) et équipé");
     await page.click('[data-st="mascotte"]'); await page.click('[data-buy="m-casque"]'); await page.waitForTimeout(150);
     await page.click('[data-st="carte"]'); await page.click('[data-buy="d-neon"]'); await page.waitForTimeout(150);
     await page.click('[data-st="flamme"]'); await page.click('[data-buy="l-arc"]'); await page.waitForTimeout(150);
@@ -1079,29 +1079,17 @@ async function genially(browser) {
   const g = L.geniallyText(html);
   ok(g.title === "la procréation humaine" && g.text.includes("Le cycle ovarien dure 28 jours.") && !/awesome|Magic Design|Title here/.test(g.text), "genially : texte du cours extrait, textes du modèle retirés", JSON.stringify(g));
   ok(L.geniallyText("<html><body>rien</body></html>").text === "", "genially : page sans transcription, texte vide");
-  // 2. Écran d'import.
+  // 2. Écran d'import : plus d'onglet Genially (récupération du texte retirée le 14 nov.), on conseille des captures d'écran.
   for (const [w, h] of [[390, 844], [1280, 800]]) {
     const page = await open(browser, { w, h, theme: "dark" }), tag = "genially " + w;
-    await go(page, "#import-c2", 400); await page.click('[data-tab="link"]'); await page.waitForTimeout(100);
-    ok(await page.locator("#lnk").count() === 1, tag + " : onglet lien Genially");
-    let o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o)); let sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px", sm.join(" | "));
-    await page.fill("#lnk", "https://exemple.com/truc"); await page.click("#lget"); await page.waitForTimeout(200);
-    ok(await page.evaluate(() => !window.__fake.liens), tag + " : lien qui n'est pas un Genially refusé sans appel");
-    await page.fill("#lnk", "https://view.genially.com/5f3b9c1aa8dacb0d83e508cd"); await page.click("#lget"); await page.waitForTimeout(300);
-    ok((await txt(page)).includes("captures d'écran"), tag + " : Genially sans texte, message clair");
-    if (w === 390) await page.screenshot({ path: path.join(SHOTS, "import-genially-390.png"), fullPage: true });
-    await page.fill("#lnk", "https://view.genial.ly/5e6205c475ef8e0fc16756e9/presentation-la-reaction-inflammatoire"); await page.click("#lget"); await page.waitForTimeout(300);
-    ok(await page.locator("#txt").count() === 1 && (await page.inputValue("#txt")).startsWith("La réaction inflammatoire") && (await page.inputValue("#txt")).length > 200, tag + " : texte du Genially récupéré dans « Coller du texte »");
-    // Schémas : captures d'écran ajoutées au texte du Genially, envoyées dans le même import (lues par l'IA comme des photos).
-    ok(await page.locator(".shots").count() === 1, tag + " : bloc pour ajouter les schémas en captures");
+    await go(page, "#import-c2", 400);
+    ok(await page.locator('[data-tab="link"]').count() === 0 && (await txt(page)).includes("Un Genially ? Fais une capture d'écran de chaque page"), tag + " : onglet retiré, conseil des captures d'écran");
+    // Texte collé + capture d'un schéma : partent ensemble à l'IA.
+    await page.click('[data-tab="text"]'); await page.fill("#txt", "La réaction inflammatoire " + "La mitose est une division cellulaire qui donne deux cellules filles identiques. ".repeat(3));
     await page.setInputFiles("#shotpick", path.join(__dirname, "photo-feuille.jpg")); await page.waitForTimeout(150);
-    ok((await txt(page)).includes("photo-feuille.jpg") && (await page.inputValue("#txt")).startsWith("La réaction inflammatoire"), tag + " : capture ajoutée, texte gardé");
-    if (w === 390) await page.screenshot({ path: path.join(SHOTS, "import-genially-schemas-390.png"), fullPage: true });
     await page.click("#go"); await page.waitForTimeout(1500);
     ok(await page.evaluate(() => { const g = window.__fake.lastSegs || []; return g.some(x => x.path) && g.some(x => x.text && x.text.startsWith("La réaction inflammatoire")); }), tag + " : texte et capture partis ensemble à l'IA");
-    // Lien collé directement dans la zone de texte : récupéré au moment de créer les cartes.
-    await go(page, "#import-c3", 400); await page.click('[data-tab="text"]'); await page.fill("#txt", "https://view.genially.com/5e6205c475ef8e0fc16756e9"); await page.click("#go"); await page.waitForTimeout(600);
-    ok(await page.evaluate(() => window.__fake.liens >= 3), tag + " : lien collé dans le texte, récupéré automatiquement");
+    const o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
     ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
   }
 }
