@@ -806,7 +806,7 @@
     { id: "blackwhite", n: "Un Black and White", d: "Un repas au Black and White, offert.", price: 1350 },
     { id: "cinema", n: "Une place de cinéma", d: "Le film de ton choix, sur grand écran. (Et on pourra bien se câliner.)", price: 1350 },
     { id: "surprise", n: "La surprise", d: "Le plus gros palier. On ne dit rien : c'est une surprise.", price: 3350 },
-    { id: "balade", n: "Une balade en voiture", d: "(Quand j'aurai le permis.) Je t'emmène où tu veux.", price: 9999 },
+    { id: "balade", n: "Une balade en voiture", d: "(Quand j'aurai le permis.) Je t'emmène où tu veux.", price: 9999999 },
   ];
   const GIFT_SHELVES = [["Petits plaisirs", 0, 649], ["Cadeaux", 650, 1349], ["Gros cadeaux", 1350, Infinity]];
   // Bon à envoyer en capture d'écran : nom du cadeau, prénom, date, numéro du bon.
