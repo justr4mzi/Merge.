@@ -117,6 +117,8 @@
     const fail = (status, j) => ({ data: null, error: { message: "Edge Function returned a non-2xx status code", context: { status, json: async () => j } } });
     await new Promise(r => setTimeout(r, 20));
     if (legacy) return fail(500, { error: "erreur", detail: "relation import_jobs does not exist" });
+    // Lien Genially : la vraie fonction lit le JSON-LD de la page (testé à part avec lien.mjs) ; ici, un texte fixe.
+    if (b.action === "lien") { window.__fake.liens = (window.__fake.liens || 0) + 1; return /5e6205c475ef8e0fc16756e9/.test(b.url) ? { data: { ok: true, url: b.url, title: "La réaction inflammatoire", text: COURS }, error: null } : fail(400, { error: "requete", detail: "Ce Genially ne contient presque pas de texte (sûrement des images). Fais des captures d'écran et importe-les comme photos." }); }
     if (quotaLeft <= 0) return fail(429, { error: "quota", calls, quota: calls });
     if (b.action === "libre") { quotaLeft--; calls++; return { data: { answer: "## Ce que tu as demandé\n- La mitose donne **deux cellules** identiques.\n- La méiose donne quatre cellules haploïdes.", usage: { calls, quota: calls + quotaLeft } }, error: null }; }
     if (b.action !== "import_start" && b.action !== "import_resume") return fail(400, { error: "requete", detail: "Action inconnue." });

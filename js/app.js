@@ -1550,17 +1550,20 @@
       if (d.doneHtml) { const h = d.doneHtml; d.doneHtml = null; d.ready = false; d.files = []; app.innerHTML = h; chipUpdate(); confetti(); return; }
       app.innerHTML = `<div class="row"><a class="iconbtn" href="#chapitre-${id}" aria-label="Retour au chapitre">${I.back}</a><span class="small muted">${esc(ch.name)}</span></div>
         <h1>Importer un cours</h1>
-        <div class="seg" role="group" aria-label="Type d'import"><button data-tab="files" aria-pressed="${d.tab === "files"}">Fichiers et photos</button><button data-tab="text" aria-pressed="${d.tab === "text"}">Coller du texte</button></div>
+        <div class="seg" role="group" aria-label="Type d'import"><button data-tab="files" aria-pressed="${d.tab === "files"}">Fichiers et photos</button><button data-tab="text" aria-pressed="${d.tab === "text"}">Texte</button><button data-tab="link" aria-pressed="${d.tab === "link"}">Genially</button></div>
         ${d.tab === "files" ? `<div class="drop" id="drop">${I.up}<p><b>Glisse tes fichiers ici</b></p><p class="small muted">PDF, photos de cahier (iPhone compris), PowerPoint (.pptx, .ppt), LibreOffice (.odp, .odt), Word (.docx), texte (.txt, .rtf). Ajoute autant de fichiers que tu veux : tout est converti et lu en entier, images des diapositives comprises.</p>
           <div class="row" style="flex-wrap:wrap;justify-content:center"><label class="btn sm ghost" for="pick">Parcourir les fichiers</label><label class="btn sm ghost" for="cam">Prendre une photo</label></div>
           <button class="switch" id="redsw" role="switch" aria-checked="${safeGet("merge.redresse") !== "0"}" type="button"><i></i>Redresser et recadrer les photos de feuilles</button>
           <input id="pick" type="file" multiple accept=".pdf,.pptx,.ppsx,.ppt,.pps,.odp,.docx,.odt,.rtf,.txt,.md,.csv,image/*" hidden><input id="cam" type="file" accept="image/*" capture="environment" hidden></div>
           <div class="filelist">${d.files.map((f, i) => `<div><span>${esc(f.name)}</span><button class="mini" data-rm="${i}" aria-label="Retirer ${esc(f.name)}">Retirer</button></div>`).join("")}</div>`
+          : d.tab === "link" ? `<div class="field"><label for="lnk">Lien du Genially</label><input id="lnk" type="text" inputmode="url" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="https://view.genially.com/…" value="${esc(d.link || "")}"></div>
+            <button class="btn sm ghost" id="lget" style="align-self:flex-start">Récupérer le texte du Genially</button><p class="small muted">Colle le lien d'un Genially public (présentation, cours interactif). Merge récupère tous ses textes ; tu peux les relire avant de créer les cartes. Les images ne sont pas lues : pour un Genially fait surtout d'images, importe des captures d'écran.</p>`
           : `<div class="field"><label for="txt">Texte du cours</label><textarea id="txt" placeholder="Colle ton cours ici">${esc(d.text)}</textarea></div>`}
         <div class="field"><label for="n">Combien de flashcards ? <b id="nv">${d.n}</b></label><input id="n" type="range" min="10" max="${C.CARTES_MAX}" step="5" value="${d.n}"></div>
         <button class="btn" id="go">Créer le résumé et les cartes</button>
         <div id="status" class="note" role="status">Les cartes viennent uniquement de ton cours. Chaque carte garde la phrase du cours qui la justifie.</div>`;
       app.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { keep(); d.tab = b.dataset.tab; draw(); });
+      if ($("lget")) $("lget").onclick = async () => { keep(); $("lget").disabled = true; if (await fetchLink(d.link)) { draw(); toast("Texte du Genially récupéré. Relis-le, puis crée tes cartes."); } else if ($("lget")) $("lget").disabled = false; };
       app.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { d.files.splice(+b.dataset.rm, 1); draw(); });
       $("n").oninput = () => { d.n = +$("n").value; $("nv").textContent = d.n; };
       const add = (list) => { d.files.push(...list); draw(); };
@@ -1575,7 +1578,16 @@
       }
       chipUpdate();
     }
-    function keep() { if ($("txt")) d.text = $("txt").value; }
+    function keep() { if ($("txt")) d.text = $("txt").value; if ($("lnk")) d.link = $("lnk").value.trim(); }
+    // Lien Genially → texte du cours (fonction studio, action « lien » : aucune IA, juste la transcription publique du Genially).
+    const isGenially = v => /^https?:\/\/(view\.)?(genially\.com|genial\.ly)\/[0-9a-f]{24}\S*$/i.test(String(v || "").trim());
+    async function fetchLink(url) {
+      if (!isGenially(url)) { toast("Colle un lien Genially, par exemple https://view.genially.com/…"); return false; }
+      if (state.offline) { toast("Il faut être connecté à Internet pour lire un Genially."); return false; }
+      const st = $("status"); if (st) st.textContent = "Je lis le Genially…";
+      try { const r = await ai({ action: "lien", url: url.trim() }, "studio"); d.link = url.trim(); d.text = (r.title ? r.title + "\n\n" : "") + r.text; d.tab = "text"; return true; }
+      catch (e) { if (st) showErr(st, e); else toast(e.message); return false; }
+    }
     const say = (m) => { d.msg = m; impPaint(d); };
 
     async function imageToJpeg(file, scan) {
@@ -1696,6 +1708,7 @@
     }
     async function run() {
       if (d.busy) return; keep();
+      if (d.tab === "link" || (d.tab === "text" && isGenially(d.text))) { const ok = await fetchLink(d.tab === "link" ? d.link : d.text); if (!ok) return; draw(); }
       if (d.tab === "files" && !d.files.length) return toast("Ajoute au moins un fichier ou une photo.");
       if (d.tab === "text" && d.text.trim().length < 80) return toast("Colle un texte de cours plus long.");
       d.busy = true; d.local = true; d.ready = false; d.failed = null; d.canResume = false; d.jobId = null; d.shown = 0; d.target = 1; d.t0 = Date.now(); d.stage = "read"; d.msg = "Je démarre…";

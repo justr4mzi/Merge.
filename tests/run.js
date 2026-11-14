@@ -1058,6 +1058,35 @@ async function boutiqueV2(browser) {
   }
 }
 
+async function genially(browser) {
+  // 1. Extraction (supabase/functions/studio/lien.mjs) sur une vraie structure de page Genially (bloc JSON-LD « text »).
+  const L = await import(require("url").pathToFileURL(path.join(ROOT, "supabase/functions/studio/lien.mjs")).href);
+  ok(L.geniallyUrl("https://view.genial.ly/5e6205c475ef8e0fc16756e9/presentation-la-reaction-inflammatoire?fbclid=x") === "https://view.genially.com/5e6205c475ef8e0fc16756e9" && L.geniallyUrl("https://view.genially.com/67f160a5e1196f27a7d26748/interactive-content") === "https://view.genially.com/67f160a5e1196f27a7d26748", "genially : anciens et nouveaux liens reconnus");
+  ok(L.geniallyUrl("https://exemple.com/5e6205c475ef8e0fc16756e9") === null && L.geniallyUrl("javascript:alert(1)") === null && L.geniallyUrl("https://view.genially.com/../admin") === null, "genially : autres sites refusés");
+  const html = '<html><head><script data-react-helmet="true" type="application/ld+json">' + JSON.stringify({ "@context": "https://schema.org", "@type": "CreativeWork", name: "la procréation humaine", text: "la procréation humaine RAPPEL I. le fonctionnement de l\'appareil génital masculin An awesome subtitle here Title here Magic Design Interactivity Le cycle ovarien dure 28 jours." }) + '</script></head><body><div id="root"></div></body></html>';
+  const g = L.geniallyText(html);
+  ok(g.title === "la procréation humaine" && g.text.includes("Le cycle ovarien dure 28 jours.") && !/awesome|Magic Design|Title here/.test(g.text), "genially : texte du cours extrait, textes du modèle retirés", JSON.stringify(g));
+  ok(L.geniallyText("<html><body>rien</body></html>").text === "", "genially : page sans transcription, texte vide");
+  // 2. Écran d'import.
+  for (const [w, h] of [[390, 844], [1280, 800]]) {
+    const page = await open(browser, { w, h, theme: "dark" }), tag = "genially " + w;
+    await go(page, "#import-c2", 400); await page.click('[data-tab="link"]'); await page.waitForTimeout(100);
+    ok(await page.locator("#lnk").count() === 1, tag + " : onglet lien Genially");
+    let o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o)); let sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px", sm.join(" | "));
+    await page.fill("#lnk", "https://exemple.com/truc"); await page.click("#lget"); await page.waitForTimeout(200);
+    ok(await page.evaluate(() => !window.__fake.liens), tag + " : lien qui n'est pas un Genially refusé sans appel");
+    await page.fill("#lnk", "https://view.genially.com/5f3b9c1aa8dacb0d83e508cd"); await page.click("#lget"); await page.waitForTimeout(300);
+    ok((await txt(page)).includes("captures d'écran"), tag + " : Genially sans texte, message clair");
+    if (w === 390) await page.screenshot({ path: path.join(SHOTS, "import-genially-390.png"), fullPage: true });
+    await page.fill("#lnk", "https://view.genial.ly/5e6205c475ef8e0fc16756e9/presentation-la-reaction-inflammatoire"); await page.click("#lget"); await page.waitForTimeout(300);
+    ok(await page.locator("#txt").count() === 1 && (await page.inputValue("#txt")).startsWith("La réaction inflammatoire") && (await page.inputValue("#txt")).length > 200, tag + " : texte du Genially récupéré dans « Coller du texte »");
+    // Lien collé directement dans la zone de texte : récupéré au moment de créer les cartes.
+    await go(page, "#import-c3", 400); await page.click('[data-tab="text"]'); await page.fill("#txt", "https://view.genially.com/5e6205c475ef8e0fc16756e9"); await page.click("#go"); await page.waitForTimeout(600);
+    ok(await page.evaluate(() => window.__fake.liens >= 3), tag + " : lien collé dans le texte, récupéré automatiquement");
+    ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+  }
+}
+
 let BASE;
 (async () => {
   fs.mkdirSync(SHOTS, { recursive: true });
@@ -1066,7 +1095,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => !only || only.includes(n);
     if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
-    const SUITES = { flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2 };
+    const SUITES = { flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially };
     for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();
