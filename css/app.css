@@ -974,3 +974,49 @@ button.voucher{all:unset;box-sizing:border-box;display:flex;align-items:center;j
 .voucher-card .vstate{margin-top:4px;padding:6px 14px;border-radius:99px;background:rgba(255,255,255,.18);font-weight:800;font-size:.9em}
 .voucher-card .vstate.ok{background:#22c38e}
 .vsend{font-weight:800;text-align:center;margin:4px 0 0;color:var(--fg)}
+/* Choisir quoi réviser (#perso) et chapitres du contrôle */
+.mixsub{border-left:4px solid var(--c)}
+.mixsub .chip.big{align-self:flex-start;font-size:1.05em}
+.mixsub .chip,.exchs .chip{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mixbar{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom));z-index:5;flex-wrap:wrap;gap:10px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.mixbar .btn{gap:6px}
+.exchs .chips{margin-top:2px}
+/* Grosse mise à jour de la boutique (nov. 2026) : nouveaux fonds, cartes, flammes et exclusivités de niveau */
+body[data-bg="pois"]::after,.bg-pois{background-image:radial-gradient(color-mix(in srgb,var(--accent) 35%,transparent) 2.5px,transparent 3px);background-size:26px 26px;animation:mpois 30s linear infinite}
+@keyframes mpois{to{background-position:260px 260px}}
+body[data-bg="grille"]::after,.bg-grille{background-image:linear-gradient(rgba(148,131,255,.18) 1px,transparent 1px),linear-gradient(90deg,rgba(148,131,255,.18) 1px,transparent 1px);background-size:22px 22px}
+body[data-bg="rayures"]::after,.bg-rayures{background-image:repeating-linear-gradient(135deg,color-mix(in srgb,var(--accent) 16%,transparent) 0 14px,transparent 14px 34px);background-size:200% 200%;animation:mrayures 18s linear infinite}
+@keyframes mrayures{to{background-position:100% 100%}}
+body[data-bg="coeurs"]::after,.bg-coeurs{background-image:radial-gradient(circle at 40% 40%,rgba(240,90,149,.5) 3px,transparent 3.5px),radial-gradient(circle at 60% 40%,rgba(240,90,149,.5) 3px,transparent 3.5px),linear-gradient(45deg,transparent 46%,rgba(240,90,149,.0) 46%);background-size:44px 44px;animation:mcoeurs 14s linear infinite}
+@keyframes mcoeurs{to{background-position:0 -440px}}
+body[data-bg="braises"]::after,.bg-braises{background-image:radial-gradient(2.5px 2.5px at 15% 80%,#ff8a3d,transparent),radial-gradient(2px 2px at 45% 60%,#ffb347,transparent),radial-gradient(3px 3px at 75% 90%,#ff6a2b,transparent),radial-gradient(2px 2px at 90% 50%,#ffc46b,transparent),linear-gradient(0deg,rgba(255,106,43,.22),transparent 45%);background-size:260px 260px,260px 260px,260px 260px,260px 260px,100% 100%;animation:mbraises 9s linear infinite}
+@keyframes mbraises{to{background-position:0 -260px,0 -260px,0 -260px,0 -260px,0 0}}
+body[data-bg="ocean"]::after,.bg-ocean{background:radial-gradient(60% 40% at 50% 0%,rgba(56,189,248,.35),transparent 70%),linear-gradient(180deg,rgba(14,116,144,.25),rgba(8,47,73,.45));background-size:100% 200%;animation:mocean 16s ease-in-out infinite alternate}
+@keyframes mocean{to{background-position:0 100%}}
+body[data-bg="arcenciel"]::after,.bg-arcenciel{background:linear-gradient(120deg,rgba(239,68,68,.28),rgba(245,158,11,.28),rgba(34,197,94,.28),rgba(59,130,246,.28),rgba(168,85,247,.28),rgba(239,68,68,.28));background-size:400% 400%;animation:marcenciel 20s linear infinite}
+@keyframes marcenciel{to{background-position:400% 0}}
+body[data-bg="matrice"]::after,.bg-matrice{background-image:repeating-linear-gradient(90deg,transparent 0 16px,rgba(34,197,94,.22) 16px 18px),linear-gradient(180deg,transparent,rgba(34,197,94,.12));background-size:100% 100%,100% 300px;animation:mmatrice 4s linear infinite}
+@keyframes mmatrice{to{background-position:0 0,0 300px}}
+body[data-bg="filantes"]::after,.bg-filantes{background-image:linear-gradient(115deg,transparent 49.5%,rgba(255,255,255,.7) 50%,transparent 51%),radial-gradient(1.5px 1.5px at 20% 30%,#fff,transparent),radial-gradient(1px 1px at 70% 60%,#fff,transparent),radial-gradient(40% 30% at 50% 40%,rgba(148,131,255,.35),transparent 70%);background-size:180px 120px,100% 100%,100% 100%,100% 100%;animation:mfilantes 3s linear infinite}
+@keyframes mfilantes{to{background-position:180px 120px,0 0,0 0,0 0}}
+body[data-card="pastel"] .face,[data-cardprev="pastel"] .face{background:linear-gradient(135deg,#fde2e4,#e2ece9 50%,#dfe7fd);color:#3a3550}
+body[data-card="kraft"] .face,[data-cardprev="kraft"] .face{background:#c8a476;color:#3a2a17}
+body[data-card="foret"] .face,[data-cardprev="foret"] .face{background:linear-gradient(160deg,#1f4d36,#2f7a4f);color:#eefaf2}
+body[data-card="bois"] .face,[data-cardprev="bois"] .face{background:repeating-linear-gradient(90deg,#9a6b3f 0 7px,#a8784a 7px 13px,#8e6238 13px 20px);color:#fff7ea}
+body[data-card="ocean"] .face,[data-cardprev="ocean"] .face{background:linear-gradient(180deg,#38bdf8,#0e7490);color:#fff}
+body[data-card="glace"] .face,[data-cardprev="glace"] .face{background:linear-gradient(135deg,#e0f7ff,#b9e6f7 60%,#ffffff);color:#0b4a63;box-shadow:inset 0 0 0 2px rgba(255,255,255,.8),0 4px 14px rgba(56,189,248,.35)}
+body[data-card="lave"] .face,[data-cardprev="lave"] .face{background:radial-gradient(70% 60% at 30% 80%,#ff7a18,transparent 70%),linear-gradient(160deg,#3a0d0d,#7f1d1d);color:#fff4e5}
+body[data-card="minuit"] .face,[data-cardprev="minuit"] .face{background:linear-gradient(160deg,#0f172a,#312e81);color:#e0e7ff}
+body[data-card="or"] .face,[data-cardprev="or"] .face{background:linear-gradient(135deg,#f9e27a,#d4a017 50%,#f5d36b);color:#3a2a00;box-shadow:0 0 0 2px #b8860b,0 6px 18px rgba(212,160,23,.45)}
+body[data-card="diamant"] .face,[data-cardprev="diamant"] .face{background:linear-gradient(135deg,#ffffff,#d6f2ff 30%,#f3e8ff 60%,#e0fff4);color:#1e1b4b;box-shadow:0 0 0 2px #a5b4fc,0 0 24px rgba(165,180,252,.7)}
+body[data-flame="violette"] .streak,[data-flameprev="violette"]{background:rgba(168,85,247,.18);color:#a855f7}
+body[data-flame="menthe"] .streak,[data-flameprev="menthe"]{background:rgba(16,185,129,.18);color:#0f9f74}
+body[data-flame="glace"] .streak,[data-flameprev="glace"]{background:linear-gradient(135deg,#e0f7ff,#9adcf5);color:#0b4a63}
+body[data-flame="lave"] .streak,[data-flameprev="lave"]{background:linear-gradient(135deg,#7f1d1d,#ff7a18);color:#fff}
+body[data-flame="neon"] .streak,[data-flameprev="neon"]{background:#0e0b1f;color:#7df9ff;box-shadow:0 0 0 1.5px #7df9ff,0 0 12px rgba(125,249,255,.6)}
+body[data-flame="galaxie"] .streak,[data-flameprev="galaxie"]{background:linear-gradient(135deg,#1e1b4b,#6d28d9,#db2777);color:#fff}
+body[data-flame="cosmique"] .streak,[data-flameprev="cosmique"]{background:linear-gradient(90deg,#0f172a,#4338ca,#db2777,#f59e0b);background-size:300% 100%;color:#fff;animation:mcosmique 6s linear infinite}
+@keyframes mcosmique{to{background-position:300% 0}}
+.shopitem.excl{border-color:#d4a017;box-shadow:inset 0 0 0 1px rgba(212,160,23,.35)}
+.lvlgift.excl b{color:#d4a017}
+@media (prefers-reduced-motion:reduce){body[data-flame] .streak,[data-flameprev]{animation:none!important}}

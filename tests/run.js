@@ -29,7 +29,7 @@ const overflow = page => page.evaluate(() => { const d = document.documentElemen
 const small = page => page.evaluate(() => [...document.querySelectorAll("#app button, #app a.btn, #app a.chip, #app a.iconbtn, #app a.mini, .tabs a")].filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height < 43.5 && !e.closest(".mindmap") && !e.classList.contains("flip"); }).slice(0, 4).map(e => e.tagName + "." + e.className + ":" + Math.round(e.getBoundingClientRect().height) + ":" + e.textContent.trim().slice(0, 20)));
 const txt = page => page.evaluate(() => document.getElementById("app").innerText);
 
-const ROUTES = ["methode-s1", "bac-s1", "edt", "recompenses", "melange", "interro-c1", "accueil", "matieres", "matiere-s1", "dossier-g1", "chapitre-c1", "calendrier", "progres", "duo", "reglages", "erreurs", "import-c1", "resume-c1", "cartes-c1", "apprendre-c1", "quiz-c1", "controle-c1", "associer-c1", "vraifaux-c1", "ecouter-c1", "questions-c1", "blurting-c1", "feynman-c1", "khole-c1", "boss-c1", "flash-c1", "bus-c1", "planche-c1", "erreurs-c1", "fiche-c1", "recherche", "minuteur", "blanc-c1", "difficiles-c1", "revision-s1"];
+const ROUTES = ["methode-s1", "bac-s1", "edt", "recompenses", "melange", "interro-c1", "accueil", "matieres", "matiere-s1", "dossier-g1", "chapitre-c1", "calendrier", "progres", "duo", "reglages", "erreurs", "import-c1", "resume-c1", "cartes-c1", "apprendre-c1", "quiz-c1", "controle-c1", "associer-c1", "vraifaux-c1", "ecouter-c1", "questions-c1", "blurting-c1", "feynman-c1", "khole-c1", "boss-c1", "flash-c1", "bus-c1", "planche-c1", "erreurs-c1", "fiche-c1", "recherche", "minuteur", "blanc-c1", "difficiles-c1", "revision-s1", "perso", "revdossier-g1"];
 const GATED = ["pieges-c1", "faceaface-c1", "exercices-c1", "carte-c1", "trous-c1", "synthese-c1"];
 
 async function sweep(browser, w, h, theme) {
@@ -976,9 +976,13 @@ async function boutique(browser) {
     await go(page, "#recompenses", 300); ok(await page.locator('a[href="#boutique"]').count() >= 1 && (await txt(page)).includes("Mergo au casque audio"), tag + " : les achats apparaissent dans les récompenses");
     await go(page, "#accueil", 300); ok(await page.locator(".coinpill").count() === 1, tag + " : pièces affichées sur l'accueil");
     // Passage de niveau : pièces, articles offerts et récompenses débloquées.
-    await page.evaluate(() => { const r = JSON.parse(localStorage.getItem("merge.rewards")); r.lvl = 0; localStorage.setItem("merge.rewards", JSON.stringify(r)); localStorage.setItem("merge.level", "0"); localStorage.setItem("merge.badges", "[]"); });
-    await go(page, "#calendrier", 200); await go(page, "#accueil", 500);
-    ok(await page.locator(".lvlwin").count() === 1 && await page.locator(".lvlgift").count() >= 2, tag + " : passage de niveau avec pièces et cadeaux", await page.locator(".lvlwin").count() ? await page.locator(".lvlwin").innerText() : "pas de fenêtre");
+    // Beaucoup de bonnes réponses (fake.xp) : du niveau 2 au niveau 6 d'un coup.
+    await page.evaluate(() => { const r = JSON.parse(localStorage.getItem("merge.rewards")); r.lvl = 2; r.buys = r.buys.filter(b => !b.level); localStorage.setItem("merge.rewards", JSON.stringify(r)); localStorage.setItem("merge.level", "2"); localStorage.setItem("merge.badges", "[]"); localStorage.setItem("fake.xp", "20"); sessionStorage.setItem("init", "1"); location.hash = "#calendrier"; location.reload(); });
+    await page.waitForSelector("#app > *"); await page.waitForTimeout(300); await go(page, "#accueil", 600);
+    const lv6 = await page.evaluate(() => JSON.parse(localStorage.getItem("merge.wallet") || "{}").level);
+    const lt = await page.locator(".lvlwin").count() ? await page.locator(".lvlwin").innerText() : "pas de fenêtre";
+    ok(lv6 >= 5 && lv6 < 9 && await page.locator(".lvlwin").count() === 1 && lt.includes("Cerveau affûté") && lt.includes("coffre surprise") && await page.locator(".lvlgift").count() >= 4 && await page.locator(".lvlwin .sprev").count() <= 4, tag + " : passage de niveau (pièces, peu d'articles, coffre, exclusivité du niveau 5)", lv6 + " · " + lt);
+    ok(await page.evaluate(L => { const r = JSON.parse(localStorage.getItem("merge.rewards")), g = r.buys.filter(b => b.level).map(b => b.level); return g.length === Math.floor(L / 3) && g.every(l => l % 3 === 0); }, lv6), tag + " : un article offert seulement tous les 3 niveaux");
     if (w === 390 && await page.locator(".lvlwin").count()) await page.screenshot({ path: path.join(SHOTS, "niveau-390.png") });
     ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
   }
@@ -986,6 +990,72 @@ async function boutique(browser) {
   const page = await open(browser, { w: 390, h: 844, theme: "dark" }); await go(page, "#boutique", 500);
   ok(await page.locator(".giftcard").count() === 0 && await page.locator(".shopitem").count() > 0, "boutique : sans accès, pas de cadeaux en vrai (seulement la boutique)");
   await page.context().close();
+}
+
+async function controleChapitres(browser) {
+  for (const [w, h] of [[390, 844], [1280, 800]]) {
+    const page = await open(browser, { w, h, theme: "dark" }), tag = "chapitres du contrôle " + w;
+    await go(page, "#matiere-s1", 400); ok((await txt(page)).includes("Plan de révision"), tag + " : plan affiché au départ");
+    await page.click("#examBtn"); await page.waitForTimeout(150);
+    ok(await page.locator("#exOn").count() === 1 && await page.locator("[data-exc]").count() === 0, tag + " : option à cocher, désactivée par défaut");
+    await page.click("#exOn"); await page.waitForTimeout(150); ok(await page.locator("[data-exc]").count() === 3, tag + " : les chapitres de la matière à choisir");
+    await page.click('[data-exc="c2"]'); await page.waitForTimeout(150);
+    ok(!(await txt(page)).includes("Plan de révision"), tag + " : seul un chapitre sans cartes choisi, plus rien à planifier");
+    await page.click('[data-exc="c1"]'); await page.waitForTimeout(150);
+    ok((await txt(page)).includes("Seulement les chapitres du contrôle"), tag + " : plan limité aux chapitres choisis");
+    ok(await page.evaluate(() => { const v = JSON.parse(localStorage.getItem("merge.examch.s1")); return v.on && v.ids.length === 2 && v.d === window.__fake.DB.subjects.find(s => s.id === "s1").exam_date && window.__mergeSync.synced("merge.examch.s1"); }), tag + " : choix enregistré et synchronisé");
+    if (w === 390) await page.screenshot({ path: path.join(SHOTS, "chapitres-controle-390.png"), fullPage: true });
+    let sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px minimum", sm.join(" | "));
+    let o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
+    await go(page, "#matiere-s1", 300); ok((await txt(page)).includes("2 chapitres au contrôle"), tag + " : pastille du nombre de chapitres");
+    await page.click("#examBtn"); await page.waitForTimeout(150); await page.click("#exOn"); await page.waitForTimeout(150);
+    ok(!(await txt(page)).includes("Seulement les chapitres du contrôle"), tag + " : décoché, le plan reprend toute la matière");
+    // Révision combinée : tout un dossier, puis plusieurs matières, dossiers ou chapitres au choix.
+    await go(page, "#dossier-g1", 400); ok(await page.locator('a[href="#revdossier-g1"]').count() === 1, tag + " : bouton réviser tout le dossier");
+    await page.click('a[href="#revdossier-g1"]'); await page.waitForTimeout(400); ok(await page.locator(".session").count() === 1, tag + " : session du dossier lancée");
+    await go(page, "#accueil", 300); ok(await page.locator('a[href="#perso"]').count() === 1, tag + " : accueil, bouton choisir quoi réviser");
+    await go(page, "#perso", 300); ok(await page.locator("[data-ms]").count() === 1 && await page.locator("#mxgo[disabled]").count() === 1, tag + " : rien de coché au départ");
+    await page.click('[data-ms="s1"]'); await page.waitForTimeout(100);
+    ok(await page.locator('[data-mg="g1"][aria-pressed="true"]').count() === 1 && await page.locator('[data-mc="c1"][aria-pressed="true"]').count() === 1 && await page.locator("#mxgo:not([disabled])").count() === 1, tag + " : une matière coche ses dossiers et chapitres");
+    if (w === 390) await page.screenshot({ path: path.join(SHOTS, "choisir-reviser-390.png"), fullPage: true });
+    sm = await small(page); ok(!sm.length, tag + " : choisir, boutons de 44 px", sm.join(" | ")); o = await overflow(page); ok(o.sw <= o.iw, tag + " : choisir, pas de débordement", JSON.stringify(o));
+    await page.click("#mxgo"); await page.waitForTimeout(400);
+    ok(await page.evaluate(() => location.hash) === "#mixte" && await page.locator(".session").count() === 1 && await page.locator('#quit[href="#perso"]').count() === 1, tag + " : session combinée lancée");
+    ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+  }
+}
+
+async function boutiqueV2(browser) {
+  for (const [w, h] of [[390, 844], [1280, 800]]) {
+    const page = await open(browser, { w, h, theme: "dark" }), tag = "boutique v2 " + w;
+    // 5 000 pièces de bonus, niveau 1 : les articles « niveau X » restent bloqués, les exclusivités sont visibles.
+    await page.evaluate(() => { localStorage.setItem("merge.rewards", JSON.stringify({ buys: [{ id: "test-bonus", price: -5000 }], lvl: 1 })); location.reload(); });
+    await page.waitForSelector("#app > *"); await go(page, "#boutique", 500);
+    ok(await page.locator(".shopitem").count() >= 40, tag + " : beaucoup plus de couleurs", String(await page.locator(".shopitem").count()));
+    ok(await page.locator('[data-buy="c-pistache"]:not([disabled])').count() === 1 && await page.locator('[data-buy="c-platine"]').count() === 0 && (await txt(page)).includes("Niveau 15") && (await txt(page)).includes("Saphir royal"), tag + " : couleur à niveau minimum bloquée, exclusivité affichée");
+    for (const t of ["fond", "mascotte", "carte", "flamme", "titre"]) { await page.click(`[data-st="${t}"]`); await page.waitForTimeout(80); }
+    ok((await txt(page)).includes("Major de promo") && (await txt(page)).includes("Légende vivante"), tag + " : nouveaux titres et exclusivités à long terme");
+    await page.click('[data-st="mascotte"]'); await page.waitForTimeout(80); await page.click('[data-buy="m-chat"]'); await page.waitForTimeout(150);
+    ok(await page.locator('.hello svg.mascot, .shopitem.own svg.mascot').count() >= 1 && await page.evaluate(() => JSON.parse(localStorage.getItem("merge.rewards")).equip.mascotte === "m-chat"), tag + " : nouvelle tenue de Mergo achetée");
+    if (w === 390) await page.screenshot({ path: path.join(SHOTS, "boutique-mergo-390.png"), fullPage: true });
+    await page.click('[data-st="perso"]'); await page.waitForTimeout(100);
+    ok(await page.locator(".shopitem").count() === 3 && await page.locator('[data-buy="t-perso"]').count() === 0, tag + " : rayon perso, bloqué avant le niveau requis");
+    // Au niveau 6 (fake.xp) : titre personnalisé acheté puis écrit.
+    await page.evaluate(() => { localStorage.setItem("fake.xp", "40"); location.reload(); }); await page.waitForSelector("#app > *"); await go(page, "#boutique", 500);
+    await page.click('[data-st="perso"]'); await page.waitForTimeout(100); await page.click('[data-buy="t-perso"]'); await page.waitForTimeout(200);
+    await page.fill("#pv", "Reine <b>du</b> bac"); await page.click("#pok"); await page.waitForTimeout(200);
+    await page.click('[data-buy="c-perso"]'); await page.waitForTimeout(200); await page.evaluate(() => { document.getElementById("pv").value = "#12a4d9"; }); await page.click("#pok"); await page.waitForTimeout(200);
+    ok(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()) === "#12a4d9", tag + " : couleur sur mesure appliquée");
+    await go(page, "#accueil", 400);
+    ok(await page.locator(".hello .rwtitle").innerText() === "Reine <b>du</b> bac" && await page.locator(".hello .rwtitle b").count() === 0, tag + " : titre personnalisé affiché (texte brut)");
+    const wal = await page.evaluate(() => JSON.parse(localStorage.getItem("merge.wallet") || "null"));
+    ok(wal && wal.level >= 6 && wal.items.includes("Titre : Reine <b>du</b> bac") && wal.items.includes("Mergo oreilles de chat") && wal.coins >= 0 && await page.evaluate(() => window.__mergeSync.synced("merge.wallet")), tag + " : résumé pour l'admin (niveau, pièces, articles)", JSON.stringify(wal));
+    let sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px", sm.join(" | "));
+    await go(page, "#boutique", 400); await page.click('[data-st="fond"]'); await page.waitForTimeout(100); sm = await small(page); ok(!sm.length, tag + " : boutique, boutons de 44 px", sm.join(" | "));
+    const o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
+    if (w === 390) await page.screenshot({ path: path.join(SHOTS, "boutique-fonds-390.png"), fullPage: true });
+    ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+  }
 }
 
 let BASE;
@@ -996,7 +1066,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => !only || only.includes(n);
     if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
-    const SUITES = { flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique };
+    const SUITES = { flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2 };
     for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();

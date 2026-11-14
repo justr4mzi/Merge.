@@ -54,16 +54,19 @@ Deno.serve(async (req) => {
       users.push(...data.users);
       if (data.users.length < 200) break;
     }
-    const [prof, st, tts, ga, gc] = await Promise.all([
+    const [prof, st, tts, ga, gc, wk2] = await Promise.all([
       admin.from("profiles").select("user_id,display_name,classe,created_at,last_seen_at,last_seen_place"),
       admin.rpc("admin_user_stats", { p_day: day, p_week: iso(wk), p_month: iso(mo) }),
       admin.from("tts_usage").select("chars,files").eq("month", day.slice(0, 7)).maybeSingle(),
       admin.from("gift_access").select("user_id"),
       admin.from("gift_claims").select("id,user_id,gift,price,created_at,given_at").order("created_at", { ascending: false }).limit(200),
+      // Boutique de chaque élève : résumé que l'appli enregistre elle-même (niveau, pièces, articles).
+      admin.from("user_kv").select("user_id,value,updated_at").eq("key", "merge.wallet"),
     ]);
     if (st.error) throw st.error;
     const P: Record<string, Any> = {}; (prof.data ?? []).forEach((p: Any) => (P[p.user_id] = p));
     const S: Record<string, Any> = {}; (st.data ?? []).forEach((r: Any) => (S[r.user_id] = r));
+    const W: Record<string, Any> = {}; (wk2.data ?? []).forEach((r: Any) => { try { const v = JSON.parse(r.value); if (v && typeof v === "object") W[r.user_id] = Object.assign(v, { updated_at: r.updated_at }); } catch (_e) { /* ignoré */ } });
     const out = users.map((u: Any) => {
       const p = P[u.id] ?? {}, r = S[u.id] ?? {}, n = (v: unknown) => Number(v) || 0;
       const t = { d: n(r.t_day), w: n(r.t_week), m: n(r.t_month), all: n(r.t_all) }, a = { all: n(r.ai_all), d: n(r.ai_day) };
@@ -71,6 +74,7 @@ Deno.serve(async (req) => {
         id: u.id, name: p.display_name || (u.user_metadata?.full_name ?? ""), email: u.email ?? "", classe: p.classe ?? "",
         created_at: u.created_at, last_seen_at: p.last_seen_at || u.last_sign_in_at || null, last_seen_place: p.last_seen_place || "",
         screen: t, ai: a, cards: n(r.cards), chapters: n(r.chapters),
+        wallet: W[u.id] ?? null,
       };
     }).sort((x: Any, y: Any) => String(y.last_seen_at ?? "").localeCompare(String(x.last_seen_at ?? "")));
     return json({ users: out, gifts: { ready: !ga.error && !gc.error, access: (ga.data ?? []).map((r: Any) => r.user_id), claims: gc.data ?? [] }, voix: { chars: Number(tts.data?.chars ?? 0), files: Number(tts.data?.files ?? 0), limit: Number(Deno.env.get("TTS_MONTHLY_FREE") ?? "950000") }, generated_at: new Date().toISOString() });

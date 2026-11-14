@@ -143,7 +143,7 @@
   function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   // Ces clés sont gardées sur l'appareil ET dans le compte (table user_kv) : on retrouve la même chose sur téléphone et sur PC.
   // Restent sur l'appareil seulement : kvts (horodatages), file (révisions en attente d'envoi), cache.* et gen.* (copies de la base), erreurs.* (copie de secours de la table mistakes). Le thème est dans le profil.
-  const SYNC = /^merge\.(fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|boss\..+|mnemo\..+|rewards|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
+  const SYNC = /^merge\.(fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
   let kvTs = {}, kvQueue = {}, kvTimer = null, kvOff = false, kvAt = 0;
   try { kvTs = JSON.parse(localStorage.getItem("merge.kvts") || "{}") || {}; } catch (e) { kvTs = {}; }
   const kvSaveTs = () => { try { localStorage.setItem("merge.kvts", JSON.stringify(kvTs)); } catch (e) { /* rien */ } };
@@ -447,10 +447,12 @@
     draw();
   }
   async function saveExam(id, v) {
-    const date = v.free ? null : (v.date || null);
+    const date = v.free ? null : (v.date || null), sub0 = state.subjects.find(x => x.id === id), old = sub0 && sub0.exam_date;
     let r = await sb.from("subjects").update({ exam_date: date, free_revision: !!v.free }).eq("id", id);
     if (r.error) { r = await sb.from("subjects").update({ exam_date: date }).eq("id", id); if (r.error) return r.error; }
     safeSet("merge.libre." + id, v.free ? "1" : "");
+    // Chapitres choisis pour le contrôle : ils suivent la date si on la décale ; un nouveau contrôle (l'ancien est passé) repart de zéro.
+    const sel = jget("merge.examch." + id, null); if (sel && date && sel.d === old && old >= localDay()) jset("merge.examch." + id, Object.assign(sel, { d: date }));
     const s = state.subjects.find(x => x.id === id); if (s) { s.exam_date = date; s.free_revision = !!v.free; }
     return null;
   }
@@ -649,9 +651,16 @@
   const fmtT = s => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
   function xpInfo() {
     const xp = state.cards.reduce((a, c) => a + (c.right_count || 0) * 10 + (c.wrong_count || 0) * 2, 0) + state.chapters.filter(c => { const cs = cardsOf(c.id); return cs.length && mastery(cs) >= 100; }).length * 100;
-    const level = Math.floor((Math.sqrt(1 + 8 * xp / 100) - 1) / 2) + 1, base = 100 * (level - 1) * level / 2, next = 100 * level * (level + 1) / 2;
-    return { xp, level, pct: Math.round((xp - base) / (next - base) * 100), left: next - xp };
+    const level = levelOfXp(xp), base = lvlStart(level), next = base + lvlStep(level);
+    return { xp, level, rank: rankOf(level), pct: Math.round((xp - base) / (next - base) * 100), left: next - xp };
   }
+  // Niveaux : les 3 premiers vont vite (100, 200, 300 points), puis chaque niveau coûte de plus en plus cher (+25 × (niveau − 3)²).
+  // Niveau 4 à 600 points (inchangé), 5 à 1 025, 10 à 6 775, 20 à ~ 60 000, 50 à ~ 1 million : de quoi tenir des années.
+  const lvlStep = L => L <= 3 ? 100 * L : 100 * L + 25 * (L - 3) * (L - 3);
+  const lvlStart = L => { let t = 0; for (let l = 1; l < L; l++) t += lvlStep(l); return t; };
+  const levelOfXp = xp => { if (!isFinite(xp)) return 999; let L = 1, t = 0; while (L < 999 && t + lvlStep(L) <= xp) { t += lvlStep(L); L++; } return L; };
+  const RANKS = [[1, "Bronze"], [10, "Argent"], [20, "Or"], [30, "Platine"], [40, "Diamant"], [50, "Légende"]];
+  const rankOf = L => RANKS.filter(r => L >= r[0]).pop()[1];
 
   // ---------- récompenses : débloquées avec les points (rien à dépenser), équipées sur tous les appareils ----------
   const REWARDS = [
@@ -681,6 +690,39 @@
     { id: "t-prof", type: "titre", n: "Prof en herbe", price: 300 }, { id: "t-ninja", type: "titre", n: "Ninja des flashcards", price: 350 }, { id: "t-reine", type: "titre", n: "Reine des fiches", price: 400 },
     { id: "t-roi", type: "titre", n: "Roi des fiches", price: 400 }, { id: "t-zero", type: "titre", n: "Zéro oubli", price: 600 }, { id: "t-legende", type: "titre", n: "Légende du bac", price: 900 },
     { id: "k-pluie", type: "confettis", n: "Toujours la pluie de confettis", price: 200, v: "pluie" }, { id: "k-serpentins", type: "confettis", n: "Toujours les serpentins", price: 250, v: "serpentins" }, { id: "k-explosion", type: "confettis", n: "Toujours l'explosion", price: 300, v: "explosion" },
+    // Grosse mise à jour de la boutique : need = niveau minimum pour acheter (de quoi viser loin).
+    ...[["pistache", "Pistache", 150, "#6fa315"], ["lavande", "Lavande", 150, "#7c6cf0"], ["peche", "Pêche", 150, "#ee7a5f"], ["ciel", "Bleu ciel", 150, "#2f96dd"], ["chewing", "Chewing-gum", 200, "#e4569f"],
+      ["foret", "Forêt", 200, "#2f8f4e"], ["cuivre", "Cuivre", 250, "#c2662d"], ["indigo", "Indigo", 250, "#4f46e5"], ["sable", "Sable", 250, "#a8824c"], ["olive", "Olive", 300, "#6b8e23"],
+      ["chocolat", "Chocolat", 300, "#8b5a2b"], ["glacier", "Glacier", 300, "#1ea7b5"], ["magenta", "Magenta", 300, "#c026d3"], ["acier", "Bleu acier", 350, "#4a6fa5"], ["emeraude", "Émeraude", 350, "#059669"],
+      ["rubis", "Rubis", 350, "#be123c"], ["saphir", "Saphir", 350, "#1d4ed8"], ["mangue", "Mangue", 400, "#e08a00", 5], ["orchidee", "Orchidée", 400, "#a855f7", 5], ["fuchsia", "Fuchsia", 400, "#e11d74", 5],
+      ["jade", "Jade", 450, "#0e9a78", 6], ["grenat", "Grenat", 450, "#9f1239", 6], ["cobalt", "Cobalt", 500, "#2457d6", 7], ["aubergine", "Aubergine", 500, "#6b21a8", 7], ["corailvif", "Corail vif", 550, "#f2463a", 8],
+      ["tropical", "Tropical", 600, "#00a884", 9], ["flamant", "Flamant rose", 600, "#f05a95", 9], ["ultraviolet", "Ultraviolet", 700, "#7b2ff7", 10], ["minuit", "Minuit", 800, "#312e81", 12], ["platine", "Platine", 1000, "#6b7a90", 15]]
+      .map(([k, n, price, v, need]) => ({ id: "c-" + k, type: "couleur", n, price, v, need })),
+    ...[["pois", "Pois", 450], ["grille", "Cahier quadrillé", 500], ["rayures", "Rayures", 550, 4], ["coeurs", "Petits cœurs", 650, 5], ["braises", "Braises", 700, 6], ["ocean", "Fond de l'océan", 750, 7], ["arcenciel", "Arc-en-ciel", 900, 8], ["matrice", "Matrice", 1000, 10]]
+      .map(([v, n, price, need]) => ({ id: "f-" + v, type: "fond", n, price, v, need })),
+    ...[["moustache", "Mergo moustachu", 200], ["chat", "Mergo oreilles de chat", 300], ["lapin", "Mergo oreilles de lapin", 300], ["toque", "Mergo cuisinier", 300], ["echarpe", "Mergo à l'écharpe", 350], ["etoile", "Mergo la star", 400],
+      ["diplome", "Mergo diplômé", 450, 4], ["masque", "Mergo super-héros", 500, 5], ["viking", "Mergo viking", 550, 6], ["pirate", "Mergo pirate", 600, 7]]
+      .map(([v, n, price, need]) => ({ id: "m-" + v, type: "mascotte", n, price, v, need })),
+    ...[["pastel", "Cartes pastel", 300], ["kraft", "Cartes kraft", 350], ["foret", "Cartes forêt", 400], ["bois", "Cartes bois", 400], ["ocean", "Cartes océan", 450], ["glace", "Cartes de glace", 500, 5], ["lave", "Cartes de lave", 600, 6], ["minuit", "Cartes minuit", 650, 7]]
+      .map(([v, n, price, need]) => ({ id: "d-" + v, type: "carte", n, price, v, need })),
+    ...[["violette", "Flamme violette", 300], ["menthe", "Flamme menthe", 300], ["glace", "Flamme de glace", 400], ["lave", "Flamme de lave", 500, 5], ["neon", "Flamme néon", 600, 6], ["galaxie", "Flamme galaxie", 900, 9]]
+      .map(([v, n, price, need]) => ({ id: "l-" + v, type: "flamme", n, price, v, need })),
+    ...[["genie", "Petit génie", 150], ["fiche", "Fiche après fiche", 150], ["zen", "Zéro stress", 200], ["cafe", "Café et flashcards", 200], ["chill", "Chill mais efficace", 250], ["parcoeur", "Pro du par cœur", 250],
+      ["elephant", "Mémoire d'éléphant", 300], ["nuit", "Couche-tard studieux", 350], ["matin", "Lève-tôt motivé", 350], ["qcm", "As du QCM", 400], ["stop", "Inarrêtable", 300, 4], ["xxl", "Cerveau XXL", 400, 5],
+      ["boss", "Boss final", 500, 6], ["mention", "Mention très bien", 600, 7], ["sansfaute", "Sans faute", 600, 7], ["guerre", "Machine de guerre", 750, 8], ["orchestre", "Chef d'orchestre", 700, 8], ["profprof", "Prof de mes profs", 800, 9],
+      ["encyclo", "Encyclopédie vivante", 900, 10], ["bac", "Bac en poche", 1000, 10], ["phenix", "Phénix", 1200, 12], ["prodige", "Prodige", 1500, 14], ["absolu", "Génie absolu", 2000, 18], ["major", "Major de promo", 2500, 20]]
+      .map(([k, n, price, need]) => ({ id: "t-" + k, type: "titre", n, price, need })),
+    // Articles personnalisés : on écrit ou on choisit soi-même (rayon « Perso »).
+    { id: "t-perso", type: "titre", n: "Titre personnalisé", price: 1200, need: 5, perso: "titre" }, { id: "c-perso", type: "couleur", n: "Couleur sur mesure", price: 1500, need: 6, perso: "couleur" },
+    { id: "p-phrase", type: "phrase", n: "Ta phrase d'accueil", price: 800, need: 4, perso: "phrase" },
+  ];
+  // Exclusivités de niveau : impossibles à acheter, offertes en atteignant le niveau (objectifs à long terme).
+  const LEVEL_ITEMS = [
+    { id: "t-affute", type: "titre", n: "Cerveau affûté", lv: 5 }, { id: "c-saphirroyal", type: "couleur", n: "Saphir royal", v: "#2337b8", lv: 8 },
+    { id: "m-couronneor", type: "mascotte", n: "Mergo couronne d'or", v: "couronneor", lv: 10 }, { id: "d-or", type: "carte", n: "Cartes en or", v: "or", lv: 12 },
+    { id: "l-cosmique", type: "flamme", n: "Flamme cosmique", v: "cosmique", lv: 15 }, { id: "f-filantes", type: "fond", n: "Étoiles filantes", v: "filantes", lv: 20 },
+    { id: "t-immortel", type: "titre", n: "Immortel des révisions", lv: 25 }, { id: "m-dragon", type: "mascotte", n: "Mergo dragon", v: "dragon", lv: 30 },
+    { id: "d-diamant", type: "carte", n: "Cartes diamant", v: "diamant", lv: 40 }, { id: "t-legendevivante", type: "titre", n: "Légende vivante", lv: 50 },
   ];
   // Cadeaux en vrai (comptes activés dans /admin) : du petit plaisir au gros cadeau, 1 pièce ≈ 1 bonne réponse.
   // À échanger avec Ramzi : le bon affiché sert de capture d'écran à lui envoyer, et la demande apparaît dans /admin.
@@ -717,16 +759,29 @@
       ${c.given_at ? "" : `<p class="vsend">Fais une capture de ce bon et envoie-la à ${GIFT_GIVER} pour qu'il te le fasse.</p>`}`;
   }
   const CHEST_PRICE = 250;
-  SHOP.forEach(x => REWARDS.push(x));
+  SHOP.forEach(x => REWARDS.push(x)); LEVEL_ITEMS.forEach(x => REWARDS.push(x));
   REWARDS.push({ id: "d-classique", type: "carte", n: "Cartes classiques", pts: 0, v: "" }, { id: "l-classique", type: "flamme", n: "Flamme classique", pts: 0, v: "" });
   const RTYPES = [["titre", "Titres"], ["couleur", "Couleurs"], ["fond", "Fonds animés"], ["mascotte", "Mascotte"], ["carte", "Style des flashcards"], ["flamme", "Flamme de série"], ["son", "Sons"], ["confettis", "Animations de réussite"]];
   const CHEST_EVERY = 500;
-  const rwState = () => { const d = jget("merge.rewards", null) || {}; return { equip: d.equip || {}, chest: d.chest || [], opened: d.opened || 0, buys: d.buys || [], lvl: d.lvl == null ? null : d.lvl, freeChests: d.freeChests || 0 }; };
+  const rwState = () => { const d = jget("merge.rewards", null) || {}; return { equip: d.equip || {}, chest: d.chest || [], opened: d.opened || 0, buys: d.buys || [], lvl: d.lvl == null ? null : d.lvl, freeChests: d.freeChests || 0, custom: d.custom || {} }; };
   // Pièces : 1 par bonne réponse, 10 par chapitre maîtrisé (= points ÷ 10), plus 15 × niveau à chaque niveau passé ; moins ce qui a été dépensé.
   const levelBonus = L => { let t = 0; for (let l = 2; l <= L; l++) t += 15 * l; return t; };
   function coinsInfo() { const x = xpInfo(), st = rwState(), earned = Math.floor(x.xp / 10) + levelBonus(x.level), spent = st.buys.reduce((a, b) => a + (+b.price || 0), 0); return { earned, spent, balance: Math.max(0, earned - spent) }; }
-  const rwSave = (st) => jset("merge.rewards", st);
-  const rwOwned = (r, xp, st) => r.price ? st.buys.some(b => b.id === r.id) || st.chest.includes(r.id) : r.chest ? st.chest.includes(r.id) : xp >= r.pts;
+  const rwSave = (st) => { jset("merge.rewards", st); walletSync(); };
+  const rwOwned = (r, xp, st) => r.lv ? levelOfXp(xp) >= r.lv : r.price ? st.buys.some(b => b.id === r.id) || st.chest.includes(r.id) : r.chest ? st.chest.includes(r.id) : xp >= r.pts;
+  // Valeurs des articles personnalisés (titre écrit, couleur choisie).
+  const rwName = r => r && r.perso === "titre" ? (rwState().custom.titre || "") : r ? r.n : "";
+  const rwColor = r => r && r.perso === "couleur" ? (/^#[0-9a-f]{6}$/i.test(rwState().custom.couleur || "") ? rwState().custom.couleur : "") : r ? r.v : "";
+  // Résumé envoyé dans user_kv (merge.wallet) : niveau, pièces et articles, visibles dans /admin.
+  function walletSync() {
+    try {
+      if (!state.user) return; const x = xpInfo(), c = coinsInfo(), st = rwState();
+      const items = REWARDS.filter(r => (r.price || r.lv || r.chest) && rwOwned(r, x.xp, st)).map(r => r.perso === "titre" && st.custom.titre ? "Titre : " + st.custom.titre : r.n);
+      const eq = Object.values(st.equip).map(id => REWARDS.find(r => r.id === id)).filter(Boolean).map(r => r.n);
+      const w = JSON.stringify({ level: x.level, rank: x.rank, xp: x.xp, coins: c.balance, earned: c.earned, spent: c.spent, items, equip: eq, chests: st.freeChests || 0 });
+      if (safeGet("merge.wallet") !== w) safeSet("merge.wallet", w);
+    } catch (e) { /* rien */ }
+  }
   const rwEquipped = (type) => { const st = rwState(), id = st.equip[type], r = REWARDS.find(x => x.id === id && x.type === type); return r && rwOwned(r, xpInfo().xp, st) ? r : null; };
   const MASCOT_WEAR = {
     casque: '<path d="M11 34a21 21 0 0142 0" stroke="#2b2d42" stroke-width="4" fill="none"/><rect x="6" y="30" width="9" height="14" rx="3.5" fill="#ef476f"/><rect x="49" y="30" width="9" height="14" rx="3.5" fill="#ef476f"/>',
@@ -737,12 +792,24 @@
     soleil: '<g fill="#1a1d28"><rect x="14" y="28.5" width="17" height="11" rx="4.5"/><rect x="33" y="28.5" width="17" height="11" rx="4.5"/><rect x="29" y="31" width="6" height="2.4" rx="1"/></g><path d="M17 31l4 0" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".7"/>',
     aureole: '<ellipse cx="32" cy="9" rx="14" ry="3.6" fill="none" stroke="#f5c542" stroke-width="2.6"/>',
     chapeau: '<rect x="22" y="3" width="20" height="17" rx="2" fill="#1a1d28"/><rect x="15" y="18" width="34" height="4.5" rx="2.2" fill="#1a1d28"/><rect x="22" y="14" width="20" height="3.2" fill="#e03b3b"/>',
+    moustache: '<path d="M22 44q5-4 10 0q5-4 10 0q-5 4-10 1q-5 3-10-1z" fill="#3a2414"/>',
+    chat: '<path d="M13 24l3-16 11 9zM51 24l-3-16-11 9z" fill="var(--accent)"/><path d="M16 21l1.5-8 5.5 4.5zM48 21l-1.5-8-5.5 4.5z" fill="#f9a8d4"/>',
+    lapin: '<g fill="#fff"><ellipse cx="22" cy="8" rx="5" ry="13"/><ellipse cx="42" cy="8" rx="5" ry="13"/></g><g fill="#f9a8d4"><ellipse cx="22" cy="8" rx="2.4" ry="9"/><ellipse cx="42" cy="8" rx="2.4" ry="9"/></g>',
+    toque: '<path d="M19 22c-6-1-7-11 1-12 2-6 10-7 13-2 4-5 12-2 12 4 7 1 6 11 0 10z" fill="#fff" stroke="#d6d6e0" stroke-width="1.2"/><rect x="19" y="18" width="26" height="6" rx="2" fill="#fff" stroke="#d6d6e0" stroke-width="1.2"/>',
+    echarpe: '<path d="M14 50q18 9 36 0l1 5q-19 9-38 0z" fill="#e03b3b"/><path d="M40 53l4 10h-6l-2-9z" fill="#c42f2f"/>',
+    etoile: '<path d="M32 2l3.2 6.6 7.2 1-5.2 5 1.3 7.2L32 18.4l-6.5 3.4 1.3-7.2-5.2-5 7.2-1z" fill="#f5c542" stroke="#b8860b" stroke-width="1"/>',
+    diplome: '<path d="M10 16l22-9 22 9-22 9z" fill="#1a1d28"/><path d="M20 20v6q12 6 24 0v-6l-12 5z" fill="#2b2d42"/><path d="M52 16v11" stroke="#f5c542" stroke-width="1.6"/><circle cx="52" cy="28" r="2" fill="#f5c542"/>',
+    masque: '<path d="M12 30q20-7 40 0l-2 10q-8 2-12-3h-12q-4 5-12 3z" fill="#e03b3b"/><circle cx="24" cy="35" r="4.2" fill="#fff"/><circle cx="40" cy="35" r="4.2" fill="#fff"/><circle cx="25" cy="35" r="2.2" fill="#1a1d28"/><circle cx="41" cy="35" r="2.2" fill="#1a1d28"/>',
+    viking: '<path d="M16 24a16 14 0 0132 0z" fill="#8a8f98"/><path d="M16 22q-9-4-9-16 6 6 12 10zM48 22q9-4 9-16-6 6-12 10z" fill="#f2ecd9" stroke="#b8a77a" stroke-width="1"/><rect x="15" y="21" width="34" height="4" rx="2" fill="#6b5a3a"/>',
+    pirate: '<path d="M14 24q18-14 36 0z" fill="#1a1d28"/><circle cx="32" cy="17" r="2.6" fill="#fff"/><path d="M15 27l34 3" stroke="#1a1d28" stroke-width="1.6"/><circle cx="40" cy="34" r="7" fill="#1a1d28"/>',
+    couronneor: '<path d="M17 22l3-14 7 8 5-11 5 11 7-8 3 14z" fill="#f5c542" stroke="#b8860b" stroke-width="1.2"/><circle cx="32" cy="16" r="2.4" fill="#e03b3b"/><circle cx="23" cy="18" r="1.8" fill="#3b82f6"/><circle cx="41" cy="18" r="1.8" fill="#22c55e"/>',
+    dragon: '<path d="M14 26l2-14 6 8M50 26l-2-14-6 8" fill="#f59e0b"/><path d="M8 40q-8-6-4-16 4 8 10 8zM56 40q8-6 4-16-4 8-10 8z" fill="#16a34a"/><path d="M26 46l2 3 2-3M34 46l2 3 2-3" fill="#fff"/>',
     fleur: '<g transform="translate(47 21)"><circle r="3.4" cy="-4.2" fill="#f9a8d4"/><circle r="3.4" cx="4.2" fill="#f9a8d4"/><circle r="3.4" cy="4.2" fill="#f9a8d4"/><circle r="3.4" cx="-4.2" fill="#f9a8d4"/><circle r="2.6" fill="#f5c542"/></g>',
   };
   const MASCOT = (v) => !v ? "" : `<svg class="mascot" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="38" rx="22" ry="20" fill="var(--accent)"/><circle cx="24" cy="34" r="6" fill="#fff"/><circle cx="40" cy="34" r="6" fill="#fff"/><circle cx="25" cy="35" r="2.6" fill="#1a1d28"/><circle cx="41" cy="35" r="2.6" fill="#1a1d28"/><path d="M27 46q5 4 10 0" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M14 26l5-12 7 9M50 26l-5-12-7 9" fill="var(--accent)"/>${v === "lunettes" ? '<g fill="none" stroke="#1a1d28" stroke-width="2.2"><circle cx="24" cy="34" r="8"/><circle cx="40" cy="34" r="8"/><path d="M32 34h0"/></g>' : ""}${v === "couronne" ? '<path d="M20 14l4 8 8-10 8 10 4-8 2 14H18z" fill="#f5c542" stroke="#b8860b" stroke-width="1.2"/>' : ""}${MASCOT_WEAR[v] || ""}</svg>`;
   function applyRewards() {
-    const r = document.documentElement, col = rwEquipped("couleur"), bg = rwEquipped("fond");
-    if (col && col.v) { r.style.setProperty("--accent", col.v); r.style.setProperty("--btn-bg", col.v); r.style.setProperty("--today-bg", col.v); } else { ["--accent", "--btn-bg", "--today-bg"].forEach(k => r.style.removeProperty(k)); }
+    const r = document.documentElement, col = rwEquipped("couleur"), bg = rwEquipped("fond"), cv = rwColor(col);
+    if (cv) { r.style.setProperty("--accent", cv); r.style.setProperty("--btn-bg", cv); r.style.setProperty("--today-bg", cv); } else { ["--accent", "--btn-bg", "--today-bg"].forEach(k => r.style.removeProperty(k)); }
     document.body.dataset.bg = bg && bg.v ? bg.v : "";
     const card = rwEquipped("carte"), fl = rwEquipped("flamme");
     document.body.dataset.card = card && card.v ? card.v : ""; document.body.dataset.flame = fl && fl.v ? fl.v : "";
@@ -755,7 +822,7 @@
       <div class="card pad stack rwtop"><div class="row">${MASCOT((rwEquipped("mascotte") || {}).v || "mergo")}<div class="grow"><b class="big">${xp} points</b><p class="small muted">${next ? "Prochaine récompense : " + esc(next.n) + " à " + next.pts + " points" : "Tu as tout débloqué avec les points !"}</p></div></div>
         <div class="row chestrow"><span class="mico">${I.star}</span><p class="grow small">${chests > 0 ? plural(chests, "coffre surprise à ouvrir", "coffres surprise à ouvrir") : "Un coffre surprise tous les " + CHEST_EVERY + " points. Prochain à " + (Math.floor(xp / CHEST_EVERY) + 1) * CHEST_EVERY + "."}</p>${chests > 0 ? '<button class="btn sm" id="chest">Ouvrir</button>' : ""}</div></div>
       <p class="small muted">Les points viennent de tes révisions : 10 par bonne réponse, 2 par erreur, 100 par chapitre maîtrisé à 100 %. Rien à dépenser : ce que tu débloques reste à toi, sur tous tes appareils.</p>
-      ${RTYPES.map(([t, label]) => `<div class="stack"><h2>${label}</h2><div class="rwgrid">${REWARDS.filter(r => r.type === t && (!r.price || rwOwned(r, xp, st))).map(r => { const own = rwOwned(r, xp, st), on = (st.equip[t] || REWARDS.find(x => x.type === t).id) === r.id; return `<button class="rw${own ? "" : " locked"}" data-rw="${r.id}" aria-pressed="${on}" ${own ? "" : "disabled"}>${t === "couleur" ? `<span class="rwdot" style="--c:${r.v || "#4b39c8"}"></span>` : t === "mascotte" && r.v ? MASCOT(r.v) : ""}<b>${esc(r.n)}</b><span class="small">${own ? (on ? "Équipé" : "Équiper") : r.chest ? "Dans un coffre" : r.pts + " points"}</span></button>`; }).join("")}</div></div>`).join("")}`;
+      ${RTYPES.map(([t, label]) => `<div class="stack"><h2>${label}</h2><div class="rwgrid">${REWARDS.filter(r => r.type === t && (!r.price || rwOwned(r, xp, st))).map(r => { const own = rwOwned(r, xp, st), on = (st.equip[t] || REWARDS.find(x => x.type === t).id) === r.id; return `<button class="rw${own ? "" : " locked"}" data-rw="${r.id}" aria-pressed="${on}" ${own ? "" : "disabled"}>${t === "couleur" ? `<span class="rwdot" style="--c:${esc(rwColor(r) || r.v || "#4b39c8")}"></span>` : t === "mascotte" && r.v ? MASCOT(r.v) : ""}<b>${esc(r.n)}</b><span class="small">${own ? (on ? "Équipé" : "Équiper") : r.chest ? "Dans un coffre" : r.lv ? "Niveau " + r.lv : r.pts + " points"}</span></button>`; }).join("")}</div></div>`).join("")}`;
     app.querySelectorAll("[data-rw]").forEach(b => b.onclick = () => { const r = REWARDS.find(x => x.id === b.dataset.rw), s2 = rwState(); s2.equip[r.type] = r.id; rwSave(s2); applyRewards(); if (r.type === "son") ping(true); if (r.type === "confettis") confetti(r.v || undefined); screenRewards(); });
     if ($("chest")) $("chest").onclick = () => {
       const s2 = rwState(), left = REWARDS.filter(r => r.chest && !s2.chest.includes(r.id)); s2.opened++;
@@ -764,9 +831,12 @@
     };
   }
   // ---------- boutique ----------
-  const STYPES = [["couleur", "Thèmes"], ["fond", "Fonds"], ["mascotte", "Mergo"], ["carte", "Cartes"], ["flamme", "Flamme"], ["titre", "Titres"], ["confettis", "Animations"], ["coffre", "Coffres"]];
+  const STYPES = [["couleur", "Thèmes"], ["fond", "Fonds"], ["mascotte", "Mergo"], ["carte", "Cartes"], ["flamme", "Flamme"], ["titre", "Titres"], ["perso", "Perso"], ["confettis", "Animations"], ["coffre", "Coffres"]];
   let shopTab = "couleur";
   function shopPreview(r) {
+    if (r.perso === "couleur") return `<span class="swatch" style="background:${esc(rwColor(r)) || "conic-gradient(#ef4444,#f59e0b,#22c55e,#3b82f6,#a855f7,#ef4444)"}"></span>`;
+    if (r.perso === "titre") return `<span class="rwtitle">${esc(rwName(r) || "Ton titre")}</span>`;
+    if (r.perso === "phrase") return `<span class="mico">${I.spark}</span>`;
     if (r.type === "couleur") return `<span class="swatch" style="background:${esc(r.v)}"></span>`;
     if (r.type === "fond") return `<span class="bgprev bg-${esc(r.v)}"></span>`;
     if (r.type === "mascotte") return MASCOT(r.v || "mergo");
@@ -787,10 +857,12 @@
     function draw() {
       const st = rwState(), xp = xpInfo().xp, co = coinsInfo(), bal = co.balance, lv = xpInfo().level;
       const nextGift = GIFTS.find(g => g.price > bal);
-      const items = shopTab === "coffre" ? [] : SHOP.filter(r => r.type === shopTab);
-      const card = r => { const own = rwOwned(r, xp, st), on = st.equip[r.type] === r.id, can = bal >= r.price;
-        return `<div class="shopitem${own ? " own" : ""}"><div class="sprev">${shopPreview(r)}</div><b>${esc(r.n)}</b>
-          ${own ? `<button class="btn sm${on ? " ghost" : ""}" data-eq="${r.id}" ${on ? "disabled" : ""}>${on ? "Équipé" : "Équiper"}</button>` : `<button class="btn sm${can ? "" : " ghost"}" data-buy="${r.id}" ${can ? "" : "disabled"}>${I.coin}${r.price}</button>`}</div>`; };
+      const order = (a, b) => (a.lv || 0) - (b.lv || 0) || (a.need || 0) - (b.need || 0) || (a.price || 0) - (b.price || 0);
+      const items = shopTab === "coffre" ? [] : shopTab === "perso" ? SHOP.filter(r => r.perso) : SHOP.filter(r => r.type === shopTab && !r.perso).sort(order).concat(LEVEL_ITEMS.filter(r => r.type === shopTab));
+      const card = r => { const own = rwOwned(r, xp, st), on = st.equip[r.type] === r.id, locked = !own && r.need && lv < r.need, can = !locked && bal >= r.price;
+        const act = own ? (r.perso ? `<button class="btn sm" data-perso="${r.id}">${r.perso === "phrase" || on || r.type === "phrase" ? "Modifier" : "Modifier et équiper"}</button>` : `<button class="btn sm${on ? " ghost" : ""}" data-eq="${r.id}" ${on ? "disabled" : ""}>${on ? "Équipé" : "Équiper"}</button>`)
+          : r.lv ? `<button class="btn sm ghost" disabled>${I.lock}Niveau ${r.lv}</button>` : locked ? `<button class="btn sm ghost" disabled>${I.lock}Niveau ${r.need}</button>` : `<button class="btn sm${can ? "" : " ghost"}" data-buy="${r.id}" ${can ? "" : "disabled"}>${I.coin}${r.price}</button>`;
+        return `<div class="shopitem${own ? " own" : ""}${r.lv ? " excl" : ""}"><div class="sprev">${shopPreview(r)}</div><b>${esc(r.n)}</b>${r.lv && !own ? '<span class="small muted">Exclusif, offert au niveau ' + r.lv + "</span>" : locked ? `<span class="small muted">${r.price} pièces</span>` : ""}${act}</div>`; };
       app.innerHTML = `<div class="row"><a class="iconbtn" href="#recompenses" aria-label="Retour aux récompenses">${I.back}</a><h1 class="grow">Boutique</h1></div>
         <div class="card pad stack coinhero"><div class="row"><span class="mico big">${I.coin}</span><div class="grow"><b class="big">${bal} pièces</b><p class="small muted">Gagnées en révisant : 1 par bonne réponse, 10 par chapitre maîtrisé, et ${15 * (lv + 1)} en bonus au niveau ${lv + 1}.</p></div></div>
           ${access && nextGift ? `<div class="stack"><div class="row between small"><span>Prochain cadeau : <b>${esc(nextGift.n)}</b></span><span class="muted">${bal} / ${nextGift.price}</span></div><div class="bar"><i style="width:${Math.min(100, bal / nextGift.price * 100)}%"></i></div></div>` : ""}</div>
@@ -800,19 +872,30 @@
         <div class="seg shoptabs" role="tablist" aria-label="Rayons de la boutique">${STYPES.map(t => `<button role="tab" data-st="${t[0]}" aria-selected="${shopTab === t[0]}">${t[1]}</button>`).join("")}</div>
         ${shopTab === "coffre" ? `<div class="card pad stack chestshop"><div class="row"><span class="mico big">${I.star}</span><div class="grow"><b>Coffre surprise</b><p class="small muted">Un article de la boutique au hasard, que tu n'as pas encore. Parfois une très bonne affaire.</p></div></div>
             <button class="btn" data-chest ${bal >= CHEST_PRICE || st.freeChests ? "" : "disabled"}>${st.freeChests ? "Ouvrir un coffre offert (" + st.freeChests + ")" : I.coin + CHEST_PRICE + " pièces"}</button><p class="note">Un coffre offert tous les 5 niveaux.</p></div>`
-          : `<div class="shopgrid">${items.map(card).join("")}</div>`}
+          : `${shopTab === "perso" ? '<p class="small muted">Écris ton propre titre, choisis ta couleur exacte ou ta phrase d\'accueil. Tu peux les changer quand tu veux après l\'achat.</p>' : ""}<div class="shopgrid">${items.map(card).join("")}</div>`}
         <p class="note">Ce que tu achètes reste à toi, sur tous tes appareils. Plus tu révises, plus tu gagnes de pièces.</p>`;
       app.querySelectorAll("[data-st]").forEach(b => b.onclick = () => { shopTab = b.dataset.st; draw(); });
       app.querySelectorAll("[data-eq]").forEach(b => b.onclick = () => { const r = REWARDS.find(x => x.id === b.dataset.eq), s2 = rwState(); s2.equip[r.type] = r.id; rwSave(s2); applyRewards(); if (r.type === "confettis") confetti(r.v); toast(r.n + " équipé."); draw(); });
       app.querySelectorAll("[data-buy]").forEach(b => b.onclick = () => {
         const r = SHOP.find(x => x.id === b.dataset.buy), s2 = rwState(); if (!r || rwOwned(r, xpInfo().xp, s2)) return;
         if (coinsInfo().balance < r.price) return toast("Pas encore assez de pièces.");
-        s2.buys.push({ id: r.id, price: r.price, at: Date.now() }); s2.equip[r.type] = r.id; rwSave(s2); applyRewards(); ping(true); confetti(r.type === "confettis" ? r.v : "etoiles"); toast(r.n + " acheté et équipé."); draw();
+        if (r.need && xpInfo().level < r.need) return toast("Disponible au niveau " + r.need + ".");
+        s2.buys.push({ id: r.id, price: r.price, at: Date.now() }); if (!r.perso) s2.equip[r.type] = r.id; rwSave(s2); applyRewards(); ping(true); confetti(r.type === "confettis" ? r.v : "etoiles"); draw();
+        if (r.perso) persoSheet(r); else toast(r.n + " acheté et équipé.");
       });
+      // Articles personnalisés : on écrit son titre ou sa phrase, on choisit sa couleur.
+      function persoSheet(r) {
+        const c = rwState().custom, field = r.perso === "couleur" ? `<input id="pv" type="color" value="${esc(rwColor(r) || "#4b39c8")}" style="width:100%;min-height:56px" aria-label="Ta couleur">`
+          : `<input id="pv" type="text" maxlength="${r.perso === "titre" ? 28 : 80}" value="${esc(c[r.perso] || "")}" placeholder="${r.perso === "titre" ? "Ex. Reine des révisions" : "Ex. Aujourd'hui je gère tout"}" aria-label="${esc(r.n)}">`;
+        sheet(`<div class="row"><span class="mico big">${I.spark}</span><h1>${esc(r.n)}</h1></div><div class="field">${field}</div><p class="small muted">${r.perso === "phrase" ? "Elle s'affiche sur ton accueil, sous ton prénom." : r.perso === "titre" ? "Il s'affiche à côté de ton prénom sur l'accueil." : "Toute l'appli prend ta couleur."}</p><button class="btn" id="pok">Enregistrer</button><button class="btn ghost" data-close>Fermer</button>`, el => {
+          el.querySelector("#pok").onclick = () => { const v = el.querySelector("#pv").value.trim().replace(/\s+/g, " "); if (r.perso === "couleur" && !/^#[0-9a-f]{6}$/i.test(v)) return; const s3 = rwState(); s3.custom[r.perso] = v; if (r.type !== "phrase") s3.equip[r.type] = r.id; rwSave(s3); applyRewards(); closeSheet(); toast("Enregistré."); draw(); };
+        });
+      }
+      app.querySelectorAll("[data-perso]").forEach(b => b.onclick = () => persoSheet(SHOP.find(x => x.id === b.dataset.perso)));
       const chest = app.querySelector("[data-chest]");
       if (chest) chest.onclick = () => {
         const s2 = rwState(), free = s2.freeChests > 0; if (!free && coinsInfo().balance < CHEST_PRICE) return;
-        const left = SHOP.filter(r => !rwOwned(r, xpInfo().xp, s2)); if (!left.length) return toast("Tu as déjà tout ce que contient la boutique !");
+        const left = SHOP.filter(r => !r.perso && !rwOwned(r, xpInfo().xp, s2)); if (!left.length) return toast("Tu as déjà tout ce que contient la boutique !");
         const got = left[Math.floor(Math.random() * left.length)];
         if (free) s2.freeChests--; else s2.buys.push({ id: "coffre", price: CHEST_PRICE, at: Date.now() });
         s2.buys.push({ id: got.id, price: 0, at: Date.now(), chest: true }); rwSave(s2); confetti("explosion");
@@ -839,26 +922,33 @@
   function levelGifts(lvl) {
     const st = rwState(); if (st.lvl == null) { st.lvl = lvl; rwSave(st); return null; }
     if (lvl <= st.lvl) return null;
-    const out = { coins: 0, items: [], chests: 0, from: st.lvl, to: lvl };
+    // Rééquilibré (nov. 2026) : des pièces à chaque niveau, un article offert seulement tous les 3 niveaux (une couleur au plus une fois sur deux),
+    // un coffre tous les 5 niveaux et une exclusivité aux grands paliers. Ce qui a déjà été offert reste acquis.
+    const out = { coins: 0, items: [], chests: 0, excl: [], from: st.lvl, to: lvl };
     for (let l = st.lvl + 1; l <= lvl; l++) {
       out.coins += 15 * l;
-      const pool = SHOP.filter(r => !rwOwned(r, Infinity, st) && r.price <= 150 + 60 * l);
-      if (pool.length) { const got = pool[Math.floor(Math.random() * pool.length)]; st.buys.push({ id: got.id, price: 0, at: Date.now(), level: l }); out.items.push(got); }
+      if (l % 3 === 0) {
+        const lastCol = st.buys.filter(b => b.level).slice(-1).some(b => /^c-/.test(b.id));
+        const pool = SHOP.filter(r => !r.perso && !rwOwned(r, Infinity, st) && r.price <= 100 + 40 * l && (!r.need || r.need <= l) && !(lastCol && r.type === "couleur"));
+        if (pool.length) { const got = pool[Math.floor(Math.random() * pool.length)]; st.buys.push({ id: got.id, price: 0, at: Date.now(), level: l }); out.items.push(got); }
+      }
       if (l % 5 === 0) { st.freeChests++; out.chests++; }
+      LEVEL_ITEMS.filter(r => r.lv === l).forEach(r => out.excl.push(r));
     }
     st.lvl = lvl; rwSave(st); return out;
   }
   // Fête un badge ou un niveau gagné depuis la dernière fois (jamais au tout premier passage).
   function celebrate() {
     const got = badges().filter(b => b[1]).map(b => b[0]), seen = jget("merge.badges", null), lvl = xpInfo().level, old = jget("merge.level", null);
-    jset("merge.badges", got); jset("merge.level", lvl); if (!seen || old == null) { levelGifts(lvl); return; }
+    jset("merge.badges", got); jset("merge.level", lvl); walletSync(); if (!seen || old == null) { levelGifts(lvl); return; }
     const fresh = got.filter(b => !seen.includes(b));
     const gifts = levelGifts(lvl);
     if (gifts && (gifts.items.length || gifts.coins)) {
-      const unlocked = REWARDS.filter(r => !r.price && !r.chest && r.pts > 0 && r.pts <= xpInfo().xp && r.pts > 100 * (gifts.from - 1) * gifts.from / 2);
-      sheet(`<div class="badgewin lvlwin">${MASCOT((rwEquipped("mascotte") || {}).v || "mergo")}<h1>Niveau ${lvl} !</h1><p class="muted">Tu passes au niveau ${lvl}. Voilà ce que tu gagnes :</p>
+      const unlocked = REWARDS.filter(r => !r.price && !r.chest && r.pts > 0 && r.pts <= xpInfo().xp && r.pts > lvlStart(gifts.from));
+      sheet(`<div class="badgewin lvlwin">${MASCOT((rwEquipped("mascotte") || {}).v || "mergo")}<h1>Niveau ${lvl} !</h1><p class="muted">Rang ${esc(rankOf(lvl))}. Voilà ce que tu gagnes :</p>
         <div class="lvlgifts"><div class="lvlgift"><span class="mico">${I.coin}</span><b>+${gifts.coins} pièces</b></div>
         ${gifts.items.map(r => `<div class="lvlgift"><span class="sprev">${shopPreview(r)}</span><b>${esc(r.n)}</b><span class="small muted">offert</span></div>`).join("")}
+        ${gifts.excl.map(r => `<div class="lvlgift excl"><span class="sprev">${shopPreview(r)}</span><b>${esc(r.n)}</b><span class="small muted">exclusivité de niveau</span></div>`).join("")}
         ${unlocked.map(r => `<div class="lvlgift"><span class="mico">${I.star}</span><b>${esc(r.n)}</b><span class="small muted">débloqué</span></div>`).join("")}
         ${gifts.chests ? `<div class="lvlgift"><span class="mico">${I.gift}</span><b>${plural(gifts.chests, "coffre surprise", "coffres surprise")}</b><span class="small muted">à ouvrir dans la boutique</span></div>` : ""}</div>
         ${fresh.length ? `<div class="chips">${fresh.map(b => `<span class="badge on">${esc(b)}</span>`).join("")}</div>` : ""}
@@ -867,10 +957,16 @@
     if (!fresh.length && lvl <= old) return;
     sheet(`<div class="badgewin"><span class="mico big">${I.star}</span><h1>${fresh.length ? (fresh.length > 1 ? "Nouveaux badges" : "Nouveau badge") : "Niveau " + lvl}</h1>${fresh.length ? `<div class="chips">${fresh.map(b => `<span class="badge on">${esc(b)}</span>`).join("")}</div>` : ""}<p class="muted">${lvl > old ? "Tu passes au niveau " + lvl + ". " : "Tu es niveau " + lvl + ". "}Continue comme ça.</p><button class="btn" data-close>Super</button></div>`); confetti();
   }
-  // Plan de révision : les chapitres de la matière répartis sur les jours qui restent, les moins maîtrisés d'abord.
+  // Chapitres au programme du contrôle (option « Choisir les chapitres ») : null = tous les chapitres de la matière.
+  function examChs(s) {
+    const v = jget("merge.examch." + s.id, null); if (!v || !v.on || !s.exam_date || v.d !== s.exam_date || !Array.isArray(v.ids)) return null;
+    const ids = v.ids.filter(x => state.chapters.some(c => c.id === x && c.subject_id === s.id)); return ids.length ? ids : null;
+  }
+  // Plan de révision : les chapitres de la matière (ou ceux choisis pour le contrôle) répartis sur les jours qui restent, les moins maîtrisés d'abord.
   function planFor(s) {
     const j = daysUntil(s.exam_date); if (j == null || j < 0 || isFree(s)) return [];
-    let chs = state.chapters.filter(c => c.subject_id === s.id && cardsOf(c.id).length).map(c => ({ c, m: mastery(cardsOf(c.id)) })).sort((a, b) => a.m - b.m);
+    const only = examChs(s);
+    let chs = state.chapters.filter(c => c.subject_id === s.id && cardsOf(c.id).length && (!only || only.includes(c.id))).map(c => ({ c, m: mastery(cardsOf(c.id)) })).sort((a, b) => a.m - b.m);
     if (!chs.length) return [];
     const todo = chs.filter(x => x.m < 100); if (todo.length) chs = todo;
     const n = Math.max(1, Math.min(j, 30)), days = Array.from({ length: n }, (_, i) => { const d = new Date(); d.setDate(d.getDate() + i); return { day: localDay(d), items: [], last: false }; });
@@ -1013,12 +1109,12 @@
     const ups = state.subjects.filter(x => x.exam_date && daysUntil(x.exam_date) >= 0).sort((a, b) => a.exam_date.localeCompare(b.exam_date));
     const yearNow = new Date().getMonth() >= 8 ? new Date().getFullYear() : new Date().getFullYear() - 1, newYear = p.school_year && p.school_year < yearNow;
     app.innerHTML = `<div class="row between"><div class="logo">${esc(C.NOM_APPLI)}<b>.</b></div><span class="grow"></span><span class="homemusic"><button class="iconbtn flat" data-qs aria-label="Recherche rapide">${I.search}</button><button class="iconbtn flat" data-pomo aria-label="Pomodoro">${I.clock}</button>${musicBtn()}</span>${state.offline ? '<span class="pill warn">Hors ligne</span>' : st ? `<span class="streak" title="${plural(st, "jour", "jours")} d'affilée">${plural(st, "jour", "jours")}<span class="stl">&nbsp;d'affilée</span></span>` : `<span class="pill">${esc(p.classe || "")}</span>`}</div>
-      <div class="hello"><div class="row">${MASCOT((rwEquipped("mascotte") || {}).v || "")}<h1 class="grow">Salut ${esc(p.display_name || "")}${rwEquipped("titre") && rwEquipped("titre").pts ? ` <span class="rwtitle">${esc(rwEquipped("titre").n)}</span>` : ""}</h1></div><p class="muted">${esc(new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }).replace(/^./, c => c.toUpperCase()))} · ${esc(PEPS[new Date().getDate() % PEPS.length])}</p></div>
+      <div class="hello"><div class="row">${MASCOT((rwEquipped("mascotte") || {}).v || "")}<h1 class="grow">Salut ${esc(p.display_name || "")}${rwEquipped("titre") && rwEquipped("titre").id !== "t-novice" && rwName(rwEquipped("titre")) ? ` <span class="rwtitle">${esc(rwName(rwEquipped("titre")))}</span>` : ""}</h1></div><p class="muted">${esc(new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }).replace(/^./, c => c.toUpperCase()))} · ${esc((rwOwned(SHOP.find(r => r.id === "p-phrase"), 0, rwState()) && rwState().custom.phrase) || PEPS[new Date().getDate() % PEPS.length])}</p></div>
       <div class="level"><a class="lvl" href="#recompenses" aria-label="Niveau ${lv.level}, voir les récompenses">Niveau ${lv.level}</a><a class="coinpill" href="#boutique" aria-label="${coinsInfo().balance} pièces, ouvrir la boutique">${I.coin}${coinsInfo().balance}</a><div class="bar grow"><i style="width:${lv.pct}%"></i></div><span class="small muted">encore ${lv.left} points</span></div>
       ${(() => { const tn = new Date().getHours() >= 15 ? tonightSuggestion() : null; return tn ? `<div class="banner"><div><h2>Ce soir</h2><p class="small">Demain tu as ${tn.subs.map(x => esc(x.name)).join(", ")}. Un petit tour avant ?</p></div><a class="btn sm" href="#revision-${tn.subs[0].id}">Réviser ${esc(tn.subs[0].name)}</a></div>` : ""; })()}${resumeHtml()}${[0, 1].includes(new Date().getDay()) && state.sessions.length ? `<div class="banner"><div><h2>Ton bilan de la semaine est prêt</h2><p class="small">Ce que tu as fait, et ton objectif pour la suite.</p></div><a class="btn sm" href="#bilan">Voir</a></div>` : ""}
       <div class="dash"><div class="card today"><div><p class="small muted">À réviser aujourd'hui</p><div class="big">${plural(due, "carte", "cartes")}</div></div>
         <div><div class="row between small muted" style="margin-bottom:6px"><span>Objectif du jour</span><span>${doneVal} / ${p.daily_goal_value} ${unit}</span></div><div class="bar"><i style="width:${Math.min(100, doneVal / p.daily_goal_value * 100)}%"></i></div></div>
-        ${due ? '<a class="btn" href="#cartes-jour">Réviser maintenant</a>' : ""}${state.cards.length > 3 ? `<a class="btn ghost mixbtn" href="#melange">Révision mélangée<span class="small">${state.subjects.some(x => x.exam_date && daysUntil(x.exam_date) >= 0) ? "priorité aux contrôles proches" : "toutes tes matières"}</span></a>` : ""}${due ? "" : `<p class="small muted">${state.cards.length ? "Tu es à jour. Reviens plus tard ou ouvre un chapitre pour t'entraîner." : "Ajoute un chapitre et importe ton cours pour créer tes premières cartes."}</p>`}</div>
+        ${due ? '<a class="btn" href="#cartes-jour">Réviser maintenant</a>' : ""}${state.cards.length > 3 ? `<a class="btn ghost mixbtn" href="#melange">Révision mélangée<span class="small">${state.subjects.some(x => x.exam_date && daysUntil(x.exam_date) >= 0) ? "priorité aux contrôles proches" : "toutes tes matières"}</span></a><a class="btn ghost mixbtn" href="#perso">Choisir quoi réviser<span class="small">matières, dossiers ou chapitres au choix</span></a>` : ""}${due ? "" : `<p class="small muted">${state.cards.length ? "Tu es à jour. Reviens plus tard ou ouvre un chapitre pour t'entraîner." : "Ajoute un chapitre et importe ton cours pour créer tes premières cartes."}</p>`}</div>
         ${weekHtml(week, p)}
         <div class="card pad stack upnext"><div class="row between"><h2>Prochains contrôles</h2><a class="linkbtn" href="#calendrier">Calendrier</a></div>${ups.length ? ups.slice(0, 3).map(x => `<a class="exam" href="#matiere-${x.id}" style="--c:${esc(x.color)}"><span class="jx">${daysUntil(x.exam_date) === 0 ? "Auj." : "J-" + daysUntil(x.exam_date)}</span><span class="grow"><b>${esc(x.name)}</b><span class="small muted">${esc(fmtDate(x.exam_date))}</span></span></a>`).join("") : '<p class="muted small">Aucun contrôle prévu. Place une date dans le calendrier pour avoir un plan de révision.</p>'}</div></div>
       <div class="card stats">${[[I.bolt, st, st > 1 ? "jours d'affilée" : "jour d'affilée", ""], [I.check, state.cards.filter(isMastered).length + " / " + state.cards.length, "cartes maîtrisées", ""], [I.cal, next ? (daysUntil(next.exam_date) === 0 ? "Auj." : "J-" + daysUntil(next.exam_date)) : "Libre", next ? esc(next.name) : "aucun contrôle prévu", ""], [I.spark, homeQuota ? homeQuota.calls : "…", "appels IA aujourd'hui", "hq"]].map((x, i) => `<div class="stat s${i + 1}"><span class="sico">${x[0]}</span><div><b${x[3] ? ` id="${x[3]}"` : ""}>${x[1]}</b><span>${x[2]}</span></div></div>`).join("")}</div>
@@ -1081,7 +1177,7 @@
     const chs = state.chapters.filter(c => c.subject_id === id), groups = state.groups.filter(g => g.subject_id === id), loose = chs.filter(c => !groups.some(g => g.id === c.group_id));
     app.innerHTML = `<div class="row"><a class="iconbtn" href="#matieres" aria-label="Retour aux matières">${I.back}</a><span class="grow"></span><button class="iconbtn flat" id="sAdd" aria-label="Ajouter un chapitre ou un dossier" title="Ajouter">${I.plus}</button><button class="iconbtn flat" id="sSet" aria-label="Réglages de la matière" title="Réglages">${I.gear}</button></div>
       <div class="stack" style="--c:${esc(s.color)}"><div class="row"><span class="dot"></span><h1>${esc(s.name)}</h1></div>
-        <div class="row" style="flex-wrap:wrap">${examPill(s)}<button class="linkbtn" id="examBtn" aria-expanded="${!!openPicker}">${I.cal}Date du contrôle</button></div><div id="examBox"></div>
+        <div class="row" style="flex-wrap:wrap">${examPill(s)}${examChs(s) ? `<span class="pill">${plural(examChs(s).length, "chapitre", "chapitres")} au contrôle</span>` : ""}<button class="linkbtn" id="examBtn" aria-expanded="${!!openPicker}">${I.cal}Date du contrôle</button></div><div id="examBox"></div><div id="examChs"></div>
         ${chs.some(c => cardsOf(c.id).length) ? `<a class="btn revall" href="#revision-${id}">${I.cards}Réviser tous les chapitres de la matière</a>` : ""}
         <div class="row" style="flex-wrap:wrap"><a class="btn sm ghost" href="#methode-${id}">${I.steps}Fiche méthode</a><a class="btn sm ghost" href="#bac-${id}">${I.book}Vrais sujets d'examen</a></div></div>
       <div class="stack"><div class="row between"><h2>Dossiers</h2><button class="iconbtn accent" id="addG" aria-label="Ajouter un dossier">${I.plus}</button></div>
@@ -1089,10 +1185,20 @@
         ${groups.length ? `<div class="grid">${groups.map(g => { const gc = chs.filter(c => c.group_id === g.id), cs = state.cards.filter(k => gc.some(c => c.id === k.chapter_id)), m = mastery(cs); return `<a class="card folder" style="--c:${esc(okColor(g.color) ? g.color : s.color)}" href="#dossier-${g.id}"><div class="row">${I.folder}<b class="grow">${esc(g.name)}</b></div><div class="row between small"><span>${plural(gc.length, "chapitre", "chapitres")}</span><span>${m} %</span></div><div class="bar"><i style="width:${m}%"></i></div></a>`; }).join("")}</div>` : '<p class="small muted">Range tes chapitres par thème, par exemple « Thème 1 : Génétique ». Touche + pour créer un dossier.</p>'}</div>
       <div class="stack"><div class="row between"><h2>${groups.length ? "Chapitres sans dossier" : "Chapitres"}</h2></div>
       ${loose.length ? loose.map(c => chapterRow(c, s.color)).join("") : `<p class="muted">${chs.length ? "Tous tes chapitres sont rangés dans des dossiers." : "Aucun chapitre pour l'instant. Touche + en haut à droite pour en créer un."}</p>`}</div>
-      ${subjectToolsHtml(s, chs)}`;
-    const openExam = () => examPicker($("examBox"), { date: s.exam_date, free: isFree(s) }, async v => { const err = await saveExam(id, v); if (err) return fail(err, "Date non enregistrée"); toast(v.free ? "Révision libre activée." : v.date ? "Date enregistrée." : "Date retirée."); screenSubject(id, true); });
+      <div id="stools">${subjectToolsHtml(s, chs)}</div>`;
+    // Option sous le calendrier : choisir les chapitres qui tombent au contrôle. Le plan de révision ne garde alors qu'eux.
+    function examChsBox() {
+      const box = $("examChs"); if (!box) return;
+      if (!$("examBox").innerHTML || !s.exam_date || isFree(s) || daysUntil(s.exam_date) < 0 || !chs.length) { box.innerHTML = ""; return; }
+      const key = "merge.examch." + id, v = jget(key, null), on = !!(v && v.on && v.d === s.exam_date), ids = on ? (v.ids || []).filter(x => chs.some(c => c.id === x)) : [];
+      box.innerHTML = `<div class="card pad stack exchs"><button type="button" class="switch" role="switch" aria-checked="${on}" id="exOn"><i></i><span>Choisir les chapitres du contrôle</span></button>${on ? `<p class="small muted" aria-live="polite">${ids.length ? "Ton plan de révision ne garde que " + (ids.length > 1 ? "ces " + ids.length + " chapitres." : "ce chapitre.") : "Touche les chapitres qui tombent au contrôle."}</p><div class="chips">${chs.map(c => `<button type="button" class="chip" data-exc="${c.id}" aria-pressed="${ids.includes(c.id)}" style="--c:${esc(s.color)}"><span class="dot"></span>&nbsp;${esc(c.name)}</button>`).join("")}</div>` : ""}</div>`;
+      const save = (o, i) => { jset(key, { on: o, d: s.exam_date, ids: i }); examChsBox(); $("stools").innerHTML = subjectToolsHtml(s, chs); };
+      $("exOn").onclick = () => save(!on, ids);
+      box.querySelectorAll("[data-exc]").forEach(b => b.onclick = () => save(true, ids.includes(b.dataset.exc) ? ids.filter(x => x !== b.dataset.exc) : ids.concat(b.dataset.exc)));
+    }
+    const openExam = () => { examPicker($("examBox"), { date: s.exam_date, free: isFree(s) }, async v => { const err = await saveExam(id, v); if (err) return fail(err, "Date non enregistrée"); toast(v.free ? "Révision libre activée." : v.date ? "Date enregistrée." : "Date retirée."); screenSubject(id, true); }); examChsBox(); };
     if (openPicker) openExam();
-    $("examBtn").onclick = () => { if ($("examBox").innerHTML) { $("examBox").innerHTML = ""; $("examBtn").setAttribute("aria-expanded", "false"); } else { openExam(); $("examBtn").setAttribute("aria-expanded", "true"); } };
+    $("examBtn").onclick = () => { if ($("examBox").innerHTML) { $("examBox").innerHTML = ""; examChsBox(); $("examBtn").setAttribute("aria-expanded", "false"); } else { openExam(); $("examBtn").setAttribute("aria-expanded", "true"); } };
     $("addG").onclick = () => {
       if ($("gform").innerHTML) { $("gform").innerHTML = ""; return; }
       $("gform").innerHTML = `<div class="field"><label for="gname">Nom du dossier</label><div class="row"><input id="gname" type="text" maxlength="80" placeholder="Ex. Thème 1 : Génétique"><button class="btn" id="gsave">Créer</button></div></div>`;
@@ -1137,6 +1243,7 @@
       const cs = state.cards.filter(k => chs.some(c => c.id === k.chapter_id)), m = mastery(cs);
       app.innerHTML = `<div class="row"><a class="iconbtn" href="#matiere-${s.id}" aria-label="Retour à la matière">${I.back}</a><span class="row small muted" style="--c:${esc(s.color)}"><span class="dot"></span>${esc(s.name)}</span><span class="grow"></span><button class="iconbtn flat" id="gAdd" aria-label="Ajouter un chapitre dans ce dossier" title="Ajouter un chapitre">${I.plus}</button><button class="iconbtn flat" id="gSet" aria-label="Réglages du dossier" title="Réglages du dossier">${I.gear}</button></div>
         <div class="stack" style="--c:${esc(s.color)}"><h1>${esc(g.name)}</h1><div class="row"><div class="bar grow"><i style="width:${m}%;background:var(--c)"></i></div><span class="small muted">${plural(chs.length, "chapitre", "chapitres")} · ${m} %</span></div></div>
+        ${cs.length ? `<a class="btn revall" href="#revdossier-${id}">${I.cards}Réviser toutes les flashcards du dossier</a>` : ""}
         <div class="seg" role="tablist" aria-label="Contenu du dossier">${TABS_G.map(t => `<button role="tab" data-gt="${t[0]}" aria-selected="${groupTab === t[0]}">${t[1]}</button>`).join("")}</div>
         <div class="stack" role="tabpanel">${list()}</div>
 `;
@@ -1649,10 +1756,16 @@
   // Une carte marquée fausse revient dans la file jusqu'à ce qu'elle soit réussie. Chaque carte réussie fait monter la jauge.
   async function screenSession(scope, hard, subj) {
     tabs.hidden = true; app.innerHTML = `<p class="muted">Chargement…</p>`;
-    const backHref = scope === "jour" || scope === "melange" ? "#accueil" : subj ? "#matiere-" + scope : "#chapitre-" + scope;
-    const pool = subj ? state.cards.filter(c => state.chapters.some(ch => ch.id === c.chapter_id && ch.subject_id === scope)) : cardsOf(scope);
-    const single = scope !== "jour" && scope !== "melange" && !subj && !hard;
+    // Révision combinée : tout un dossier (« g:<id> ») ou ce que l'élève a coché dans « Choisir quoi réviser » (« mixte »).
+    let chIds = null, backX = null, training = false;
+    if (scope === "mixte") { const v = jget("merge.mixsel", null); chIds = (v && Array.isArray(v.ids) ? v.ids : []); backX = "#perso"; }
+    else if (scope.startsWith("g:")) { const gid = scope.slice(2); chIds = state.chapters.filter(c => c.group_id === gid).map(c => c.id); backX = state.groups.some(g => g.id === gid) ? "#dossier-" + gid : "#matieres"; }
+    const backHref = backX || (scope === "jour" || scope === "melange" ? "#accueil" : subj ? "#matiere-" + scope : "#chapitre-" + scope);
+    const pool = chIds ? state.cards.filter(c => chIds.includes(c.chapter_id)) : subj ? state.cards.filter(c => state.chapters.some(ch => ch.id === c.chapter_id && ch.subject_id === scope)) : cardsOf(scope);
+    const single = scope !== "jour" && scope !== "melange" && !subj && !hard && !chIds;
     let meta = scope === "jour" ? dueCards(state.cards) : dueCards(pool);
+    // Mélange choisi : les cartes à revoir d'abord, puis toutes les autres cartes de la sélection, mélangées.
+    if (chIds && !hard) { const rest = shuffle(pool.filter(c => !meta.includes(c))); if (!meta.length) training = true; meta = meta.concat(rest); }
     // Révision mélangée : toutes les matières, les cartes à revoir et non maîtrisées d'abord, avec plus de poids pour les matières dont le contrôle approche.
     if (scope === "melange") {
       const subjOf = Object.fromEntries(state.chapters.map(ch => [ch.id, ch.subject_id])), w = {};
@@ -1661,7 +1774,6 @@
       meta = state.cards.slice().sort((a, b) => score(b) - score(a)).slice(0, 40);
       if (!meta.length) { location.hash = "#accueil"; return; }
     }
-    let training = false;
     if (hard) { meta = pool.filter(c => (c.wrong_count || 0) > 0).sort((a, b) => b.wrong_count - a.wrong_count).slice(0, 20); training = true; if (!meta.length) { toast("Aucune carte difficile pour l'instant : tu n'as encore rien raté ici."); location.hash = backHref; return; } }
     else if (single) { const todo = pool.filter(c => !isMastered(c)); if (todo.length) meta = meta.concat(shuffle(todo.filter(c => !meta.includes(c)))); else if (!meta.length) { meta = shuffle(pool); training = true; } }
     else if (!meta.length && scope !== "jour") { meta = shuffle(pool); training = true; }
@@ -2301,10 +2413,37 @@
     };
   }
 
+  // ---------- choisir quoi réviser : matières, dossiers et chapitres combinés en une session de flashcards ----------
+  function screenMix() {
+    tabs.hidden = true;
+    const withCards = state.chapters.filter(c => cardsOf(c.id).length), subs = state.subjects.filter(x => withCards.some(c => c.subject_id === x.id));
+    const prev = jget("merge.mixsel", null), sel = new Set(((prev && prev.ids) || []).filter(x => withCards.some(c => c.id === x)));
+    const all = ids => ids.length && ids.every(x => sel.has(x));
+    const chip = (attr, id, name, color, ids, cls) => `<button type="button" class="chip${cls ? " " + cls : ""}" ${attr}="${id}" aria-pressed="${all(ids)}" style="--c:${esc(color)}"><span class="dot"></span>&nbsp;${esc(name)}</button>`;
+    function draw() {
+      const n = state.cards.filter(c => sel.has(c.chapter_id)).length;
+      app.innerHTML = `<div class="row"><a class="iconbtn" href="#accueil" aria-label="Retour">${I.back}</a><h1 class="grow">Choisir quoi réviser</h1></div>
+        <p class="muted">Touche des matières, des dossiers ou des chapitres : toutes leurs flashcards sont mélangées dans une seule session.</p>
+        ${subs.length ? subs.map(x => { const chs = withCards.filter(c => c.subject_id === x.id), gs = state.groups.filter(g => g.subject_id === x.id && chs.some(c => c.group_id === g.id));
+          return `<div class="card pad stack mixsub" style="--c:${esc(x.color)}">${chip("data-ms", x.id, x.name, x.color, chs.map(c => c.id), "big")}
+            ${gs.length ? `<span class="label">Dossiers</span><div class="chips">${gs.map(g => chip("data-mg", g.id, g.name, okColor(g.color) ? g.color : x.color, chs.filter(c => c.group_id === g.id).map(c => c.id))).join("")}</div>` : ""}
+            <span class="label">Chapitres</span><div class="chips">${chs.map(c => chip("data-mc", c.id, c.name, x.color, [c.id])).join("")}</div></div>`; }).join("") : '<p class="muted">Importe un cours dans un chapitre pour avoir des flashcards à réviser.</p>'}
+        <div class="mixbar card pad row between"><span><b>${plural(n, "carte", "cartes")}</b><span class="small muted"> · ${plural(sel.size, "chapitre", "chapitres")}</span></span><div class="row">${sel.size ? '<button class="btn sm ghost" id="mxclr">Tout retirer</button>' : ""}<button class="btn sm" id="mxgo"${n ? "" : " disabled"}>${I.cards}Réviser</button></div></div>`;
+      const flip = ids => { const on = all(ids); ids.forEach(x => on ? sel.delete(x) : sel.add(x)); draw(); };
+      app.querySelectorAll("[data-ms]").forEach(b => b.onclick = () => flip(withCards.filter(c => c.subject_id === b.dataset.ms).map(c => c.id)));
+      app.querySelectorAll("[data-mg]").forEach(b => b.onclick = () => flip(withCards.filter(c => c.group_id === b.dataset.mg).map(c => c.id)));
+      app.querySelectorAll("[data-mc]").forEach(b => b.onclick = () => flip([b.dataset.mc]));
+      if ($("mxclr")) $("mxclr").onclick = () => { sel.clear(); draw(); };
+      $("mxgo").onclick = () => { if (!n) return; jset("merge.mixsel", { ids: [...sel] }); location.hash = "#mixte"; };
+    }
+    draw();
+  }
+
   // ---------- outils d'une matière ----------
   function subjectToolsHtml(s, chs) {
+    const only = examChs(s); if (only) chs = chs.filter(c => only.includes(c.id));
     const j = daysUntil(s.exam_date), weak = chs.map(c => ({ c, m: mastery(cardsOf(c.id)), n: cardsOf(c.id).length })).filter(x => x.n).sort((a, b) => a.m - b.m);
-    return `${j != null && j >= 0 && weak.length ? `<div class="card pad stack"><h2>Plan de révision</h2><p class="muted">${j === 0 ? "Le contrôle est aujourd'hui." : "Il reste " + plural(j, "jour", "jours") + "."} Commence par les chapitres les moins maîtrisés.</p>${weak.slice(0, 5).map((x, i) => `<a class="row between" style="text-decoration:none;min-height:44px" href="#cartes-${x.c.id}"><span><b>${i + 1}.</b> ${esc(x.c.name)}</span><span class="pill ${x.m < 50 ? "warn" : ""}">${x.m} %</span></a>`).join("")}</div>` : ""}
+    return `${j != null && j >= 0 && weak.length ? `<div class="card pad stack"><h2>Plan de révision</h2><p class="muted">${j === 0 ? "Le contrôle est aujourd'hui." : "Il reste " + plural(j, "jour", "jours") + "."}${only ? " Seulement les chapitres du contrôle." : ""} Commence par les chapitres les moins maîtrisés.</p>${weak.slice(0, 5).map((x, i) => `<a class="row between" style="text-decoration:none;min-height:44px" href="#cartes-${x.c.id}"><span><b>${i + 1}.</b> ${esc(x.c.name)}</span><span class="pill ${x.m < 50 ? "warn" : ""}">${x.m} %</span></a>`).join("")}</div>` : ""}
 `;
   }
   // Réglages de la matière (fenêtre ouverte par l'engrenage en haut à droite).
@@ -3498,7 +3637,7 @@
     if (safeGet("merge.duoin") && location.hash !== "#duo") { location.hash = "#duo"; return; }
     const h = location.hash.replace("#", ""), arg = h.slice(h.indexOf("-") + 1);
     document.body.classList.add("nav"); closeSheet();
-    drawTabs(/^(calendrier|progres|duo|reglages)$/.test(h) ? h : h === "edt" ? "calendrier" : h === "corbeille" ? "reglages" : h === "bilan" || h === "minuteur" || h === "recompenses" || h === "boutique" ? "progres" : !h || h === "accueil" || h === "cartes-jour" || h === "melange" ? "accueil" : "matieres");
+    drawTabs(/^(calendrier|progres|duo|reglages)$/.test(h) ? h : h === "edt" ? "calendrier" : h === "corbeille" ? "reglages" : h === "bilan" || h === "minuteur" || h === "recompenses" || h === "boutique" ? "progres" : !h || h === "accueil" || h === "cartes-jour" || h === "melange" || h === "perso" || h === "mixte" ? "accueil" : "matieres");
     screenSession.key = null;
     if (busStop) busStop();
     stopSpeak();
@@ -3536,6 +3675,9 @@
     else if (h.startsWith("difficiles-")) screenSession(arg, true);
     else if (h.startsWith("revision-")) screenSession(arg, false, true);
     else if (h === "melange") screenSession("melange");
+    else if (h === "perso") screenMix();
+    else if (h === "mixte") screenSession("mixte");
+    else if (h.startsWith("revdossier-")) screenSession("g:" + arg);
     else if (h === "recompenses") screenRewards();
     else if (h === "boutique") screenShop();
     else if (h === "edt") screenEdt();
