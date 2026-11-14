@@ -1470,7 +1470,7 @@
       pushOn = !error; return pushOn;
     } catch (e) { return false; }
   }
-  const newImp = (ch) => ({ tab: "files", files: [], text: "", n: (ch && ch.cards_target) || C.CARTES_PAR_DEFAUT, busy: false, cache: {} });
+  const newImp = (ch) => ({ tab: "files", files: [], shots: [], text: "", n: (ch && ch.cards_target) || C.CARTES_PAR_DEFAUT, busy: false, cache: {} });
   const onImport = (chId) => location.hash === "#import-" + chId;
   function jobDoneHtml(chId, res) {
     const ch = state.chapters.find(c => c.id === chId) || { name: "" }, notes = (res.notes || []).slice();
@@ -1547,7 +1547,7 @@
     const d = IMPORTS[id] || (IMPORTS[id] = newImp(ch));
     function draw() {
       if (d.busy) { app.innerHTML = impBusyHtml(d, ch.name); chipUpdate(); if ($("askn")) $("askn").onclick = async () => { const ok = await ensurePush(true); if (!ok) toast("Notifications impossibles sur cet appareil ou refusées."); if (d.busy && onImport(id)) draw(); }; return; }
-      if (d.doneHtml) { const h = d.doneHtml; d.doneHtml = null; d.ready = false; d.files = []; app.innerHTML = h; chipUpdate(); confetti(); return; }
+      if (d.doneHtml) { const h = d.doneHtml; d.doneHtml = null; d.ready = false; d.files = []; d.shots = []; app.innerHTML = h; chipUpdate(); confetti(); return; }
       app.innerHTML = `<div class="row"><a class="iconbtn" href="#chapitre-${id}" aria-label="Retour au chapitre">${I.back}</a><span class="small muted">${esc(ch.name)}</span></div>
         <h1>Importer un cours</h1>
         <div class="seg" role="group" aria-label="Type d'import"><button data-tab="files" aria-pressed="${d.tab === "files"}">Fichiers et photos</button><button data-tab="text" aria-pressed="${d.tab === "text"}">Texte</button><button data-tab="link" aria-pressed="${d.tab === "link"}">Genially</button></div>
@@ -1557,14 +1557,16 @@
           <input id="pick" type="file" multiple accept=".pdf,.pptx,.ppsx,.ppt,.pps,.odp,.docx,.odt,.rtf,.txt,.md,.csv,image/*" hidden><input id="cam" type="file" accept="image/*" capture="environment" hidden></div>
           <div class="filelist">${d.files.map((f, i) => `<div><span>${esc(f.name)}</span><button class="mini" data-rm="${i}" aria-label="Retirer ${esc(f.name)}">Retirer</button></div>`).join("")}</div>`
           : d.tab === "link" ? `<div class="field"><label for="lnk">Lien du Genially</label><input id="lnk" type="text" inputmode="url" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="https://view.genially.com/…" value="${esc(d.link || "")}"></div>
-            <button class="btn sm ghost" id="lget" style="align-self:flex-start">Récupérer le texte du Genially</button><p class="small muted">Colle le lien d'un Genially public (présentation, cours interactif). Merge récupère tous ses textes ; tu peux les relire avant de créer les cartes. Les images ne sont pas lues : pour un Genially fait surtout d'images, importe des captures d'écran.</p>`
-          : `<div class="field"><label for="txt">Texte du cours</label><textarea id="txt" placeholder="Colle ton cours ici">${esc(d.text)}</textarea></div>`}
+            <button class="btn sm ghost" id="lget" style="align-self:flex-start">Récupérer le texte du Genially</button><p class="small muted">Colle le lien d'un Genially public (présentation, cours interactif). Merge récupère tous ses textes ; tu peux les relire avant de créer les cartes.</p>${shotsHtml()}`
+          : `<div class="field"><label for="txt">Texte du cours</label><textarea id="txt" placeholder="Colle ton cours ici">${esc(d.text)}</textarea></div>${shotsHtml()}`}
         <div class="field"><label for="n">Combien de flashcards ? <b id="nv">${d.n}</b></label><input id="n" type="range" min="10" max="${C.CARTES_MAX}" step="5" value="${d.n}"></div>
         <button class="btn" id="go">Créer le résumé et les cartes</button>
         <div id="status" class="note" role="status">Les cartes viennent uniquement de ton cours. Chaque carte garde la phrase du cours qui la justifie.</div>`;
       app.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { keep(); d.tab = b.dataset.tab; draw(); });
       if ($("lget")) $("lget").onclick = async () => { keep(); $("lget").disabled = true; if (await fetchLink(d.link)) { draw(); toast("Texte du Genially récupéré. Relis-le, puis crée tes cartes."); } else if ($("lget")) $("lget").disabled = false; };
       app.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { d.files.splice(+b.dataset.rm, 1); draw(); });
+      app.querySelectorAll("[data-rms]").forEach(b => b.onclick = () => { keep(); d.shots.splice(+b.dataset.rms, 1); draw(); });
+      if ($("shotpick")) $("shotpick").onchange = e => { keep(); d.shots.push(...e.target.files); draw(); };
       $("n").oninput = () => { d.n = +$("n").value; $("nv").textContent = d.n; };
       const add = (list) => { d.files.push(...list); draw(); };
       if ($("redsw")) $("redsw").onclick = () => { const on = safeGet("merge.redresse") === "0"; safeSet("merge.redresse", on ? "1" : "0"); $("redsw").setAttribute("aria-checked", on); };
@@ -1577,6 +1579,13 @@
           $("resume").onclick = async () => { $("resume").disabled = true; try { await ai({ action: "import_resume", job_id: d.jobId }, "studio"); d.busy = true; d.local = false; d.canResume = false; d.t0 = Date.now(); d.msg = "Reprise de l'import…"; impTimer(d); watchJob(id); draw(); } catch (er) { d.canResume = er.code === "quota"; showErr(s, er); } }; }
       }
       chipUpdate();
+    }
+    // Schémas et images : un Genially (ou un texte collé) ne donne que du texte. On y ajoute des captures d'écran,
+    // lues par l'IA comme les photos (elle décrit chaque schéma), dans le même import.
+    function shotsHtml() {
+      return `<div class="card pad stack shots"><b>Schémas, images, tableaux</b><p class="small muted">${d.tab === "link" || d.link ? "Le texte du Genially est récupéré, mais pas ses images." : "Ton texte a des schémas à côté ?"} Ajoute des captures d'écran : l'IA les lit et décrit chaque schéma, comme pour une photo de cours.</p>
+        ${d.shots.length ? `<div class="filelist">${d.shots.map((f, i) => `<div><span>${esc(f.name)}</span><button class="mini" data-rms="${i}" aria-label="Retirer ${esc(f.name)}">Retirer</button></div>`).join("")}</div>` : ""}
+        <label class="btn sm ghost" for="shotpick" style="align-self:flex-start">Ajouter des captures</label><input id="shotpick" type="file" multiple accept="image/*,.pdf" hidden></div>`;
     }
     function keep() { if ($("txt")) d.text = $("txt").value; if ($("lnk")) d.link = $("lnk").value.trim(); }
     // Lien Genially → texte du cours (fonction studio, action « lien » : aucune IA, juste la transcription publique du Genially).
@@ -1717,8 +1726,9 @@
       try {
         const segs = [], budget = { pages: 0, cut: false }, notes = [];
         if (d.tab === "text") segs.push({ text: d.text.trim() });
-        else for (const [fi, f] of d.files.entries()) {
-          d.fi = fi; d.fn = d.files.length; impProg(d, "read", 0.6 * fi / d.fn);
+        const list = d.tab === "text" ? (d.shots || []) : d.files;
+        for (const [fi, f] of list.entries()) {
+          d.fi = fi; d.fn = list.length; impProg(d, "read", 0.6 * fi / d.fn);
           // Un fichier déjà lu (ou déjà transcrit par l'IA) n'est pas relu si l'import est relancé : aucun appel payé deux fois.
           const name = f.name.toLowerCase(), key = f.name + ":" + f.size + ":" + f.lastModified;
           if (d.cache[key]) { segs.push(...d.cache[key]); budget.pages += d.cache[key].length; continue; }

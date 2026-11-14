@@ -122,6 +122,7 @@
     if (quotaLeft <= 0) return fail(429, { error: "quota", calls, quota: calls });
     if (b.action === "libre") { quotaLeft--; calls++; return { data: { answer: "## Ce que tu as demandé\n- La mitose donne **deux cellules** identiques.\n- La méiose donne quatre cellules haploïdes.", usage: { calls, quota: calls + quotaLeft } }, error: null }; }
     if (b.action !== "import_start" && b.action !== "import_resume") return fail(400, { error: "requete", detail: "Action inconnue." });
+    if (b.action === "import_start") window.__fake.lastSegs = b.segs;
     const delay = +(opt("delay") || 30), now = () => new Date().toISOString();
     let job;
     if (b.action === "import_resume") { job = DB.import_jobs.find(j => j.id === b.job_id); if (!job) return fail(400, { error: "requete", detail: "Cet import ne peut pas être repris. Relance-le." }); Object.assign(job, { status: "running", error: null, error_code: null }); }

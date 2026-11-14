@@ -1080,6 +1080,13 @@ async function genially(browser) {
     if (w === 390) await page.screenshot({ path: path.join(SHOTS, "import-genially-390.png"), fullPage: true });
     await page.fill("#lnk", "https://view.genial.ly/5e6205c475ef8e0fc16756e9/presentation-la-reaction-inflammatoire"); await page.click("#lget"); await page.waitForTimeout(300);
     ok(await page.locator("#txt").count() === 1 && (await page.inputValue("#txt")).startsWith("La réaction inflammatoire") && (await page.inputValue("#txt")).length > 200, tag + " : texte du Genially récupéré dans « Coller du texte »");
+    // Schémas : captures d'écran ajoutées au texte du Genially, envoyées dans le même import (lues par l'IA comme des photos).
+    ok(await page.locator(".shots").count() === 1, tag + " : bloc pour ajouter les schémas en captures");
+    await page.setInputFiles("#shotpick", path.join(__dirname, "photo-feuille.jpg")); await page.waitForTimeout(150);
+    ok((await txt(page)).includes("photo-feuille.jpg") && (await page.inputValue("#txt")).startsWith("La réaction inflammatoire"), tag + " : capture ajoutée, texte gardé");
+    if (w === 390) await page.screenshot({ path: path.join(SHOTS, "import-genially-schemas-390.png"), fullPage: true });
+    await page.click("#go"); await page.waitForTimeout(1500);
+    ok(await page.evaluate(() => { const g = window.__fake.lastSegs || []; return g.some(x => x.path) && g.some(x => x.text && x.text.startsWith("La réaction inflammatoire")); }), tag + " : texte et capture partis ensemble à l'IA");
     // Lien collé directement dans la zone de texte : récupéré au moment de créer les cartes.
     await go(page, "#import-c3", 400); await page.click('[data-tab="text"]'); await page.fill("#txt", "https://view.genially.com/5e6205c475ef8e0fc16756e9"); await page.click("#go"); await page.waitForTimeout(600);
     ok(await page.evaluate(() => window.__fake.liens >= 3), tag + " : lien collé dans le texte, récupéré automatiquement");
