@@ -289,6 +289,7 @@
     safeSet("merge.file", JSON.stringify(rest));
   }
   async function loadAll() {
+    state.loadedAt = Date.now();
     await flushQueue();
     const uid = state.user.id; const since = new Date(); since.setDate(since.getDate() - 120);
     const allCards = async (cols) => { const out = []; for (let from = 0; ; from += 1000) { const r = await sb.from("cards").select(cols).eq("user_id", uid).order("created_at").range(from, from + 999); if (r.error) return r; out.push(...(r.data || [])); if ((r.data || []).length < 1000) return { data: out, error: null }; } };
@@ -309,10 +310,19 @@
     state.offline = false;
     try { await kvPull(); } catch (e) { /* synchronisation au prochain passage */ }
     try { await ctrlSync(true); } catch (e) { /* refait au prochain chargement */ }
+    try { seasonReset(); } catch (e) { /* refait au prochain chargement */ }
     safeSet("merge.cache." + uid, JSON.stringify({ profile: state.profile, subjects: state.subjects, groups: state.groups, chapters: state.chapters, cards: state.cards, sessions: state.sessions, legacy: state.legacy }));
     applyLook(state.profile); applyRewards();
     setTimeout(prefetchOffline, 4000);
   }
+  // Retour sur l'appli (autre onglet, appli rouverte sur le téléphone) : on recharge les données si elles ont plus d'une minute,
+  // pour qu'un chapitre ou une matière mis à la corbeille sur un autre appareil disparaisse partout ici aussi.
+  document.addEventListener("visibilitychange", async () => {
+    if (document.visibilityState !== "visible" || !state.user || !state.profile || state.offline || Date.now() - (state.loadedAt || 0) < 60000) return;
+    if (Object.values(IMPORTS).some(d => d.busy) || document.getElementById("sheet")) return;
+    const h = location.hash; try { await loadAll(); } catch (e) { return; }
+    if (location.hash === h && /^#?(accueil|matieres|calendrier|progres|perso|matiere-.*|dossier-.*|chapitre-.*)?$/.test(h)) route();
+  });
   // Hors ligne complet : résumés et contenus déjà générés (quiz, fiche, carte mentale…) copiés sur l'appareil, au plus toutes les 30 min.
   function offlineKeep(k, v) { const t = JSON.stringify(v); try { if (localStorage.getItem(k) !== t) localStorage.setItem(k, t); return true; } catch (e) { return false; } }
   let prefetchAt = 0;
@@ -692,14 +702,18 @@
   const jget = (k, d) => { try { const v = JSON.parse(safeGet(k) || "null"); return v == null ? d : v; } catch (e) { return d; } };
   const jset = (k, v) => safeSet(k, JSON.stringify(v));
   const fmtT = s => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+  // Points bruts (tout l'historique). Les points de jeu partent de zéro à chaque remise à zéro (saison) : xp0 = points bruts à ce moment-là.
+  function rawXp() {
+    return state.cards.reduce((a, c) => a + (c.right_count || 0) * 10 + (c.wrong_count || 0) * 2, 0) + state.chapters.filter(c => { const cs = cardsOf(c.id); return cs.length && mastery(cs) >= 100; }).length * 100;
+  }
   function xpInfo() {
-    const xp = state.cards.reduce((a, c) => a + (c.right_count || 0) * 10 + (c.wrong_count || 0) * 2, 0) + state.chapters.filter(c => { const cs = cardsOf(c.id); return cs.length && mastery(cs) >= 100; }).length * 100;
+    const d = jget("merge.rewards", null) || {}, xp = Math.max(0, rawXp() - (+d.xp0 || 0));
     const level = levelOfXp(xp), base = lvlStart(level), next = base + lvlStep(level);
     return { xp, level, rank: rankOf(level), pct: Math.round((xp - base) / (next - base) * 100), left: next - xp };
   }
-  // Niveaux : les 3 premiers vont vite (100, 200, 300 points), puis chaque niveau coûte de plus en plus cher (+25 × (niveau − 3)²).
-  // Niveau 4 à 600 points (inchangé), 5 à 1 025, 10 à 6 775, 20 à ~ 60 000, 50 à ~ 1 million : de quoi tenir des années.
-  const lvlStep = L => L <= 3 ? 100 * L : 100 * L + 25 * (L - 3) * (L - 3);
+  // Niveaux (saison 2, 14 nov. 2026) : chaque niveau coûte 150 × niveau + 40 × (niveau − 1)² points, de plus en plus cher.
+  // Niveau 2 à 150 points, 5 à 2 060, 10 à ~15 000, 20 à ~113 000, 30 à ~374 000, 50 à ~1,7 million : de quoi tenir des années.
+  const lvlStep = L => 150 * L + 40 * (L - 1) * (L - 1);
   const lvlStart = L => { let t = 0; for (let l = 1; l < L; l++) t += lvlStep(l); return t; };
   const levelOfXp = xp => { if (!isFinite(xp)) return 999; let L = 1, t = 0; while (L < 999 && t + lvlStep(L) <= xp) { t += lvlStep(L); L++; } return L; };
   const RANKS = [[1, "Bronze"], [10, "Argent"], [20, "Or"], [30, "Platine"], [40, "Diamant"], [50, "Légende"]];
@@ -707,12 +721,12 @@
 
   // ---------- récompenses : débloquées avec les points (rien à dépenser), équipées sur tous les appareils ----------
   const REWARDS = [
-    { id: "t-novice", type: "titre", n: "Apprenti", pts: 0 }, { id: "t-regulier", type: "titre", n: "Régulier", pts: 300 }, { id: "t-studieux", type: "titre", n: "Studieux", pts: 800 }, { id: "t-acharne", type: "titre", n: "Acharné", pts: 2000 }, { id: "t-maitre", type: "titre", n: "Maître des fiches", pts: 4000 }, { id: "t-legende", type: "titre", n: "Légende de Merge", pts: 8000 },
-    { id: "c-violet", type: "couleur", n: "Violet Merge", pts: 0, v: "" }, { id: "c-ocean", type: "couleur", n: "Océan", pts: 200, v: "#2f7cf6" }, { id: "c-menthe", type: "couleur", n: "Menthe", pts: 500, v: "#14a37f" }, { id: "c-corail", type: "couleur", n: "Corail", pts: 1000, v: "#f0605a" }, { id: "c-or", type: "couleur", n: "Or", pts: 2500, v: "#d99a0b" }, { id: "c-rose", type: "couleur", n: "Rose néon", pts: 0, chest: true, v: "#e0409c" }, { id: "c-lagon", type: "couleur", n: "Lagon", pts: 0, chest: true, v: "#0ea5b7" },
-    { id: "f-aucun", type: "fond", n: "Sans fond animé", pts: 0, v: "" }, { id: "f-aurore", type: "fond", n: "Aurore", pts: 400, v: "aurore" }, { id: "f-etoiles", type: "fond", n: "Ciel étoilé", pts: 1200, v: "etoiles" }, { id: "f-vagues", type: "fond", n: "Vagues", pts: 0, chest: true, v: "vagues" },
-    { id: "s-doux", type: "son", n: "Sons doux", pts: 0, v: "doux" }, { id: "s-arcade", type: "son", n: "Sons arcade", pts: 600, v: "arcade" }, { id: "s-cristal", type: "son", n: "Sons cristal", pts: 0, chest: true, v: "cristal" },
-    { id: "m-aucune", type: "mascotte", n: "Pas de mascotte", pts: 0, v: "" }, { id: "m-mergo", type: "mascotte", n: "Mergo", pts: 150, v: "mergo" }, { id: "m-mergo-lunettes", type: "mascotte", n: "Mergo à lunettes", pts: 1500, v: "lunettes" }, { id: "m-mergo-couronne", type: "mascotte", n: "Mergo couronné", pts: 0, chest: true, v: "couronne" },
-    { id: "k-hasard", type: "confettis", n: "Animations au hasard", pts: 0, v: "" }, { id: "k-feux", type: "confettis", n: "Toujours le feu d'artifice", pts: 700, v: "feux" }, { id: "k-etoiles", type: "confettis", n: "Toujours les étoiles", pts: 0, chest: true, v: "etoiles" },
+    { id: "t-novice", type: "titre", n: "Apprenti", pts: 0 }, { id: "t-regulier", type: "titre", n: "Régulier", pts: 1200 }, { id: "t-studieux", type: "titre", n: "Studieux", pts: 3200 }, { id: "t-acharne", type: "titre", n: "Acharné", pts: 8000 }, { id: "t-maitre", type: "titre", n: "Maître des fiches", pts: 16000 }, { id: "t-legende", type: "titre", n: "Légende de Merge", pts: 32000 },
+    { id: "c-violet", type: "couleur", n: "Violet Merge", pts: 0, v: "" }, { id: "c-ocean", type: "couleur", n: "Océan", pts: 800, v: "#2f7cf6" }, { id: "c-menthe", type: "couleur", n: "Menthe", pts: 2000, v: "#14a37f" }, { id: "c-corail", type: "couleur", n: "Corail", pts: 4000, v: "#f0605a" }, { id: "c-or", type: "couleur", n: "Or", pts: 10000, v: "#d99a0b" }, { id: "c-rose", type: "couleur", n: "Rose néon", pts: 0, chest: true, v: "#e0409c" }, { id: "c-lagon", type: "couleur", n: "Lagon", pts: 0, chest: true, v: "#0ea5b7" },
+    { id: "f-aucun", type: "fond", n: "Sans fond animé", pts: 0, v: "" }, { id: "f-aurore", type: "fond", n: "Aurore", pts: 1600, v: "aurore" }, { id: "f-etoiles", type: "fond", n: "Ciel étoilé", pts: 4800, v: "etoiles" }, { id: "f-vagues", type: "fond", n: "Vagues", pts: 0, chest: true, v: "vagues" },
+    { id: "s-doux", type: "son", n: "Sons doux", pts: 0, v: "doux" }, { id: "s-arcade", type: "son", n: "Sons arcade", pts: 2400, v: "arcade" }, { id: "s-cristal", type: "son", n: "Sons cristal", pts: 0, chest: true, v: "cristal" },
+    { id: "m-aucune", type: "mascotte", n: "Pas de mascotte", pts: 0, v: "" }, { id: "m-mergo", type: "mascotte", n: "Mergo", pts: 600, v: "mergo" }, { id: "m-mergo-lunettes", type: "mascotte", n: "Mergo à lunettes", pts: 6000, v: "lunettes" }, { id: "m-mergo-couronne", type: "mascotte", n: "Mergo couronné", pts: 0, chest: true, v: "couronne" },
+    { id: "k-hasard", type: "confettis", n: "Animations au hasard", pts: 0, v: "" }, { id: "k-feux", type: "confettis", n: "Toujours le feu d'artifice", pts: 2800, v: "feux" }, { id: "k-etoiles", type: "confettis", n: "Toujours les étoiles", pts: 0, chest: true, v: "etoiles" },
   ];
   // ---------- boutique : articles achetés avec les pièces (gagnées en révisant) ----------
   // price = prix en pièces. Les cadeaux en vrai (type « cadeau ») n'apparaissent que sur les comptes activés dans /admin.
@@ -805,11 +819,21 @@
   SHOP.forEach(x => REWARDS.push(x)); LEVEL_ITEMS.forEach(x => REWARDS.push(x));
   REWARDS.push({ id: "d-classique", type: "carte", n: "Cartes classiques", pts: 0, v: "" }, { id: "l-classique", type: "flamme", n: "Flamme classique", pts: 0, v: "" });
   const RTYPES = [["titre", "Titres"], ["couleur", "Couleurs"], ["fond", "Fonds animés"], ["mascotte", "Mascotte"], ["carte", "Style des flashcards"], ["flamme", "Flamme de série"], ["son", "Sons"], ["confettis", "Animations de réussite"]];
-  const CHEST_EVERY = 500;
-  const rwState = () => { const d = jget("merge.rewards", null) || {}; return { equip: d.equip || {}, chest: d.chest || [], opened: d.opened || 0, buys: d.buys || [], lvl: d.lvl == null ? null : d.lvl, freeChests: d.freeChests || 0, custom: d.custom || {} }; };
-  // Pièces : 1 par bonne réponse, 10 par chapitre maîtrisé (= points ÷ 10), plus 15 × niveau à chaque niveau passé ; moins ce qui a été dépensé.
-  const levelBonus = L => { let t = 0; for (let l = 2; l <= L; l++) t += 15 * l; return t; };
-  function coinsInfo() { const x = xpInfo(), st = rwState(), earned = Math.floor(x.xp / 10) + levelBonus(x.level), spent = st.buys.reduce((a, b) => a + (+b.price || 0), 0); return { earned, spent, balance: Math.max(0, earned - spent) }; }
+  const CHEST_EVERY = 3000;
+  const rwState = () => { const d = jget("merge.rewards", null) || {}; return { equip: d.equip || {}, chest: d.chest || [], opened: d.opened || 0, buys: d.buys || [], lvl: d.lvl == null ? null : d.lvl, freeChests: d.freeChests || 0, custom: d.custom || {}, xp0: +d.xp0 || 0, season: d.season || 0 }; };
+  // Remise à zéro pour tout le monde (saison 2, 14 nov. 2026, demandée par Ramzi) : niveau, pièces, achats, couleurs, titres et coffres repartent de zéro.
+  // Les cartes et leur progression ne changent pas ; seuls les points de jeu repartent de zéro (xp0). Les bons cadeaux déjà demandés restent dans « Mes bons ».
+  const SEASON = 2;
+  function seasonReset() {
+    const d = jget("merge.rewards", null) || {}; if ((+d.season || 0) >= SEASON || !state.cards) return false;
+    jset("merge.rewards", { season: SEASON, xp0: rawXp(), equip: {}, chest: [], opened: 0, buys: [], lvl: 1, freeChests: 0, custom: {} });
+    jset("merge.level", 1); applyRewards(); walletSync(); return true;
+  }
+  // Pièces (saison 2) : 1 pièce pour 25 points (≈ 1 pour 2 à 3 bonnes réponses, 4 par chapitre maîtrisé), plus 10 × niveau à chaque niveau passé ;
+  // moins ce qui a été dépensé. Exemple : ~100 bonnes réponses par jour ≈ 40 pièces par jour, un bisou en une semaine, le cinéma en ~2 mois.
+  const COIN_PTS = 25;
+  const levelBonus = L => { let t = 0; for (let l = 2; l <= L; l++) t += 10 * l; return t; };
+  function coinsInfo() { const x = xpInfo(), st = rwState(), earned = Math.floor(x.xp / COIN_PTS) + levelBonus(x.level), spent = st.buys.reduce((a, b) => a + (+b.price || 0), 0); return { earned, spent, balance: Math.max(0, earned - spent) }; }
   const rwSave = (st) => { jset("merge.rewards", st); walletSync(); };
   const rwOwned = (r, xp, st) => r.lv ? levelOfXp(xp) >= r.lv : r.price ? st.buys.some(b => b.id === r.id) || st.chest.includes(r.id) : r.chest ? st.chest.includes(r.id) : xp >= r.pts;
   // Valeurs des articles personnalisés (titre écrit, couleur choisie).
@@ -907,7 +931,7 @@
           : r.lv ? `<button class="btn sm ghost" disabled>${I.lock}Niveau ${r.lv}</button>` : locked ? `<button class="btn sm ghost" disabled>${I.lock}Niveau ${r.need}</button>` : `<button class="btn sm${can ? "" : " ghost"}" data-buy="${r.id}" ${can ? "" : "disabled"}>${I.coin}${r.price}</button>`;
         return `<div class="shopitem${own ? " own" : ""}${r.lv ? " excl" : ""}"><div class="sprev">${shopPreview(r)}</div><b>${esc(r.n)}</b>${r.lv && !own ? '<span class="small muted">Exclusif, offert au niveau ' + r.lv + "</span>" : locked ? `<span class="small muted">${r.price} pièces</span>` : ""}${act}</div>`; };
       app.innerHTML = `<div class="row"><a class="iconbtn" href="#recompenses" aria-label="Retour aux récompenses">${I.back}</a><h1 class="grow">Boutique</h1></div>
-        <div class="card pad stack coinhero"><div class="row"><span class="mico big">${I.coin}</span><div class="grow"><b class="big">${bal} pièces</b><p class="small muted">Gagnées en révisant : 1 par bonne réponse, 10 par chapitre maîtrisé, et ${15 * (lv + 1)} en bonus au niveau ${lv + 1}.</p></div></div>
+        <div class="card pad stack coinhero"><div class="row"><span class="mico big">${I.coin}</span><div class="grow"><b class="big">${bal} pièces</b><p class="small muted">Gagnées en révisant : 1 pièce tous les ${COIN_PTS} points (environ 1 pour 2 ou 3 bonnes réponses), et ${10 * (lv + 1)} en bonus au niveau ${lv + 1}.</p></div></div>
           ${access && nextGift ? `<div class="stack"><div class="row between small"><span>Prochain cadeau : <b>${esc(nextGift.n)}</b></span><span class="muted">${bal} / ${nextGift.price}</span></div><div class="bar"><i style="width:${Math.min(100, bal / nextGift.price * 100)}%"></i></div></div>` : ""}</div>
         ${access ? `<div class="stack"><h2>${I.gift}Cadeaux en vrai</h2>
           ${claims.length ? `<div class="card pad stack"><h3>Mes bons</h3>${claims.map(c => { const g = GIFTS.find(x => x.id === c.gift) || { n: c.gift }; return `<button class="row between voucher" data-bon="${esc(c.id)}"><span><b>${esc(g.n)}</b><span class="small muted"> · ${esc(fmtDate(String(c.created_at).slice(0, 10)))}</span></span><span class="pill${c.given_at ? "" : " warn"}">${c.given_at ? "Offert" : "À envoyer à " + GIFT_GIVER}</span></button>`; }).join("")}</div>` : ""}
@@ -969,7 +993,7 @@
     // un coffre tous les 5 niveaux et une exclusivité aux grands paliers. Ce qui a déjà été offert reste acquis.
     const out = { coins: 0, items: [], chests: 0, excl: [], from: st.lvl, to: lvl };
     for (let l = st.lvl + 1; l <= lvl; l++) {
-      out.coins += 15 * l;
+      out.coins += 10 * l;
       if (l % 3 === 0) {
         const lastCol = st.buys.filter(b => b.level).slice(-1).some(b => /^c-/.test(b.id));
         const pool = SHOP.filter(r => !r.perso && !rwOwned(r, Infinity, st) && r.price <= 100 + 40 * l && (!r.need || r.need <= l) && !(lastCol && r.type === "couleur"));
@@ -1509,12 +1533,12 @@
       pushOn = !error; return pushOn;
     } catch (e) { return false; }
   }
-  const newImp = (ch) => ({ tab: "files", files: [], shots: [], text: "", n: (ch && ch.cards_target) || C.CARTES_PAR_DEFAUT, busy: false, cache: {} });
+  const newImp = (ch) => ({ tab: "files", files: [], shots: [], text: "", n: ch && cardsOf(ch.id).length ? 20 : (ch && ch.cards_target) || C.CARTES_PAR_DEFAUT, busy: false, cache: {} });
   const onImport = (chId) => location.hash === "#import-" + chId;
   function jobDoneHtml(chId, res) {
     const ch = state.chapters.find(c => c.id === chId) || { name: "" }, notes = (res.notes || []).slice();
     if (res.bad) notes.push(plural(res.bad, "carte est marquée", "cartes sont marquées") + " « À vérifier ».");
-    return `<div class="card done"><h1>Bon travail !</h1><p class="muted">${plural(res.cards || 0, "carte créée", "cartes créées")} et un résumé pour « ${esc(ch.name)} ».</p>${notes.map(n => `<p class="note">${esc(n)}</p>`).join("")}<a class="btn" href="#cartes-${chId}">Réviser maintenant</a><a class="btn ghost" href="#chapitre-${chId}">Voir le chapitre</a></div>`;
+    return `<div class="card done"><h1>Bon travail !</h1><p class="muted">${(() => { const tot = cardsOf(chId).length, n = res.cards || 0; return tot > n ? plural(n, "nouvelle carte ajoutée", "nouvelles cartes ajoutées") + " à « " + esc(ch.name) + " » : " + tot + " cartes au total, et le résumé est complété." : plural(n, "carte créée", "cartes créées") + " et un résumé pour « " + esc(ch.name) + " »."; })()}</p>${notes.map(n => `<p class="note">${esc(n)}</p>`).join("")}<a class="btn" href="#cartes-${chId}">Réviser maintenant</a><a class="btn ghost" href="#chapitre-${chId}">Voir le chapitre</a></div>`;
   }
   async function applyJob(chId, j, quiet) {
     const d = IMPORTS[chId]; if (!d || d.jobId !== j.id) return;
@@ -1598,7 +1622,7 @@
           : d.tab === "link" ? `<div class="field"><label for="lnk">Lien du Genially</label><input id="lnk" type="text" inputmode="url" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="https://view.genially.com/…" value="${esc(d.link || "")}"></div>
             <button class="btn sm ghost" id="lget" style="align-self:flex-start">Récupérer le texte du Genially</button><p class="small muted">Colle le lien d'un Genially public (présentation, cours interactif). Merge récupère tous ses textes ; tu peux les relire avant de créer les cartes.</p>${shotsHtml()}`
           : `<div class="field"><label for="txt">Texte du cours</label><textarea id="txt" placeholder="Colle ton cours ici">${esc(d.text)}</textarea></div>${shotsHtml()}`}
-        <div class="field"><label for="n">Combien de flashcards ? <b id="nv">${d.n}</b></label><input id="n" type="range" min="10" max="${C.CARTES_MAX}" step="5" value="${d.n}"></div>
+        <div class="field"><label for="n">${cardsOf(id).length ? "Combien de nouvelles flashcards ajouter ?" : "Combien de flashcards ?"} <b id="nv">${d.n}</b></label>${cardsOf(id).length ? `<p class="small muted">Tu as déjà ${plural(cardsOf(id).length, "carte", "cartes")} dans ce chapitre : les nouvelles s'ajoutent à elles, sans refaire celles que tu as déjà.</p>` : ""}<input id="n" type="range" min="10" max="${C.CARTES_MAX}" step="5" value="${d.n}"></div>
         <button class="btn" id="go">Créer le résumé et les cartes</button>
         <div id="status" class="note" role="status">Les cartes viennent uniquement de ton cours. Chaque carte garde la phrase du cours qui la justifie.</div>`;
       app.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { keep(); d.tab = b.dataset.tab; draw(); });

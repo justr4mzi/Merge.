@@ -59,7 +59,8 @@ Deno.serve(async (req) => {
       })());
       return daysCache.get(uid)!;
     };
-    const dueOf = async (uid: string) => { const { count } = await admin.from("cards").select("id", { count: "exact", head: true }).eq("user_id", uid).lte("due_at", now.toISOString()); return count ?? 0; };
+    // Cartes à revoir, sans celles des chapitres ou matières mis à la corbeille.
+    const dueOf = async (uid: string) => { const { count, error } = await admin.from("cards").select("id, chapters!inner(archived, subjects!inner(archived))", { count: "exact", head: true }).eq("user_id", uid).eq("chapters.archived", false).eq("chapters.subjects.archived", false).lte("due_at", now.toISOString()); if (!error) return count ?? 0; console.error("due", error.message); const r = await admin.from("cards").select("id", { count: "exact", head: true }).eq("user_id", uid).lte("due_at", now.toISOString()); return r.count ?? 0; };
     for (const s of subs as Any[]) {
       const p = byUser[s.user_id], prefs = prefsOf(p), here = local(s.tz, now);
       if (!prefs.enabled) continue;

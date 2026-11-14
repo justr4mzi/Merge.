@@ -13,14 +13,14 @@ const QUOTA_MSG = "Vous avez atteint votre limite journalière. Contacte le cré
 let failures = 0; const log = [];
 const ok = (cond, name, extra) => { if (!cond) { failures++; log.push("ÉCHEC  " + name + (extra ? "  → " + extra : "")); } else log.push("ok     " + name); };
 
-async function open(browser, { w, h, theme, seed = "plein", legacy, quota, mastered, xp, trash }) {
+async function open(browser, { w, h, theme, seed = "plein", legacy, quota, mastered, xp, trash, oldSeason }) {
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, serviceWorkers: "block", colorScheme: theme === "dark" ? "dark" : "light" });
   const page = await ctx.newPage(); page.errors = [];
   page.on("pageerror", e => page.errors.push(String(e)));
   page.on("console", m => { if (m.type() === "error" && !/Failed to load resource|fonts\.g/.test(m.text())) page.errors.push(m.text()); });
   await page.route("**/vendor/supabase.js", r => r.fulfill({ path: path.join(__dirname, "fake-supabase.js"), contentType: "text/javascript" }));
   await page.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
-  await page.addInitScript(o => { if (sessionStorage.getItem("init")) return; sessionStorage.setItem("init", "1"); localStorage.clear(); localStorage.setItem("fake.seed", o.seed); localStorage.setItem("fake.theme", o.theme); localStorage.setItem("merge.tuto", "1"); if (o.legacy) localStorage.setItem("fake.legacy", "1"); if (o.quota != null) localStorage.setItem("fake.quota", String(o.quota)); if (o.mastered) localStorage.setItem("fake.mastered", "1"); if (o.xp) localStorage.setItem("fake.xp", String(o.xp)); if (o.trash) localStorage.setItem("fake.trash", "1"); }, { seed, theme, legacy, quota, mastered, xp, trash });
+  await page.addInitScript(o => { if (sessionStorage.getItem("init")) return; sessionStorage.setItem("init", "1"); localStorage.clear(); if (!o.oldSeason) localStorage.setItem("merge.rewards", JSON.stringify({ season: 2, xp0: 0 })); else localStorage.setItem("merge.rewards", JSON.stringify({ buys: [{ id: "c-sakura", price: 0, level: 2 }, { id: "c-cerise", price: 150 }], equip: { couleur: "c-cerise" }, lvl: 4 })); localStorage.setItem("fake.seed", o.seed); localStorage.setItem("fake.theme", o.theme); localStorage.setItem("merge.tuto", "1"); if (o.legacy) localStorage.setItem("fake.legacy", "1"); if (o.quota != null) localStorage.setItem("fake.quota", String(o.quota)); if (o.mastered) localStorage.setItem("fake.mastered", "1"); if (o.xp) localStorage.setItem("fake.xp", String(o.xp)); if (o.trash) localStorage.setItem("fake.trash", "1"); }, { seed, theme, legacy, quota, mastered, xp, trash, oldSeason });
   await page.goto(BASE + "/"); await page.waitForSelector("#app > *");
   return page;
 }
@@ -151,7 +151,7 @@ async function flows(browser) {
   // --- formats de fichiers : pptx (texte, notes, image), odp, docx, ppt ancien, rtf, txt
   page = await open(browser, { w: 390, h: 844, theme: "light" });
   const fx = await fixtures();
-  const seg = async (files) => { await go(page, "#import-c2"); await page.setInputFiles("#pick", files); await page.click("#go"); await page.waitForFunction(() => /cartes? créées?/.test(document.getElementById("app").innerText) || document.querySelector("#status .err, #status .quotabox"), null, { timeout: 15000 }); const t = await txt(page); const src = await page.evaluate(() => window.__fake.DB.sources.filter(x => x.chapter_id === "c2").slice(-1)[0]); return { t, text: src ? src.extracted_text : "" }; };
+  const seg = async (files) => { await go(page, "#import-c2"); await page.setInputFiles("#pick", files); await page.click("#go"); await page.waitForFunction(() => /cartes? créées?|cartes? ajoutées?/.test(document.getElementById("app").innerText) || document.querySelector("#status .err, #status .quotabox"), null, { timeout: 15000 }); const t = await txt(page); const src = await page.evaluate(() => window.__fake.DB.sources.filter(x => x.chapter_id === "c2").slice(-1)[0]); return { t, text: src ? src.extracted_text : "" }; };
   let r = await seg([fx.pptx]); let c0 = await page.evaluate(() => window.__fake.calls);
   ok(r.text.includes("La photosynthèse produit du dioxygène") && r.text.includes("Notes : Insister sur la chlorophylle") && r.text.includes("Deuxième diapositive"), "pptx : texte et notes de toutes les diapositives", r.t.slice(0, 200) + " | " + r.text.slice(0, 200));
   ok(r.text.includes("La mitose est une division"), "pptx : image de la diapositive transcrite par l'IA");
@@ -286,8 +286,8 @@ async function v8(browser) {
   await go(page, "#import-c1"); await page.click('[data-tab="text"]'); await page.fill("#txt", "La mitose est une division cellulaire qui donne deux cellules identiques. ".repeat(4)); await page.click("#go");
   await page.waitForSelector("#resume", { timeout: 15000 }).catch(() => {});
   ok(await page.locator("#resume").count() === 1 && (await txt(page)).includes("panne simulée"), "v8 import : erreur du serveur affichée avec « Reprendre »");
-  await page.click("#resume"); await page.waitForFunction(() => /cartes créées/.test(document.getElementById("app").innerText), null, { timeout: 15000 }).catch(() => {});
-  ok((await txt(page)).includes("8 cartes créées"), "v8 import : reprise réussie");
+  await page.click("#resume"); await page.waitForFunction(() => /cartes créées|ajoutées/.test(document.getElementById("app").innerText), null, { timeout: 15000 }).catch(() => {});
+  ok((await txt(page)).includes("8 nouvelles cartes ajoutées"), "v8 import : reprise réussie (cartes ajoutées à celles du chapitre)", (await txt(page)).slice(0, 200));
   for (const r of ["chapitre-c1", "libre-c1", "calendrier", "accueil"]) { await go(page, "#" + r, 300); o = await overflow(page); ok(o.sw <= o.iw, "v8 téléphone " + r + " : pas de débordement", JSON.stringify(o)); sm = await small(page); ok(!sm.length, "v8 téléphone " + r + " : boutons de 44 px minimum", sm.join(" | ")); }
   ok(!page.errors.length, "v8 téléphone : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
 }
@@ -794,7 +794,7 @@ async function nomAuto(browser) {
     const ch = await page.evaluate(() => window.__fake.DB.chapters.slice(-1)[0]);
     ok(ch.auto_name === true && ch.name === "Nouveau chapitre" && (await page.evaluate(() => location.hash)) === "#import-" + ch.id, tag + " : chapitre créé, direction l'import", JSON.stringify(ch));
     await page.click('[data-tab="text"]'); await page.fill("#txt", "La mitose est une division cellulaire qui donne deux cellules filles génétiquement identiques à la cellule mère. Elle comporte quatre phases.");
-    await page.click("#go"); await page.waitForFunction(() => /cartes créées/.test(document.getElementById("app").innerText), null, { timeout: 15000 }).catch(() => {});
+    await page.click("#go"); await page.waitForFunction(() => /cartes créées|ajoutées/.test(document.getElementById("app").innerText), null, { timeout: 15000 }).catch(() => {});
     const ch2 = await page.evaluate(id => window.__fake.DB.chapters.find(c => c.id === id), ch.id);
     ok(ch2.name === "La mitose et la méiose" && ch2.auto_name === false && (await txt(page)).includes("La mitose et la méiose"), tag + " : nom donné par le cours après l'import", JSON.stringify(ch2));
     await go(page, "#matiere-s1", 400); await page.click("#sAdd"); await page.waitForTimeout(150); await page.fill("#cname", "Mon chapitre"); await page.click("#addCh"); await page.waitForTimeout(500);
@@ -947,7 +947,7 @@ async function pomodoroReglable(browser) {
 async function boutique(browser) {
   for (const [w, h] of [[390, 844], [1280, 800]]) {
     const page = await open(browser, { w, h, theme: "dark" }), tag = "boutique " + w;
-    await page.evaluate(() => { localStorage.setItem("fake.gifts", "1"); localStorage.setItem("merge.rewards", JSON.stringify({ buys: [{ id: "test-bonus", price: -4600 }] })); location.reload(); });
+    await page.evaluate(() => { localStorage.setItem("fake.gifts", "1"); localStorage.setItem("merge.rewards", JSON.stringify({ season: 2, xp0: 0, buys: [{ id: "test-bonus", price: -4600 }] })); location.reload(); });
     await page.waitForSelector("#app > *"); await go(page, "#boutique", 600);
     const bal0 = await page.evaluate(() => parseInt(document.querySelector(".coinhero b.big").textContent, 10));
     ok(bal0 >= 4600 && bal0 < 5000, tag + " : solde de pièces affiché", String(bal0));
@@ -977,7 +977,7 @@ async function boutique(browser) {
     await go(page, "#accueil", 300); ok(await page.locator(".coinpill").count() === 1, tag + " : pièces affichées sur l'accueil");
     // Passage de niveau : pièces, articles offerts et récompenses débloquées.
     // Beaucoup de bonnes réponses (fake.xp) : du niveau 2 au niveau 6 d'un coup.
-    await page.evaluate(() => { const r = JSON.parse(localStorage.getItem("merge.rewards")); r.lvl = 2; r.buys = r.buys.filter(b => !b.level); localStorage.setItem("merge.rewards", JSON.stringify(r)); localStorage.setItem("merge.level", "2"); localStorage.setItem("merge.badges", "[]"); localStorage.setItem("fake.xp", "20"); sessionStorage.setItem("init", "1"); location.hash = "#calendrier"; location.reload(); });
+    await page.evaluate(() => { const r = JSON.parse(localStorage.getItem("merge.rewards")); r.lvl = 2; r.buys = r.buys.filter(b => !b.level); localStorage.setItem("merge.rewards", JSON.stringify(r)); localStorage.setItem("merge.level", "2"); localStorage.setItem("merge.badges", "[]"); localStorage.setItem("fake.xp", "60"); sessionStorage.setItem("init", "1"); location.hash = "#calendrier"; location.reload(); });
     await page.waitForSelector("#app > *"); await page.waitForTimeout(300); await go(page, "#accueil", 600);
     const lv6 = await page.evaluate(() => JSON.parse(localStorage.getItem("merge.wallet") || "{}").level);
     const lt = await page.locator(".lvlwin").count() ? await page.locator(".lvlwin").innerText() : "pas de fenêtre";
@@ -1041,7 +1041,7 @@ async function boutiqueV2(browser) {
   for (const [w, h] of [[390, 844], [1280, 800]]) {
     const page = await open(browser, { w, h, theme: "dark" }), tag = "boutique v2 " + w;
     // 5 000 pièces de bonus, niveau 1 : les articles « niveau X » restent bloqués, les exclusivités sont visibles.
-    await page.evaluate(() => { localStorage.setItem("merge.rewards", JSON.stringify({ buys: [{ id: "test-bonus", price: -5000 }], lvl: 1 })); location.reload(); });
+    await page.evaluate(() => { localStorage.setItem("merge.rewards", JSON.stringify({ season: 2, xp0: 0, buys: [{ id: "test-bonus", price: -5000 }], lvl: 1 })); location.reload(); });
     await page.waitForSelector("#app > *"); await go(page, "#boutique", 500);
     ok(await page.locator(".shopitem").count() >= 40, tag + " : beaucoup plus de couleurs", String(await page.locator(".shopitem").count()));
     ok(await page.locator('[data-buy="c-pistache"]:not([disabled])').count() === 1 && await page.locator('[data-buy="c-platine"]').count() === 0 && (await txt(page)).includes("Niveau 15") && (await txt(page)).includes("Saphir royal"), tag + " : couleur à niveau minimum bloquée, exclusivité affichée");
@@ -1053,7 +1053,7 @@ async function boutiqueV2(browser) {
     await page.click('[data-st="perso"]'); await page.waitForTimeout(100);
     ok(await page.locator(".shopitem").count() === 3 && await page.locator('[data-buy="t-perso"]').count() === 0, tag + " : rayon perso, bloqué avant le niveau requis");
     // Au niveau 6 (fake.xp) : titre personnalisé acheté puis écrit.
-    await page.evaluate(() => { localStorage.setItem("fake.xp", "40"); location.reload(); }); await page.waitForSelector("#app > *"); await go(page, "#boutique", 500);
+    await page.evaluate(() => { localStorage.setItem("fake.xp", "110"); location.reload(); }); await page.waitForSelector("#app > *"); await go(page, "#boutique", 500);
     await page.click('[data-st="perso"]'); await page.waitForTimeout(100); await page.click('[data-buy="t-perso"]'); await page.waitForTimeout(200);
     await page.fill("#pv", "Reine <b>du</b> bac"); await page.click("#pok"); await page.waitForTimeout(200);
     await page.click('[data-buy="c-perso"]'); await page.waitForTimeout(200); await page.evaluate(() => { document.getElementById("pv").value = "#12a4d9"; }); await page.click("#pok"); await page.waitForTimeout(200);
@@ -1106,6 +1106,43 @@ async function genially(browser) {
   }
 }
 
+async function corbeillePartout(browser) {
+  // Un chapitre mis à la corbeille disparaît de partout (bug du 14 nov.).
+  const page = await open(browser, { w: 390, h: 844, theme: "dark", trash: true });
+  await go(page, "#chapitre-c2", 400); await page.click("#tools summary"); await page.click("#tDel"); await page.click("#delyes"); await page.waitForTimeout(600);
+  const gone = async (where) => { const t = await txt(page) + (await page.locator("#sheet").count() ? await page.locator("#sheet").innerText() : ""); ok(!t.includes("Brassage génétique"), "corbeille partout : " + where, t.slice(0, 200)); };
+  await go(page, "#matiere-s1", 400); await gone("matière");
+  await page.click("[data-cch] >> nth=0"); await page.waitForTimeout(150); await gone("choix des chapitres du contrôle"); await page.keyboard.press("Escape");
+  await go(page, "#dossier-g1", 400); await gone("dossier");
+  await go(page, "#perso", 300); await gone("choisir quoi réviser");
+  await go(page, "#accueil", 400); await gone("accueil");
+  await page.evaluate(() => location.reload()); await page.waitForSelector("#app > *"); await go(page, "#matiere-s1", 500); await gone("matière après rechargement");
+  // Ajouter un cours à un chapitre qui a déjà des cartes : le nombre choisi s'ajoute.
+  await go(page, "#import-c1", 400);
+  ok((await txt(page)).includes("Combien de nouvelles flashcards ajouter ?") && (await txt(page)).includes("les nouvelles s'ajoutent") && await page.inputValue("#n") === "20", "ajouter un cours : nombre de NOUVELLES cartes, 20 par défaut");
+  // Retour sur l'appli après une suppression faite sur un autre appareil : les données sont rechargées.
+  await page.evaluate(() => { window.__fake.DB.chapters.find(c => c.id === "c3").archived = true; });
+  await go(page, "#matiere-s2", 300); await page.evaluate(() => { Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true }); }); 
+  await page.evaluate(() => { const d = Date.now.bind(Date); Date.now = () => d() + 120000; document.dispatchEvent(new Event("visibilitychange")); }); await page.waitForTimeout(600);
+  ok(!(await txt(page)).includes("ondes mécaniques"), "retour sur l'appli : chapitre supprimé ailleurs disparu", (await txt(page)).replace(/\s+/g, " ").slice(0, 600));
+  ok(!page.errors.length, "corbeille partout : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+}
+
+async function saison(browser) {
+  // Remise à zéro de tout le monde (saison 2) : niveau, pièces, achats et couleurs repartent de zéro ; les cartes ne bougent pas.
+  const page = await open(browser, { w: 390, h: 844, theme: "dark", xp: 20, oldSeason: true });
+  await go(page, "#boutique", 500);
+  const r = await page.evaluate(() => JSON.parse(localStorage.getItem("merge.rewards")));
+  ok(r.season === 2 && r.buys.length === 0 && !r.equip.couleur && r.xp0 > 0, "saison : achats, couleurs et niveau remis à zéro", JSON.stringify(r).slice(0, 200));
+  ok(await page.evaluate(() => parseInt(document.querySelector(".coinhero b.big").textContent, 10) === 0 && !getComputedStyle(document.documentElement).getPropertyValue("--accent").includes("#df3a3a")), "saison : 0 pièce, couleur retirée");
+  await go(page, "#accueil", 400); ok((await txt(page)).includes("Niveau 1") && await page.locator(".lvlwin").count() === 0, "saison : niveau 1, sans fenêtre de passage de niveau");
+  ok(await page.evaluate(() => window.__fake.DB.cards.some(c => c.right_count === 20)), "saison : les cartes et leurs réponses sont gardées");
+  // Une bonne réponse de plus après la remise à zéro : les points repartent de là.
+  await page.evaluate(() => { localStorage.setItem("fake.xp", "21"); location.reload(); }); await page.waitForSelector("#app > *"); await go(page, "#accueil", 400);
+  ok(await page.evaluate(() => JSON.parse(localStorage.getItem("merge.wallet") || "{}").xp > 0 && JSON.parse(localStorage.getItem("merge.rewards")).season === 2), "saison : pas de deuxième remise à zéro, les nouveaux points comptent");
+  ok(!page.errors.length, "saison : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+}
+
 let BASE;
 (async () => {
   fs.mkdirSync(SHOTS, { recursive: true });
@@ -1114,7 +1151,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => !only || only.includes(n);
     if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
-    const SUITES = { flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially };
+    const SUITES = { flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison };
     for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();
