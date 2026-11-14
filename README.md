@@ -1,13 +1,13 @@
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="icons/logo-dark.svg"><img src="icons/logo.svg" width="360" alt="Merge."></picture></p>
 
-Merge is a revision app for students. You import a lesson (PDF, photos of a notebook, PowerPoint or pasted text) and Merge turns it into a summary and flashcards, then helps you learn them with several study modes. Everything it generates comes from the imported lesson only.
+Merge is a revision app for students. You import a lesson (PDF, photos of a notebook, PowerPoint, a Genially link or pasted text) and Merge turns it into a summary and flashcards, then helps you learn them with several study modes. Everything it generates comes from the imported lesson only.
 
 The interface is in French. It works on phones (installable as a PWA) and on desktop.
 
 ## Features
 
 - **Onboarding**: name, class, subjects (suggested for the chosen class, plus names already used by students of the same class), then the next exam date for each subject, with a "no exam, free revision" switch.
-- **Import**: PDF, photos (printed or handwritten, HEIC included), PowerPoint (`.pptx`, `.ppsx`, legacy `.ppt`), LibreOffice (`.odp`, `.odt`), Word (`.docx`), `.rtf`, `.txt`, `.md`, pasted text or the phone camera, up to 400 pages per import. Text is extracted in the browser; scanned pages and pictures are transcribed by the AI. The `studio` Edge Function runs the import as a server-side job, so it continues when the app is closed, and a push notification announces the result. A chapter can be named automatically from the imported lesson.
+- **Import**: PDF, photos (printed or handwritten, HEIC included), PowerPoint (`.pptx`, `.ppsx`, legacy `.ppt`), LibreOffice (`.odp`, `.odt`), Word (`.docx`), `.rtf`, `.txt`, `.md`, pasted text, a public Genially link (its text is read from the page's JSON-LD transcript, no AI call) or the phone camera, up to 400 pages per import. Text is extracted in the browser; scanned pages and pictures are transcribed by the AI. The `studio` Edge Function runs the import as a server-side job, so it continues when the app is closed, and a push notification announces the result. A chapter can be named automatically from the imported lesson.
 - **Organisation**: subjects (one colour each), folders inside a subject, chapters inside folders. Add and settings buttons sit in the top-right corner of each subject and folder. A folder opens on its Chapters tab, then Summaries, Flashcards, Quizzes and Tests.
 - **Summary and flashcards**: a summary of the chapter's purpose and key notions, and 10 to 100 cards per import, each keeping the sentence of the lesson that justifies it. Spaced repetition with FSRS, an undo button for a mistaken answer, and a chapter test that unlocks at 100 % mastery.
 - **AI study modes** (generated once per chapter, then cached): quiz, full test, spot-the-mistakes, commonly confused notions, guided exercises, interactive mind map, cloze test (with believable wrong options), one-page A4 revision sheet, written test. Every mode can be regenerated at the end.
