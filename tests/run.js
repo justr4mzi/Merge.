@@ -181,7 +181,7 @@ async function flows(browser) {
   await go(page, "#trous-c1"); await page.click("#mk"); await page.waitForTimeout(300); const c1 = await page.evaluate(() => window.__fake.calls); await go(page, "#accueil"); await go(page, "#trous-c1");
   ok(await page.locator("#mk").count() === 0 && await page.evaluate(() => window.__fake.calls) === c1, "base non migrée : cache local, aucun second appel");
   await go(page, "#erreurs"); ok(await page.locator(".mistake").count() >= 1, "base non migrée : carnet d'erreurs local");
-  await go(page, "#matiere-s2"); await page.click("#examBtn"); await page.click(".switch"); await page.waitForTimeout(300); ok((await txt(page)).includes("Révision libre"), "base non migrée : révision libre gardée en local");
+  await go(page, "#matiere-s2"); await page.click("#ctFree"); await page.waitForTimeout(300); ok((await txt(page)).includes("Révision libre"), "base non migrée : révision libre gardée en local");
   ok(!page.errors.length, "base non migrée : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | "));
   await page.context().close();
 
@@ -996,20 +996,32 @@ async function controleChapitres(browser) {
   for (const [w, h] of [[390, 844], [1280, 800]]) {
     const page = await open(browser, { w, h, theme: "dark" }), tag = "chapitres du contrôle " + w;
     await go(page, "#matiere-s1", 400); ok((await txt(page)).includes("Plan de révision"), tag + " : plan affiché au départ");
-    await page.click("#examBtn"); await page.waitForTimeout(150);
-    ok(await page.locator("#exOn").count() === 1 && await page.locator("[data-exc]").count() === 0, tag + " : option à cocher, désactivée par défaut");
-    await page.click("#exOn"); await page.waitForTimeout(150); ok(await page.locator("[data-exc]").count() === 3, tag + " : les chapitres de la matière à choisir");
-    await page.click('[data-exc="c2"]'); await page.waitForTimeout(150);
+    ok(await page.locator(".ctrlrow").count() === 1 && await page.locator("#sAdd").count() === 1 && await page.evaluate(() => { const b = document.getElementById("sAdd").getBoundingClientRect(), h = [...document.querySelectorAll("h2")].find(x => /^Chapitres/.test(x.textContent)).getBoundingClientRect(); return Math.abs((b.top + b.bottom) / 2 - (h.top + h.bottom) / 2) < 20; }), tag + " : contrôle existant listé, + du chapitre en face de « Chapitres »");
+    await page.click("[data-cch]"); await page.waitForTimeout(150);
+    ok(await page.locator('#ccall[aria-pressed="true"]').count() === 1 && await page.locator("[data-cc]").count() === 3, tag + " : fenêtre des chapitres, « Tous les chapitres » par défaut");
+    await page.click('[data-cc="c2"]'); await page.click("#ccok"); await page.waitForTimeout(250);
     ok(!(await txt(page)).includes("Plan de révision"), tag + " : seul un chapitre sans cartes choisi, plus rien à planifier");
-    await page.click('[data-exc="c1"]'); await page.waitForTimeout(150);
-    ok((await txt(page)).includes("Seulement les chapitres du contrôle"), tag + " : plan limité aux chapitres choisis");
-    ok(await page.evaluate(() => { const v = JSON.parse(localStorage.getItem("merge.examch.s1")); return v.on && v.ids.length === 2 && v.d === window.__fake.DB.subjects.find(s => s.id === "s1").exam_date && window.__mergeSync.synced("merge.examch.s1"); }), tag + " : choix enregistré et synchronisé");
-    if (w === 390) await page.screenshot({ path: path.join(SHOTS, "chapitres-controle-390.png"), fullPage: true });
+    await page.click("[data-cch]"); await page.waitForTimeout(150); await page.click('[data-cc="c1"]'); await page.click("#ccok"); await page.waitForTimeout(250);
+    ok((await txt(page)).includes("Seulement les chapitres du contrôle") && (await txt(page)).includes("Chapitre 1 : La division cellulaire, Chapitre 2"), tag + " : plan limité aux chapitres choisis, affichés sur le contrôle");
+    ok(await page.evaluate(() => { const l = JSON.parse(localStorage.getItem("merge.controles")); return l.length === 1 && l[0].ch.length === 2 && l[0].d === window.__fake.DB.subjects.find(s => s.id === "s1").exam_date && window.__mergeSync.synced("merge.controles"); }), tag + " : choix enregistré et synchronisé", await page.evaluate(() => localStorage.getItem("merge.controles") + " / " + window.__fake.DB.subjects.find(s => s.id === "s1").exam_date));
+    // Un deuxième contrôle de SVT (le mois prochain) : la date en base reste celle du prochain contrôle.
+    const d0 = await page.evaluate(() => window.__fake.DB.subjects.find(s => s.id === "s1").exam_date);
+    await page.click("#ctAdd"); await page.waitForTimeout(150); ok(await page.locator("#examBox [data-free]").count() === 0, tag + " : calendrier d'ajout sans l'option révision libre");
+    await page.click('#examBox [data-nav="1"]'); await page.click('#examBox .day:not([disabled]) >> nth=10'); await page.waitForTimeout(300);
+    ok(await page.locator("#ccok").count() === 1, tag + " : après la date, la fenêtre demande les chapitres");
+    if (w === 390) await page.screenshot({ path: path.join(SHOTS, "chapitres-controle-390.png") });
+    await page.click("#ccok"); await page.waitForTimeout(250);
+    ok(await page.locator(".ctrlrow").count() === 2 && await page.evaluate(d => window.__fake.DB.subjects.find(s => s.id === "s1").exam_date === d, d0), tag + " : deux contrôles de SVT, le prochain reste la date du plan");
+    if (w === 390) await page.screenshot({ path: path.join(SHOTS, "controles-matiere-390.png"), fullPage: true });
     let sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px minimum", sm.join(" | "));
     let o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
-    await go(page, "#matiere-s1", 300); ok((await txt(page)).includes("2 chapitres au contrôle"), tag + " : pastille du nombre de chapitres");
-    await page.click("#examBtn"); await page.waitForTimeout(150); await page.click("#exOn"); await page.waitForTimeout(150);
-    ok(!(await txt(page)).includes("Seulement les chapitres du contrôle"), tag + " : décoché, le plan reprend toute la matière");
+    await page.click("[data-cdel] >> nth=0"); await page.click("[data-cdel] >> nth=0"); await page.waitForTimeout(300);
+    ok(await page.locator(".ctrlrow").count() === 1 && await page.evaluate(d => window.__fake.DB.subjects.find(s => s.id === "s1").exam_date !== d, d0), tag + " : premier contrôle supprimé, la date passe au suivant", await page.evaluate(() => localStorage.getItem("merge.controles") + " / " + window.__fake.DB.subjects.find(s => s.id === "s1").exam_date + " / " + document.querySelectorAll(".ctrlrow").length));
+    // Calendrier : plusieurs matières le même jour.
+    await go(page, "#calendrier", 300); await page.click(".cal button.day:not([disabled]) >> nth=-2"); await page.waitForTimeout(100);
+    await page.click('#dayPanel [data-sub="s1"]'); await page.waitForTimeout(250); await page.click("#ccok"); await page.waitForTimeout(150);
+    await page.click('#dayPanel [data-sub="s2"]'); await page.waitForTimeout(250); await page.click("#ccok"); await page.waitForTimeout(150);
+    ok(await page.locator('#dayPanel [data-sub][aria-pressed="true"]').count() === 2 && await page.locator("#dayPanel .ctrlpick").count() === 2, tag + " : deux contrôles le même jour");
     // Révision combinée : tout un dossier, puis plusieurs matières, dossiers ou chapitres au choix.
     await go(page, "#dossier-g1", 400); ok(await page.locator('a[href="#revdossier-g1"]').count() === 1, tag + " : bouton réviser tout le dossier");
     await page.click('a[href="#revdossier-g1"]'); await page.waitForTimeout(400); ok(await page.locator(".session").count() === 1, tag + " : session du dossier lancée");

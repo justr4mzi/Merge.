@@ -143,7 +143,7 @@
   function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   // Ces clés sont gardées sur l'appareil ET dans le compte (table user_kv) : on retrouve la même chose sur téléphone et sur PC.
   // Restent sur l'appareil seulement : kvts (horodatages), file (révisions en attente d'envoi), cache.* et gen.* (copies de la base), erreurs.* (copie de secours de la table mistakes). Le thème est dans le profil.
-  const SYNC = /^merge\.(fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
+  const SYNC = /^merge\.(fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|controles|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
   let kvTs = {}, kvQueue = {}, kvTimer = null, kvOff = false, kvAt = 0;
   try { kvTs = JSON.parse(localStorage.getItem("merge.kvts") || "{}") || {}; } catch (e) { kvTs = {}; }
   const kvSaveTs = () => { try { localStorage.setItem("merge.kvts", JSON.stringify(kvTs)); } catch (e) { /* rien */ } };
@@ -308,6 +308,7 @@
     state.cards = (k.data || []).filter(c => state.chapters.some(x => x.id === c.chapter_id));
     state.offline = false;
     try { await kvPull(); } catch (e) { /* synchronisation au prochain passage */ }
+    try { await ctrlSync(true); } catch (e) { /* refait au prochain chargement */ }
     safeSet("merge.cache." + uid, JSON.stringify({ profile: state.profile, subjects: state.subjects, groups: state.groups, chapters: state.chapters, cards: state.cards, sessions: state.sessions, legacy: state.legacy }));
     applyLook(state.profile); applyRewards();
     setTimeout(prefetchOffline, 4000);
@@ -430,7 +431,7 @@
   // ---------- date du contrôle : calendrier en vue mois + révision libre ----------
   const fmtDate = d => new Date(d + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
   const isFree = s => !!s.free_revision || safeGet("merge.libre." + s.id) === "1";
-  function examPicker(box, val, onChange) {
+  function examPicker(box, val, onChange, noFree) {
     const v = { date: val.date || null, free: !!val.free }, ref = new Date((v.date || localDay()) + "T00:00:00"); ref.setDate(1);
     function draw() {
       const y = ref.getFullYear(), m = ref.getMonth(), first = (new Date(y, m, 1).getDay() + 6) % 7, n = new Date(y, m + 1, 0).getDate(), today = localDay();
@@ -439,10 +440,10 @@
       box.innerHTML = `<div class="picker card pad stack${v.free ? " off" : ""}"><div class="row between"><button type="button" class="iconbtn flat" data-nav="-1" aria-label="Mois précédent">${I.back}</button><b style="text-transform:capitalize">${ref.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}</b><button type="button" class="iconbtn flat" data-nav="1" aria-label="Mois suivant" style="transform:scaleX(-1)">${I.back}</button></div>
         <div class="cal">${["L", "M", "M", "J", "V", "S", "D"].map(x => `<span class="wd">${x}</span>`).join("")}${cells}</div>
         <p class="small muted" aria-live="polite">${v.free ? "Révision libre : pas de date, tu avances à ton rythme." : v.date ? "Contrôle le " + fmtDate(v.date) + "." : "Touche le jour de ton contrôle."}</p>
-        <button type="button" class="switch" role="switch" aria-checked="${v.free}" data-free><i></i><span>Pas de contrôle prévu, révision libre</span></button></div>`;
+        ${noFree ? "" : `<button type="button" class="switch" role="switch" aria-checked="${v.free}" data-free><i></i><span>Pas de contrôle prévu, révision libre</span></button>`}</div>`;
       box.querySelectorAll("[data-nav]").forEach(b => b.onclick = () => { ref.setMonth(ref.getMonth() + (+b.dataset.nav)); draw(); });
       box.querySelectorAll("[data-day]").forEach(b => b.onclick = () => { v.date = v.date === b.dataset.day ? null : b.dataset.day; draw(); onChange({ date: v.date, free: false }); });
-      box.querySelector("[data-free]").onclick = () => { v.free = !v.free; if (v.free) v.date = null; draw(); onChange({ date: v.date, free: v.free }); };
+      if (box.querySelector("[data-free]")) box.querySelector("[data-free]").onclick = () => { v.free = !v.free; if (v.free) v.date = null; draw(); onChange({ date: v.date, free: v.free }); };
     }
     draw();
   }
@@ -457,6 +458,48 @@
     return null;
   }
 
+  // ---------- contrôles : plusieurs par matière (user_kv « merge.controles »), avec les chapitres de chacun ----------
+  // { id, s: matière, d: "AAAA-MM-JJ", ch: [chapitres] ou null (= tous) }. subjects.exam_date garde la date du PROCHAIN contrôle
+  // de la matière : c'est elle qu'utilisent le plan, l'accueil et les rappels (qui lisent aussi cette liste côté serveur).
+  const ctrls = () => (jget("merge.controles", null) || []).filter(c => c && c.id && c.s && /^\d{4}-\d{2}-\d{2}$/.test(c.d));
+  const ctrlSave = l => jset("merge.controles", l);
+  const ctrlsOf = sid => ctrls().filter(c => c.s === sid).sort((a, b) => a.d.localeCompare(b.d));
+  const nextCtrl = s => s && !isFree(s) ? ctrlsOf(s.id).find(c => c.d >= localDay()) || null : null;
+  const upCtrls = () => ctrls().filter(c => c.d >= localDay()).map(c => ({ c, s: state.subjects.find(x => x.id === c.s) })).filter(x => x.s && !isFree(x.s)).sort((a, b) => a.c.d.localeCompare(b.c.d));
+  const jx = d => { const j = daysUntil(d); return j === 0 ? "Auj." : "J-" + j; };
+  async function ctrlSync(migrate) {
+    let l = ctrls(), changed = false;
+    // Dates déjà en base (avant cette version, ou mises à l'inscription) : elles deviennent des contrôles, avec l'ancien choix de chapitres.
+    if (migrate) state.subjects.forEach(s => { if (s.exam_date && !isFree(s) && s.exam_date >= localDay() && !l.some(c => c.s === s.id && c.d === s.exam_date)) { const v = jget("merge.examch." + s.id, null); l.push({ id: "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), s: s.id, d: s.exam_date, ch: v && v.on && v.d === s.exam_date && Array.isArray(v.ids) && v.ids.length ? v.ids : null }); changed = true; } });
+    const seen = new Set(), old = localDay(new Date(Date.now() - 60 * 86400000));
+    const l2 = l.filter(c => { const k = c.s + c.d; if (seen.has(k) || c.d < old) return false; seen.add(k); return true; });
+    if (l2.length !== l.length || changed) ctrlSave(l2);
+    if (state.offline) return;
+    for (const s of state.subjects) { if (isFree(s)) continue; const nx = nextCtrl(s), want = nx ? nx.d : null; if ((s.exam_date || null) !== want && (want || (s.exam_date && s.exam_date >= localDay()))) await saveExam(s.id, { date: want, free: false }); }
+  }
+  async function ctrlAdd(sid, d) {
+    const l = ctrls(); if (l.some(c => c.s === sid && c.d === d)) return null;
+    const c = { id: "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), s: sid, d, ch: null }; l.push(c); ctrlSave(l); await ctrlSync(); return c;
+  }
+  async function ctrlDel(cid) { ctrlSave(ctrls().filter(c => c.id !== cid)); await ctrlSync(); }
+  // Fenêtre « Quels chapitres tombent ? » : ouverte juste après avoir placé un contrôle, et depuis le bouton « Chapitres ».
+  function ctrlChSheet(cid, after) {
+    const c = ctrls().find(x => x.id === cid), s = c && state.subjects.find(x => x.id === c.s); if (!s) return;
+    const chs = state.chapters.filter(x => x.subject_id === s.id), sel = new Set((c.ch || []).filter(x => chs.some(y => y.id === x)));
+    const paint = el => {
+      el.querySelector("#cchs").innerHTML = chs.map(x => `<button type="button" class="chip" data-cc="${x.id}" aria-pressed="${sel.has(x.id)}" style="--c:${esc(s.color)}"><span class="dot"></span>&nbsp;${esc(x.name)}</button>`).join("");
+      el.querySelector("#ccall").setAttribute("aria-pressed", String(!sel.size));
+      el.querySelector("#ccnote").textContent = sel.size ? "Ton plan de révision ne gardera que " + (sel.size > 1 ? "ces " + sel.size + " chapitres." : "ce chapitre.") : "Tous les chapitres de la matière sont au programme.";
+      el.querySelectorAll("[data-cc]").forEach(b => b.onclick = () => { sel.has(b.dataset.cc) ? sel.delete(b.dataset.cc) : sel.add(b.dataset.cc); paint(el); });
+    };
+    sheet(`<div class="row"><span class="mico big">${I.cal}</span><h1>Contrôle de ${esc(s.name)}</h1></div><p class="muted">${esc(fmtDate(c.d))}</p><h2>Quels chapitres tombent ?</h2>
+      ${chs.length ? `<button type="button" class="chip big" id="ccall" aria-pressed="true">Tous les chapitres</button><span class="label">Ou seulement :</span><div class="chips" id="cchs"></div><p class="small muted" id="ccnote" aria-live="polite"></p>` : '<p class="small muted">Pas encore de chapitre dans cette matière : le contrôle porte sur toute la matière. Tu pourras choisir les chapitres plus tard.</p><span id="ccall" hidden></span><span id="cchs" hidden></span><span id="ccnote" hidden></span>'}
+      <button class="btn" id="ccok">Valider</button>`, el => {
+      paint(el);
+      el.querySelector("#ccall").onclick = () => { sel.clear(); paint(el); };
+      el.querySelector("#ccok").onclick = () => { const l = ctrls(), x = l.find(y => y.id === cid); if (x) { x.ch = sel.size ? [...sel] : null; ctrlSave(l); } closeSheet(); toast(sel.size ? "Contrôle enregistré avec " + plural(sel.size, "chapitre", "chapitres") + "." : "Contrôle enregistré."); if (after) after(); };
+    });
+  }
 
   // ---------- connexion et inscription ----------
   function screenLogin(msg) {
@@ -959,8 +1002,8 @@
   }
   // Chapitres au programme du contrôle (option « Choisir les chapitres ») : null = tous les chapitres de la matière.
   function examChs(s) {
-    const v = jget("merge.examch." + s.id, null); if (!v || !v.on || !s.exam_date || v.d !== s.exam_date || !Array.isArray(v.ids)) return null;
-    const ids = v.ids.filter(x => state.chapters.some(c => c.id === x && c.subject_id === s.id)); return ids.length ? ids : null;
+    const c = nextCtrl(s); if (!c || !Array.isArray(c.ch)) return null;
+    const ids = c.ch.filter(x => state.chapters.some(c => c.id === x && c.subject_id === s.id)); return ids.length ? ids : null;
   }
   // Plan de révision : les chapitres de la matière (ou ceux choisis pour le contrôle) répartis sur les jours qui restent, les moins maîtrisés d'abord.
   function planFor(s) {
@@ -1102,11 +1145,11 @@
     const today = state.sessions.find(s => s.day === localDay()) || { seconds: 0, cards_reviewed: 0 };
     const doneVal = p.daily_goal_kind === "minutes" ? Math.floor(today.seconds / 60) : today.cards_reviewed;
     const unit = p.daily_goal_kind === "minutes" ? "min" : "cartes";
-    const next = state.subjects.filter(s => s.exam_date && daysUntil(s.exam_date) >= 0).sort((a, b) => a.exam_date.localeCompare(b.exam_date))[0];
+    const up0 = upCtrls()[0], next = up0 ? Object.assign({}, up0.s, { exam_date: up0.c.d }) : null;
     const ready = state.chapters.filter(c => cardsOf(c.id).length).slice(-4).reverse();
     const lv = xpInfo();
     const week = lastDays(7, state.sessions);
-    const ups = state.subjects.filter(x => x.exam_date && daysUntil(x.exam_date) >= 0).sort((a, b) => a.exam_date.localeCompare(b.exam_date));
+    const ups = upCtrls();
     const yearNow = new Date().getMonth() >= 8 ? new Date().getFullYear() : new Date().getFullYear() - 1, newYear = p.school_year && p.school_year < yearNow;
     app.innerHTML = `<div class="row between"><div class="logo">${esc(C.NOM_APPLI)}<b>.</b></div><span class="grow"></span><span class="homemusic"><button class="iconbtn flat" data-qs aria-label="Recherche rapide">${I.search}</button><button class="iconbtn flat" data-pomo aria-label="Pomodoro">${I.clock}</button>${musicBtn()}</span>${state.offline ? '<span class="pill warn">Hors ligne</span>' : st ? `<span class="streak" title="${plural(st, "jour", "jours")} d'affilée">${plural(st, "jour", "jours")}<span class="stl">&nbsp;d'affilée</span></span>` : `<span class="pill">${esc(p.classe || "")}</span>`}</div>
       <div class="hello"><div class="row">${MASCOT((rwEquipped("mascotte") || {}).v || "")}<h1 class="grow">Salut ${esc(p.display_name || "")}${rwEquipped("titre") && rwEquipped("titre").id !== "t-novice" && rwName(rwEquipped("titre")) ? ` <span class="rwtitle">${esc(rwName(rwEquipped("titre")))}</span>` : ""}</h1></div><p class="muted">${esc(new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }).replace(/^./, c => c.toUpperCase()))} · ${esc((rwOwned(SHOP.find(r => r.id === "p-phrase"), 0, rwState()) && rwState().custom.phrase) || PEPS[new Date().getDate() % PEPS.length])}</p></div>
@@ -1116,7 +1159,7 @@
         <div><div class="row between small muted" style="margin-bottom:6px"><span>Objectif du jour</span><span>${doneVal} / ${p.daily_goal_value} ${unit}</span></div><div class="bar"><i style="width:${Math.min(100, doneVal / p.daily_goal_value * 100)}%"></i></div></div>
         ${due ? '<a class="btn" href="#cartes-jour">Réviser maintenant</a>' : ""}${state.cards.length > 3 ? `<a class="btn ghost mixbtn" href="#melange">Révision mélangée<span class="small">${state.subjects.some(x => x.exam_date && daysUntil(x.exam_date) >= 0) ? "priorité aux contrôles proches" : "toutes tes matières"}</span></a><a class="btn ghost mixbtn" href="#perso">Choisir quoi réviser<span class="small">matières, dossiers ou chapitres au choix</span></a>` : ""}${due ? "" : `<p class="small muted">${state.cards.length ? "Tu es à jour. Reviens plus tard ou ouvre un chapitre pour t'entraîner." : "Ajoute un chapitre et importe ton cours pour créer tes premières cartes."}</p>`}</div>
         ${weekHtml(week, p)}
-        <div class="card pad stack upnext"><div class="row between"><h2>Prochains contrôles</h2><a class="linkbtn" href="#calendrier">Calendrier</a></div>${ups.length ? ups.slice(0, 3).map(x => `<a class="exam" href="#matiere-${x.id}" style="--c:${esc(x.color)}"><span class="jx">${daysUntil(x.exam_date) === 0 ? "Auj." : "J-" + daysUntil(x.exam_date)}</span><span class="grow"><b>${esc(x.name)}</b><span class="small muted">${esc(fmtDate(x.exam_date))}</span></span></a>`).join("") : '<p class="muted small">Aucun contrôle prévu. Place une date dans le calendrier pour avoir un plan de révision.</p>'}</div></div>
+        <div class="card pad stack upnext"><div class="row between"><h2>Prochains contrôles</h2><a class="linkbtn" href="#calendrier">Calendrier</a></div>${ups.length ? ups.slice(0, 3).map(({ c, s: x }) => `<a class="exam" href="#matiere-${x.id}" style="--c:${esc(x.color)}"><span class="jx">${jx(c.d)}</span><span class="grow"><b>${esc(x.name)}</b><span class="small muted">${esc(fmtDate(c.d))}${c.ch ? " · " + plural(c.ch.length, "chapitre", "chapitres") : ""}</span></span></a>`).join("") : '<p class="muted small">Aucun contrôle prévu. Place une date dans le calendrier pour avoir un plan de révision.</p>'}</div></div>
       <div class="card stats">${[[I.bolt, st, st > 1 ? "jours d'affilée" : "jour d'affilée", ""], [I.check, state.cards.filter(isMastered).length + " / " + state.cards.length, "cartes maîtrisées", ""], [I.cal, next ? (daysUntil(next.exam_date) === 0 ? "Auj." : "J-" + daysUntil(next.exam_date)) : "Libre", next ? esc(next.name) : "aucun contrôle prévu", ""], [I.spark, homeQuota ? homeQuota.calls : "…", "appels IA aujourd'hui", "hq"]].map((x, i) => `<div class="stat s${i + 1}"><span class="sico">${x[0]}</span><div><b${x[3] ? ` id="${x[3]}"` : ""}>${x[1]}</b><span>${x[2]}</span></div></div>`).join("")}</div>
       ${planTodayHtml()}${installHtml()}
       ${newYear ? `<div class="banner"><div><h2>Nouvelle année scolaire</h2><p class="small">Tu passes en quelle classe ? Mets ta classe à jour dans Réglages.</p></div><a class="btn sm" href="#reglages">Mettre à jour</a></div>` : ""}
@@ -1175,30 +1218,26 @@
     const s = state.subjects.find(x => x.id === id); if (!s) { location.hash = "#accueil"; return; }
     tabs.hidden = true;
     const chs = state.chapters.filter(c => c.subject_id === id), groups = state.groups.filter(g => g.subject_id === id), loose = chs.filter(c => !groups.some(g => g.id === c.group_id));
-    app.innerHTML = `<div class="row"><a class="iconbtn" href="#matieres" aria-label="Retour aux matières">${I.back}</a><span class="grow"></span><button class="iconbtn flat" id="sAdd" aria-label="Ajouter un chapitre ou un dossier" title="Ajouter">${I.plus}</button><button class="iconbtn flat" id="sSet" aria-label="Réglages de la matière" title="Réglages">${I.gear}</button></div>
+    app.innerHTML = `<div class="row"><a class="iconbtn" href="#matieres" aria-label="Retour aux matières">${I.back}</a><span class="grow"></span><button class="iconbtn flat" id="sSet" aria-label="Réglages de la matière" title="Réglages">${I.gear}</button></div>
       <div class="stack" style="--c:${esc(s.color)}"><div class="row"><span class="dot"></span><h1>${esc(s.name)}</h1></div>
-        <div class="row" style="flex-wrap:wrap">${examPill(s)}${examChs(s) ? `<span class="pill">${plural(examChs(s).length, "chapitre", "chapitres")} au contrôle</span>` : ""}<button class="linkbtn" id="examBtn" aria-expanded="${!!openPicker}">${I.cal}Date du contrôle</button></div><div id="examBox"></div><div id="examChs"></div>
+        <div class="card pad stack ctrlbox"><div class="row between"><h2>Contrôles</h2><button class="btn sm" id="ctAdd" aria-expanded="${!!openPicker}">${I.cal}Ajouter un contrôle</button></div><div id="examBox"></div>
+          ${isFree(s) ? '<p class="small muted">Révision libre : pas de contrôle prévu, tu avances à ton rythme.</p>' : ctrlsOf(id).filter(c => c.d >= localDay()).map(c => `<div class="ctrlrow"><span class="jx">${jx(c.d)}</span><span class="grow"><b>${esc(fmtDate(c.d))}</b><span class="small muted">${c.ch && c.ch.length ? esc(chs.filter(y => c.ch.includes(y.id)).map(y => y.name).join(", ")) : "Tous les chapitres"}</span></span><button class="btn sm ghost" data-cch="${c.id}">Chapitres</button><button class="iconbtn flat" data-cdel="${c.id}" aria-label="Supprimer le contrôle du ${esc(fmtDate(c.d))}">${I.x}</button></div>`).join("") || '<p class="small muted">Aucun contrôle prévu. Ajoute-en un : ton plan de révision se fait tout seul. Tu peux en mettre plusieurs.</p>'}
+          <button type="button" class="switch" role="switch" aria-checked="${isFree(s)}" id="ctFree"><i></i><span>Pas de contrôle, révision libre</span></button></div>
         ${chs.some(c => cardsOf(c.id).length) ? `<a class="btn revall" href="#revision-${id}">${I.cards}Réviser tous les chapitres de la matière</a>` : ""}
         <div class="row" style="flex-wrap:wrap"><a class="btn sm ghost" href="#methode-${id}">${I.steps}Fiche méthode</a><a class="btn sm ghost" href="#bac-${id}">${I.book}Vrais sujets d'examen</a></div></div>
       <div class="stack"><div class="row between"><h2>Dossiers</h2><button class="iconbtn accent" id="addG" aria-label="Ajouter un dossier">${I.plus}</button></div>
         <div id="gform"></div>
         ${groups.length ? `<div class="grid">${groups.map(g => { const gc = chs.filter(c => c.group_id === g.id), cs = state.cards.filter(k => gc.some(c => c.id === k.chapter_id)), m = mastery(cs); return `<a class="card folder" style="--c:${esc(okColor(g.color) ? g.color : s.color)}" href="#dossier-${g.id}"><div class="row">${I.folder}<b class="grow">${esc(g.name)}</b></div><div class="row between small"><span>${plural(gc.length, "chapitre", "chapitres")}</span><span>${m} %</span></div><div class="bar"><i style="width:${m}%"></i></div></a>`; }).join("")}</div>` : '<p class="small muted">Range tes chapitres par thème, par exemple « Thème 1 : Génétique ». Touche + pour créer un dossier.</p>'}</div>
-      <div class="stack"><div class="row between"><h2>${groups.length ? "Chapitres sans dossier" : "Chapitres"}</h2></div>
-      ${loose.length ? loose.map(c => chapterRow(c, s.color)).join("") : `<p class="muted">${chs.length ? "Tous tes chapitres sont rangés dans des dossiers." : "Aucun chapitre pour l'instant. Touche + en haut à droite pour en créer un."}</p>`}</div>
+      <div class="stack"><div class="row between"><h2>${groups.length ? "Chapitres sans dossier" : "Chapitres"}</h2><button class="iconbtn accent" id="sAdd" aria-label="Ajouter un chapitre" title="Ajouter un chapitre">${I.plus}</button></div>
+      ${loose.length ? loose.map(c => chapterRow(c, s.color)).join("") : `<p class="muted">${chs.length ? "Tous tes chapitres sont rangés dans des dossiers." : "Aucun chapitre pour l'instant. Touche + pour en créer un."}</p>`}</div>
       <div id="stools">${subjectToolsHtml(s, chs)}</div>`;
-    // Option sous le calendrier : choisir les chapitres qui tombent au contrôle. Le plan de révision ne garde alors qu'eux.
-    function examChsBox() {
-      const box = $("examChs"); if (!box) return;
-      if (!$("examBox").innerHTML || !s.exam_date || isFree(s) || daysUntil(s.exam_date) < 0 || !chs.length) { box.innerHTML = ""; return; }
-      const key = "merge.examch." + id, v = jget(key, null), on = !!(v && v.on && v.d === s.exam_date), ids = on ? (v.ids || []).filter(x => chs.some(c => c.id === x)) : [];
-      box.innerHTML = `<div class="card pad stack exchs"><button type="button" class="switch" role="switch" aria-checked="${on}" id="exOn"><i></i><span>Choisir les chapitres du contrôle</span></button>${on ? `<p class="small muted" aria-live="polite">${ids.length ? "Ton plan de révision ne garde que " + (ids.length > 1 ? "ces " + ids.length + " chapitres." : "ce chapitre.") : "Touche les chapitres qui tombent au contrôle."}</p><div class="chips">${chs.map(c => `<button type="button" class="chip" data-exc="${c.id}" aria-pressed="${ids.includes(c.id)}" style="--c:${esc(s.color)}"><span class="dot"></span>&nbsp;${esc(c.name)}</button>`).join("")}</div>` : ""}</div>`;
-      const save = (o, i) => { jset(key, { on: o, d: s.exam_date, ids: i }); examChsBox(); $("stools").innerHTML = subjectToolsHtml(s, chs); };
-      $("exOn").onclick = () => save(!on, ids);
-      box.querySelectorAll("[data-exc]").forEach(b => b.onclick = () => save(true, ids.includes(b.dataset.exc) ? ids.filter(x => x !== b.dataset.exc) : ids.concat(b.dataset.exc)));
-    }
-    const openExam = () => { examPicker($("examBox"), { date: s.exam_date, free: isFree(s) }, async v => { const err = await saveExam(id, v); if (err) return fail(err, "Date non enregistrée"); toast(v.free ? "Révision libre activée." : v.date ? "Date enregistrée." : "Date retirée."); screenSubject(id, true); }); examChsBox(); };
+    // Contrôles : « Ajouter un contrôle » ouvre le calendrier ; un jour touché crée le contrôle puis demande ses chapitres.
+    const openExam = () => { examPicker($("examBox"), { date: null, free: false }, async v => { if (!v.date) return; const c = await ctrlAdd(id, v.date); $("examBox").innerHTML = ""; if (!c) return toast("Il y a déjà un contrôle ce jour-là."); screenSubject(id); ctrlChSheet(c.id, () => screenSubject(id)); }, true); };
     if (openPicker) openExam();
-    $("examBtn").onclick = () => { if ($("examBox").innerHTML) { $("examBox").innerHTML = ""; examChsBox(); $("examBtn").setAttribute("aria-expanded", "false"); } else { openExam(); $("examBtn").setAttribute("aria-expanded", "true"); } };
+    $("ctAdd").onclick = () => { if ($("examBox").innerHTML) { $("examBox").innerHTML = ""; $("ctAdd").setAttribute("aria-expanded", "false"); } else { openExam(); $("ctAdd").setAttribute("aria-expanded", "true"); } };
+    app.querySelectorAll("[data-cch]").forEach(b => b.onclick = () => ctrlChSheet(b.dataset.cch, () => screenSubject(id)));
+    app.querySelectorAll("[data-cdel]").forEach(b => b.onclick = async () => { if (b.dataset.ok !== "1") { b.dataset.ok = "1"; b.classList.add("danger"); toast("Touche encore pour supprimer ce contrôle."); return; } await ctrlDel(b.dataset.cdel); toast("Contrôle supprimé."); screenSubject(id); });
+    $("ctFree").onclick = async () => { const err = await saveExam(id, { date: null, free: !isFree(s) }); if (err) return fail(err, "Réglage non enregistré"); await ctrlSync(); toast(isFree(s) ? "Révision libre activée." : "Révision libre désactivée."); screenSubject(id); };
     $("addG").onclick = () => {
       if ($("gform").innerHTML) { $("gform").innerHTML = ""; return; }
       $("gform").innerHTML = `<div class="field"><label for="gname">Nom du dossier</label><div class="row"><input id="gname" type="text" maxlength="80" placeholder="Ex. Thème 1 : Génétique"><button class="btn" id="gsave">Créer</button></div></div>`;
@@ -2509,21 +2548,21 @@
       const cells = []; for (let i = 0; i < first; i++) cells.push('<span class="pad"></span>');
       let daysDone = 0, secs = 0;
       for (let d = 1; d <= n; d++) {
-        const key = y + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0"), ex = state.subjects.filter(x => x.exam_date === key);
+        const key = y + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0"), ex = ctrls().filter(c => c.d === key).map(c => state.subjects.find(x => x.id === c.s)).filter(x => x && !isFree(x));
         if (did[key]) { daysDone++; secs += did[key].seconds || 0; }
         const vac = vacOf(key);
         cells.push(`<button type="button" class="day${key === today ? " now" : ""}${ex.length ? " has" : ""}${did[key] ? " did" : ""}${vac ? " hol" : ""}"${vac ? ` title="Vacances : ${vac[0]}"` : ""} data-day="${key}" aria-pressed="${picked === key}"${key < today ? " disabled" : ""} aria-label="${d}${ex.length ? ", contrôle : " + esc(ex.map(x => x.name).join(", ")) : ""}${did[key] ? ", jour révisé" : ""}"><span class="dn">${d}</span><i>${ex.map(x => `<b style="background:${esc(x.color)}"></b>`).join("")}</i>${ex.slice(0, 2).map(x => `<em style="--c:${esc(x.color)}">${esc(x.name)}</em>`).join("")}</button>`);
       }
-      const up = state.subjects.filter(x => x.exam_date && daysUntil(x.exam_date) >= 0).sort((a, b) => a.exam_date.localeCompare(b.exam_date)), free = state.subjects.filter(isFree);
+      const up = upCtrls(), free = state.subjects.filter(isFree), onDay = picked ? ctrls().filter(c => c.d === picked) : [];
       app.innerHTML = `<div class="row between" style="flex-wrap:wrap"><h1>Calendrier</h1><div class="row" style="flex-wrap:wrap"><a class="btn sm" href="#edt">Emploi du temps</a><button class="btn sm ghost" id="todayb">Aujourd'hui</button></div></div>
         <div class="calwrap"><div class="card pad stack calcard"><div class="row between"><button class="iconbtn flat" id="prev" aria-label="Mois précédent">${I.back}</button><h2 class="calmonth">${ref.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}</h2><button class="iconbtn flat" id="nextm" aria-label="Mois suivant" style="transform:scaleX(-1)">${I.back}</button></div>
           <div class="cal calx">${["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map(x => `<span class="wd">${x}</span>`).join("")}${cells.join("")}</div>
           <div class="callegend"><span><i class="lg now"></i>Aujourd'hui</span><span><i class="lg did"></i>Jour révisé</span><span><i class="lg ex"></i>Contrôle</span><span><i class="lg hol"></i>Vacances (zone A)</span></div></div>
         <div class="stack calside">
-          ${picked ? `<div class="card pad stack" id="dayPanel"><h2>${fmtDate(picked)}</h2><p class="label">Contrôle le ${fmtDate(picked)} : touche la matière concernée</p><div class="chips">${state.subjects.map(x => `<button class="chip" data-sub="${x.id}" aria-pressed="${x.exam_date === picked}" style="--c:${esc(x.color)}"><span class="dot"></span>&nbsp;${esc(x.name)}</button>`).join("") || '<span class="muted">Ajoute d\'abord une matière.</span>'}</div></div>` : `<div class="card pad stack calhint"><span class="mico big">${I.cal}</span><div><h2>Place tes contrôles</h2><p class="note">Touche un jour pour y placer un contrôle.</p></div></div>`}
-          <div class="stack"><h2>Prochains contrôles</h2>${up.length ? up.map(x => `<a class="card exam" href="#matiere-${x.id}" style="--c:${esc(x.color)}"><span class="jx">${daysUntil(x.exam_date) === 0 ? "Auj." : "J-" + daysUntil(x.exam_date)}</span><span class="grow"><b>${esc(x.name)}</b><span class="small muted">${esc(fmtDate(x.exam_date))} · ${daysUntil(x.exam_date) === 0 ? "Aujourd'hui" : "Dans " + plural(daysUntil(x.exam_date), "jour", "jours")}</span></span></a>`).join("") : '<p class="muted">Aucune date pour l\'instant.</p>'}</div>
+          ${picked ? `<div class="card pad stack" id="dayPanel"><h2>${fmtDate(picked)}</h2><p class="label">Contrôles ce jour-là : touche une ou plusieurs matières</p><div class="chips">${state.subjects.map(x => `<button class="chip" data-sub="${x.id}" aria-pressed="${onDay.some(c => c.s === x.id)}" style="--c:${esc(x.color)}"><span class="dot"></span>&nbsp;${esc(x.name)}</button>`).join("") || '<span class="muted">Ajoute d\'abord une matière.</span>'}</div>${onDay.length ? onDay.map(c => { const x = state.subjects.find(y => y.id === c.s); return x ? `<button class="row between ctrlpick" data-cch="${c.id}"><span><b>${esc(x.name)}</b><span class="small muted"> · ${c.ch ? plural(c.ch.length, "chapitre", "chapitres") : "tous les chapitres"}</span></span><span class="linkbtn">Chapitres</span></button>` : ""; }).join("") : ""}</div>` : `<div class="card pad stack calhint"><span class="mico big">${I.cal}</span><div><h2>Place tes contrôles</h2><p class="note">Touche un jour pour y placer un contrôle.</p></div></div>`}
+          <div class="stack"><h2>Prochains contrôles</h2>${up.length ? up.map(({ c, s: x }) => `<a class="card exam" href="#matiere-${x.id}" style="--c:${esc(x.color)}"><span class="jx">${jx(c.d)}</span><span class="grow"><b>${esc(x.name)}</b><span class="small muted">${esc(fmtDate(c.d))} · ${daysUntil(c.d) === 0 ? "Aujourd'hui" : "Dans " + plural(daysUntil(c.d), "jour", "jours")}${c.ch ? " · " + plural(c.ch.length, "chapitre", "chapitres") : ""}</span></span></a>`).join("") : '<p class="muted">Aucune date pour l\'instant.</p>'}</div>
           ${(() => { const cur = vacOf(today), nx = VACANCES.find(v => v[1] > today); const fd = d => new Date(d + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" }); return cur ? `<div class="card pad stack vaccard"><h2>Vacances de ${cur[0]}</h2><p class="small muted">Jusqu'au ${fd(cur[2])}. Le bon moment pour revoir les chapitres les plus fragiles.</p></div>` : nx ? `<div class="card pad stack vaccard"><h2>Prochaines vacances : ${nx[0]}</h2><p class="small muted">Du ${fd(nx[1])} au ${fd(nx[2])}, dans ${plural(daysUntil(nx[1]), "jour", "jours")}. Zone A.</p></div>` : ""; })()}
-          ${(() => { const s0 = up[0], pl = s0 ? planFor(s0) : []; return pl.length ? `<div class="card pad stack"><h2>Plan de révision : ${esc(s0.name)}</h2>${pl.filter(x => x.items.length || x.last).slice(0, 8).map(x => `<div class="srow"><span>${esc(new Date(x.day + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }))}</span><b>${esc(x.items.map(y => y.c.name).concat(x.last ? ["Révision générale"] : []).join(", "))}</b></div>`).join("")}<p class="note">Les chapitres les moins maîtrisés passent en premier. Le plan se recalcule chaque jour.</p></div>` : ""; })()}
+          ${(() => { const s0 = up[0] && up[0].s, pl = s0 ? planFor(s0) : []; return pl.length ? `<div class="card pad stack"><h2>Plan de révision : ${esc(s0.name)}</h2>${pl.filter(x => x.items.length || x.last).slice(0, 8).map(x => `<div class="srow"><span>${esc(new Date(x.day + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }))}</span><b>${esc(x.items.map(y => y.c.name).concat(x.last ? ["Révision générale"] : []).join(", "))}</b></div>`).join("")}<p class="note">Les chapitres les moins maîtrisés passent en premier. Le plan se recalcule chaque jour.</p></div>` : ""; })()}
           ${free.length ? `<div class="stack"><h2>En révision libre</h2><p class="small muted">En révision libre : ${free.map(x => esc(x.name)).join(", ")}.</p></div>` : ""}
           <div class="card stats two"><div class="stat s1"><span class="sico">${I.check}</span><div><b>${daysDone}</b><span>${daysDone > 1 ? "jours révisés ce mois" : "jour révisé ce mois"}</span></div></div><div class="stat s2"><span class="sico">${I.bolt}</span><div><b>${Math.round(secs / 60)} min</b><span>de révision ce mois</span></div></div></div>
         </div></div>`;
@@ -2531,11 +2570,14 @@
       $("prev").onclick = () => { ref.setMonth(ref.getMonth() - 1); draw(); };
       $("nextm").onclick = () => { ref.setMonth(ref.getMonth() + 1); draw(); };
       app.querySelectorAll("[data-day]").forEach(b => b.onclick = () => { picked = picked === b.dataset.day ? null : b.dataset.day; draw(); });
+      // Plusieurs contrôles possibles le même jour, la même semaine, et plusieurs par matière.
       app.querySelectorAll("[data-sub]").forEach(b => b.onclick = async () => {
-        const sub = state.subjects.find(x => x.id === b.dataset.sub), err = await saveExam(sub.id, { date: sub.exam_date === picked ? null : picked, free: false });
-        if (err) return fail(err, "Date non enregistrée");
-        toast(sub.exam_date ? "Contrôle de " + sub.name + " placé." : "Date retirée."); draw();
+        const sub = state.subjects.find(x => x.id === b.dataset.sub), have = ctrls().find(c => c.s === sub.id && c.d === picked);
+        if (have) { await ctrlDel(have.id); toast("Contrôle de " + sub.name + " retiré."); return draw(); }
+        if (isFree(sub)) { const err = await saveExam(sub.id, { date: null, free: false }); if (err) return fail(err, "Date non enregistrée"); }
+        const c = await ctrlAdd(sub.id, picked); draw(); if (c) ctrlChSheet(c.id, draw);
       });
+      app.querySelectorAll("[data-cch]").forEach(b => b.onclick = () => ctrlChSheet(b.dataset.cch, draw));
     }
     draw();
   }

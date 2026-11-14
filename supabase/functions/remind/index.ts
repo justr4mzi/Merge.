@@ -66,9 +66,23 @@ Deno.serve(async (req) => {
       const open = slots(here.minutes, prefs);
       if (!open.exam && !open.daily && !open.streak) continue; // rien à envoyer à cette heure : on ne lit pas la base
       const days = await studyDays(s.user_id);
-      const exams = open.exam || open.daily
-        ? (await admin.from("subjects").select("id,name,exam_date").eq("user_id", s.user_id).eq("archived", false).in("exam_date", [here.day, addDays(here.day, 1), addDays(here.day, 3), addDays(here.day, 7)])).data ?? []
-        : [];
+      // Contrôles : la date du prochain contrôle de chaque matière (subjects.exam_date) et tous les contrôles prévus dans l'appli
+      // (plusieurs par matière possibles, user_kv « merge.controles »).
+      const wanted = [here.day, addDays(here.day, 1), addDays(here.day, 3), addDays(here.day, 7)];
+      let exams: Any[] = [];
+      if (open.exam || open.daily) {
+        const [sj, kv] = await Promise.all([
+          admin.from("subjects").select("id,name,exam_date,free_revision").eq("user_id", s.user_id).eq("archived", false),
+          admin.from("user_kv").select("value").eq("user_id", s.user_id).eq("key", "merge.controles").maybeSingle(),
+        ]);
+        const list = (sj.data ?? []).filter((x: Any) => !x.free_revision);
+        let ctl: Any[] = []; try { ctl = JSON.parse(kv.data?.value ?? "[]"); } catch (_e) { ctl = []; }
+        const seen = new Set<string>();
+        const add = (id: string, d: string) => { const x = list.find((y: Any) => y.id === id); if (!x || !wanted.includes(d) || seen.has(id + d)) return; seen.add(id + d); exams.push({ id, name: x.name, exam_date: d }); };
+        list.forEach((x: Any) => x.exam_date && add(x.id, String(x.exam_date)));
+        (Array.isArray(ctl) ? ctl : []).forEach((c: Any) => c && typeof c.s === "string" && typeof c.d === "string" && add(c.s, c.d));
+        exams = exams.slice(0, 12);
+      }
       const r = decide({
         minutes: here.minutes, day: here.day, prefs, sub: s, name: String(p?.display_name ?? "").trim(),
         studied: days.has(here.day), streak: streakOf(days, here.day), due: open.daily ? await dueOf(s.user_id) : 0,

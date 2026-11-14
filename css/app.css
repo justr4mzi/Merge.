@@ -1020,3 +1020,14 @@ body[data-flame="cosmique"] .streak,[data-flameprev="cosmique"]{background:linea
 .shopitem.excl{border-color:#d4a017;box-shadow:inset 0 0 0 1px rgba(212,160,23,.35)}
 .lvlgift.excl b{color:#d4a017}
 @media (prefers-reduced-motion:reduce){body[data-flame] .streak,[data-flameprev]{animation:none!important}}
+/* Contrôles d'une matière (plusieurs possibles) */
+.ctrlbox h2{margin:0}
+.ctrlbox .btn.sm{gap:6px}
+.ctrlrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--line)}
+.ctrlrow .grow{display:flex;flex-direction:column;min-width:0;flex:1 1 calc(100% - 80px)}
+.ctrlrow .btn,.ctrlrow .iconbtn{margin-left:auto}
+.ctrlrow .btn+.iconbtn{margin-left:0}
+.ctrlrow .jx,.ctrlpick .jx{font-weight:900}
+.ctrlrow .iconbtn.danger{color:#e5484d;border-color:#e5484d}
+.ctrlpick{min-height:44px;width:100%;background:none;border:0;border-top:1px solid var(--line);padding:6px 0;color:inherit;text-align:left;font:inherit}
+#sheet .chip.big{align-self:flex-start;font-size:1.02em}
