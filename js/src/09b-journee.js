@@ -21,9 +21,22 @@
     const s = state.subjects.find(x => x.id === sid), only = s ? examChs(s) : null, pool = only ? chs.filter(c => only.includes(c.id)) : chs;
     return (pool.length ? pool : chs).map(c => ({ c, due: dueCards(cardsOf(c.id)).length, m: mastery(cardsOf(c.id)) })).sort((a, b) => b.due - a.due || a.m - b.m)[0].c;
   }
+  // Un bloc peut viser plusieurs matières (b.ss) et plusieurs chapitres (b.chs) ; b.s et b.ch gardent le premier (anciens blocs).
+  const bSubs = b => (Array.isArray(b.ss) && b.ss.length ? b.ss : b.s ? [b.s] : []).filter(id => state.subjects.some(x => x.id === id));
+  const bChs = b => (Array.isArray(b.chs) && b.chs.length ? b.chs : b.ch ? [b.ch] : []).filter(id => state.chapters.some(c => c.id === id));
+  // Lancer un bloc : plusieurs chapitres ou matières en flashcards = révision mélangée de tout ça.
+  function goBlock(b) {
+    const chs = bChs(b), subs = bSubs(b);
+    if (b.act === "cartes" && (chs.length > 1 || (!chs.length && subs.length > 1))) {
+      const ids = chs.length ? chs : state.chapters.filter(c => subs.includes(c.subject_id) && cardsOf(c.id).length).map(c => c.id);
+      jset("merge.mixsel", { ids }); location.hash = "#mixte"; return true;
+    }
+    const to = blockTarget(b); if (to) { location.hash = to; return true; } return false;
+  }
+  document.addEventListener("click", e => { const a = e.target.closest && e.target.closest("[data-blkgo]"); if (!a) return; e.preventDefault(); const bl = blocksOn(jGet(), localDay()).find(x => x.id === a.dataset.blkgo); if (bl) goBlock(bl); });
   function blockTarget(b) {
     // Chapitre : celui choisi, ou celui que Merge choisit (b.auto) ; sans chapitre, on ouvre la matière.
-    const ch = b.ch && state.chapters.some(c => c.id === b.ch) ? b.ch : b.s && b.auto ? (bestChapter(b.s) || {}).id : null;
+    const ch = bChs(b)[0] || (b.s && b.auto ? (bestChapter(b.s) || {}).id : null);
     if (b.act === "cartes") return ch ? "#cartes-" + ch : b.s ? "#revision-" + b.s : "#cartes-jour";
     if (b.act === "quiz") return ch ? "#quiz-" + ch : null;
     if (b.act === "resume") return ch ? "#resume-" + ch : null;
@@ -79,13 +92,18 @@
     const days = [...Array(7)].map((_, i) => { const d = new Date(mon); d.setDate(d.getDate() + i); return localDay(d); });
     const subj = id => state.subjects.find(x => x.id === id), colorOf = blockColor;
     const end = dayOf(days[6]);
-    app.innerHTML = `${planSeg("edt")}<div class="jnav"><button class="linkbtn" id="jup">${I.back}${esc(dayOf(jDay).toLocaleDateString("fr-FR", { month: "long" }).replace(/^./, c => c.toUpperCase()))}</button><span class="grow"></span><button class="btn sm ghost" id="wtoday">Aujourd'hui</button></div>
-      <div class="row between"><button class="iconbtn flat" id="wprev" aria-label="Semaine précédente">${I.back}</button><h1 style="margin:0;text-align:center">Semaine du ${mon.getDate()}${mon.getMonth() !== end.getMonth() ? " " + mon.toLocaleDateString("fr-FR", { month: "short" }) : ""} au ${end.getDate()} ${end.toLocaleDateString("fr-FR", { month: "short" })}</h1><button class="iconbtn flat" id="wnext" aria-label="Semaine suivante" style="transform:scaleX(-1)">${I.back}</button></div>
-      ${edtGet().ab && weekAB(mon) ? `<p class="small muted" style="text-align:center;margin:0">Semaine ${weekAB(mon)}</p>` : ""}
-      <div class="wklist">${days.map(k => { const d = dayOf(k), bs = blocksOn(j, k), sc = schoolOn(j, k), cs = ctrls().filter(c => c.d === k).map(c => subj(c.s)).filter(Boolean), mins_ = bs.filter(b => b.act !== "pause").reduce((a, b) => a + b.dur, 0);
-        return `<button class="wkday card${k === today ? " now" : ""}" data-wd="${k}"><span class="wkd"><span>${d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "")}</span><b>${d.getDate()}</b></span><span class="wkbody">${cs.map(x => `<span class="wkexam" style="--c:${esc(x.color)}">Contrôle de ${esc(x.name)}</span>`).join("")}<span class="wkpills">${bs.filter(b => b.act !== "pause").slice(0, 6).map(b => `<i style="background:${esc(colorOf(b))}">${esc(b.start)} ${esc((subj(b.s) || {}).name || actOf(b.act)[1])}</i>`).join("") || `<span class="small muted">${j.off[k] ? "Pas cours · " : sc.length ? plural(sc.length, "cours", "cours") + " · " : ""}rien de prévu</span>`}</span>${mins_ ? `<span class="small muted">${durTxt(mins_)} de révision${isDoneAll(j, k, bs) ? " · fait" : ""}</span>` : ""}</span></button>`; }).join("")}</div>`;
+    // Une ligne par jour : date, petite frise de la journée (7 h – 21 h : cours en couleur pâle, révisions en couleur pleine), résumé.
+    const H0 = 7 * 60, H1 = 21 * 60, pos = (st, du) => { const a = Math.max(H0, st), z = Math.min(H1, st + du); return z <= a ? null : `left:${((a - H0) / (H1 - H0) * 100).toFixed(2)}%;width:${Math.max(1.2, (z - a) / (H1 - H0) * 100).toFixed(2)}%`; };
+    const range = `${mon.getDate()}${mon.getMonth() !== end.getMonth() ? " " + mon.toLocaleDateString("fr-FR", { month: "short" }) : ""} – ${end.getDate()} ${end.toLocaleDateString("fr-FR", { month: "short" })}`;
+    app.innerHTML = `${planSeg("edt")}<div class="jnav"><button class="linkbtn" id="jup">${I.back}${esc(dayOf(jDay).toLocaleDateString("fr-FR", { month: "long" }).replace(/^./, c => c.toUpperCase()))}</button><span class="grow"></span>${days.includes(today) ? "" : `<button class="btn sm" id="wtoday">Aujourd'hui</button>`}</div>
+      <div class="wkhead"><button class="iconbtn flat" id="wprev" aria-label="Semaine précédente">${I.back}</button><div class="wktitle"><b>${esc(range)}</b>${edtGet().ab && weekAB(mon) ? `<span class="small muted">Semaine ${weekAB(mon)}</span>` : ""}</div><button class="iconbtn flat" id="wnext" aria-label="Semaine suivante" style="transform:scaleX(-1)">${I.back}</button></div>
+      <div class="wklist card">${days.map(k => { const d = dayOf(k), bs = blocksOn(j, k), sc = schoolOn(j, k), cs = ctrls().filter(c => c.d === k).map(c => subj(c.s)).filter(Boolean), work = bs.filter(b => b.act !== "pause"), mins_ = work.reduce((a, b) => a + b.dur, 0), done = isDoneAll(j, k, bs);
+        const segs = sc.map(x => { const p2 = pos(mins(x.start), mins(x.end) - mins(x.start)); return p2 ? `<i class="sc" style="${p2};--c:${esc((subjOfName(x.subject) || {}).color || "#64748b")}"></i>` : ""; }).join("") + work.map(b => { const p2 = pos(mins(b.start), b.dur); return p2 ? `<i style="${p2};--c:${esc(colorOf(b))}"></i>` : ""; }).join("");
+        const meta = [j.off[k] ? "Pas cours" : sc.length ? plural(sc.length, "cours", "cours") : "", mins_ ? durTxt(mins_) + " de révision" : ""].filter(Boolean).join(" · ") || "Rien de prévu";
+        return `<button class="wkrow${k === today ? " now" : ""}${!sc.length && !work.length && !cs.length ? " empty" : ""}" data-wd="${k}"><span class="wkdate"><span>${d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "")}</span><b>${d.getDate()}</b></span><span class="wkmain">${cs.length ? `<span class="wkexams">${cs.map(x => `<span class="wkexam" style="--c:${esc(x.color)}"><span class="dot"></span>Contrôle de ${esc(x.name)}</span>`).join("")}</span>` : ""}<span class="wkbar" aria-hidden="true">${segs}</span><span class="wkmeta small">${esc(meta)}${done ? ` <span class="wkdone">${I.check}fait</span>` : ""}</span></span><span class="wkgo" aria-hidden="true">${I.back}</span></button>`; }).join("")}</div>
+      <p class="small muted wklegend"><i class="lg sc"></i>cours <i class="lg"></i>révisions · de 7 h à 21 h</p>`;
     $("jup").onclick = () => jGo("mois");
-    $("wtoday").onclick = () => jGo("jour", today);
+    if ($("wtoday")) $("wtoday").onclick = () => jGo("semaine", today);
     $("wprev").onclick = () => { const d = dayOf(jDay); d.setDate(d.getDate() - 7); jGo("semaine", localDay(d)); };
     $("wnext").onclick = () => { const d = dayOf(jDay); d.setDate(d.getDate() + 7); jGo("semaine", localDay(d)); };
     app.querySelectorAll("[data-wd]").forEach(b => b.onclick = () => jGo("jour", b.dataset.wd));
@@ -112,7 +130,7 @@
       else { const b = it.b, done = isDone(j, jDay, b), s = subj(b.s), a = actOf(b.act), ch = b.ch && state.chapters.find(c => c.id === b.ch), auto = !b.ch && b.auto && b.s && bestChapter(b.s);
         const live = jDay === today && !done && mins(b.start) <= nowMin() && nowMin() < mins(b.start) + b.dur;
         rows.push(`<div class="jrow${done ? " done" : ""}${live ? " live" : ""}" ${live ? liveAttrs(b) + ` ` : ""}style="--c:${esc(colorOf(b))}${live ? ";--p:" + ((nowMin() - mins(b.start)) / b.dur * 100).toFixed(1) + "%" : ""}"><button class="jpill" data-go="${b.id}" style="--h:${Math.min(120, Math.max(48, b.dur * 1.1))}px" aria-label="Lancer : ${esc(b.title || a[1])}">${I[a[2]]}</button>
-          <button class="jtxt" data-edit="${b.id}"><span class="small muted">${b.start}–${hm(mins(b.start) + b.dur)} (${durTxt(b.dur)})${b.weekly ? " · chaque semaine" : ""}</span><b>${esc(b.title || (b.act === "pause" ? "Pause" : a[1] + (s ? " · " + s.name : "")))}</b>${live ? `<span class="small lrem">${remTxt(mins(b.start) + b.dur - nowMin())}</span>` : ""}${ch || auto ? `<span class="small muted">${esc((ch || auto).name)}</span>` : ""}</button>
+          <button class="jtxt" data-edit="${b.id}"><span class="small muted">${b.start}–${hm(mins(b.start) + b.dur)} (${durTxt(b.dur)})${b.weekly ? " · chaque semaine" : ""}</span><b>${esc(blockName(b))}</b>${live ? `<span class="small lrem">${remTxt(mins(b.start) + b.dur - nowMin())}</span>` : ""}${(() => { const cl = bChs(b).map(id => state.chapters.find(c => c.id === id).name); return cl.length ? `<span class="small muted">${esc(cl[0])}${cl.length > 1 ? " + " + (cl.length - 1) : ""}</span>` : auto ? `<span class="small muted">${esc(auto.name)}</span>` : ""; })()}</button>
           <button class="jcheck" data-done="${b.id}" role="checkbox" aria-checked="${done}" aria-label="Fait"><span>${done ? I.check : ""}</span></button></div>`); }
       prevEnd = Math.max(prevEnd || 0, st + it.dur);
     });
@@ -142,7 +160,7 @@
     app.querySelectorAll("[data-gap]").forEach(b => b.onclick = () => blockSheet(null, b.dataset.gap));
     app.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => blockSheet(list.find(x => x.id === b.dataset.edit)));
     app.querySelectorAll("[data-done]").forEach(b => b.onclick = () => { const x = jGet(), key = jDay + "|" + b.dataset.done; if (x.done[key]) delete x.done[key]; else { x.done[key] = true; ping(true); } jSave(x); re(); });
-    app.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { const bl = list.find(x => x.id === b.dataset.go), to = bl && blockTarget(bl); if (to) location.hash = to; else blockSheet(bl); });
+    app.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { const bl = list.find(x => x.id === b.dataset.go); if (!(bl && goBlock(bl))) blockSheet(bl); });
     $("jauto").onclick = () => {
       const plan = autoPlan(jGet(), jDay); if (!plan.length) return toast(state.cards.length ? "Plus de place libre ce jour-là." : "Importe d'abord un cours pour avoir quelque chose à réviser.");
       previewSheet(plan, "Voici une proposition pour " + (jDay === today ? "aujourd'hui" : esc(fmtDate(jDay))) + ".");
@@ -151,7 +169,7 @@
   }
   // Ajouter ou modifier un bloc : activité, matière, chapitre (choisi par Merge par défaut), heure, durée, répétition.
   // Nom affiché d'un bloc.
-  function blockName(b) { const s = state.subjects.find(x => x.id === b.s); return b.title || (b.act === "pause" ? "Pause" : actOf(b.act)[1] + (s ? " · " + s.name : "")); }
+  function blockName(b) { const n = bSubs(b).map(id => state.subjects.find(x => x.id === id).name); return b.title || (b.act === "pause" ? "Pause" : actOf(b.act)[1] + (n.length ? " · " + n.join(" + ") : "")); }
   // Tâche en cours : Merge connaît l'heure ; la couleur de la matière remplit le bloc au fil des minutes, avec le temps qui reste.
   const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60; };
   function liveAttrs(b) { return `data-lstart="${mins(b.start)}" data-ldur="${b.dur}"`; }
@@ -162,7 +180,7 @@
     const nx = list.find(b => b !== cur && mins(b.start) > n && !isDone(j, k, b));
     if (!cur && !nx) return '<div id="nowtask"></div>';
     const p = cur ? Math.min(100, (n - mins(cur.start)) / cur.dur * 100) : 0;
-    return `<div id="nowtask" class="stack">${cur ? `<a class="nowtask live" ${liveAttrs(cur)} href="${blockTarget(cur)}" style="--c:${esc(blockColor(cur))};--p:${p.toFixed(1)}%"><span class="ntfill"></span><span class="ntbody"><span class="small"><b>En cours</b> · <span class="lrem">${remTxt(mins(cur.start) + cur.dur - n)}</span></span><b class="ntname">${esc(blockName(cur))}</b><span class="small">${cur.start}–${hm(mins(cur.start) + cur.dur)}</span></span><span class="ntgo">${I.play}</span></a>` : ""}${nx ? `<a class="ntnext" href="#calendrier"><span class="dot" style="background:${esc(blockColor(nx))}"></span><span class="small">${cur ? "Ensuite" : "Prochaine tâche"} à <b>${nx.start}</b> : ${esc(blockName(nx))}</span></a>` : ""}</div>`;
+    return `<div id="nowtask" class="stack">${cur ? `<a class="nowtask live" ${liveAttrs(cur)} href="#calendrier" data-blkgo="${cur.id}" style="--c:${esc(blockColor(cur))};--p:${p.toFixed(1)}%"><span class="ntfill"></span><span class="ntbody"><span class="small"><b>En cours</b> · <span class="lrem">${remTxt(mins(cur.start) + cur.dur - n)}</span></span><b class="ntname">${esc(blockName(cur))}</b><span class="small">${cur.start}–${hm(mins(cur.start) + cur.dur)}</span></span><span class="ntgo">${I.play}</span></a>` : ""}${nx ? `<a class="ntnext" href="#calendrier"><span class="dot" style="background:${esc(blockColor(nx))}"></span><span class="small">${cur ? "Ensuite" : "Prochaine tâche"} à <b>${nx.start}</b> : ${esc(blockName(nx))}</span></a>` : ""}</div>`;
   }
   // Toutes les 20 s : avance le remplissage et le temps restant (accueil et frise du jour), sans tout redessiner.
   let liveTimer = null;
@@ -223,25 +241,28 @@
     };
   }
   function blockSheet(b, at) {
-    const j = jGet(), edit = !!b, v = Object.assign({ act: "cartes", s: (state.subjects[0] || {}).id || null, ch: null, start: at || hm(Math.max(mins("17:00"), Math.ceil((new Date().getHours() * 60 + new Date().getMinutes()) / 15) * 15)), dur: 30, title: "", weekly: false }, b || {});
+    const j = jGet(), edit = !!b, v = Object.assign({ act: "cartes", s: null, ch: null, start: at || hm(Math.max(mins("17:00"), Math.ceil((new Date().getHours() * 60 + new Date().getMinutes()) / 15) * 15)), dur: 30, title: "", weekly: false }, b || {});
     const durs = [15, 20, 30, 45, 60, 90, 120, 150, 180];
-    if (b && b.auto) v.ch = "auto";
+    // Matières et chapitres : plusieurs possibles, tout est facultatif ; un 2e appui enlève.
+    const ss = new Set(b ? bSubs(b) : []), cc = new Set(b ? bChs(b) : []); let autoCh = !!(b && b.auto);
     const paint = el => {
-      const chs = state.chapters.filter(c => c.subject_id === v.s), auto = v.s && bestChapter(v.s), noSubj = v.act === "pause";
+      const noSubj = v.act === "pause";
       el.querySelector("#bacts").innerHTML = ACTS.map(a => `<button type="button" class="actbtn" data-ba="${a[0]}" aria-pressed="${v.act === a[0]}">${I[a[2]]}<span>${a[1]}</span></button>`).join("");
-      const optSubj = v.act === "libre";
-      el.querySelector("#bsubj").innerHTML = noSubj ? "" : `<span class="label">Matière${optSubj ? " (facultatif)" : ""}</span><div class="chips">${optSubj ? `<button type="button" class="chip" data-bs="" aria-pressed="${!v.s}">Aucune</button>` : ""}${state.subjects.map(x => `<button type="button" class="chip" data-bs="${x.id}" aria-pressed="${v.s === x.id}" style="--c:${esc(x.color)}"><span class="dot"></span>&nbsp;${esc(x.name)}</button>`).join("") || '<span class="small muted">Ajoute d\'abord une matière.</span>'}</div>
-        ${chs.length ? `<label class="label" for="bch">Chapitre (facultatif)</label><select id="bch"><option value="">Aucun chapitre en particulier</option>${auto ? `<option value="auto"${v.ch === "auto" ? " selected" : ""}>Choisi par Merge : ${esc(auto.name)}</option>` : ""}${chs.map(c => `<option value="${c.id}"${v.ch === c.id ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select>` : ""}`;
-      el.querySelector("#bcols").innerHTML = `<button type="button" class="bcol auto" data-bc="" aria-pressed="${!v.color}" aria-label="Couleur de la matière" style="--c:${esc(blockColor(Object.assign({}, v, { color: null })))}"><i></i><span>Matière</span></button>` + BCOLORS.map(c => `<button type="button" class="bcol" data-bc="${c}" aria-pressed="${v.color === c}" aria-label="Couleur ${c}" style="--c:${c}"><i></i></button>`).join("");
+      const sel = state.subjects.filter(x => ss.has(x.id)), one = sel.length === 1 ? bestChapter(sel[0].id) : null;
+      el.querySelector("#bsubj").innerHTML = noSubj ? "" : `<span class="label">Matières (facultatif, plusieurs possibles)</span><div class="chips">${state.subjects.map(x => `<button type="button" class="chip" data-bs="${x.id}" aria-pressed="${ss.has(x.id)}" style="--c:${esc(x.color)}"><span class="dot"></span>${esc(x.name)}</button>`).join("") || '<span class="small muted">Ajoute d\'abord une matière.</span>'}</div>
+        ${sel.map(x => { const l = state.chapters.filter(c => c.subject_id === x.id); return l.length ? `<div class="bchgrp" style="--c:${esc(x.color)}"><span class="small muted"><span class="dot"></span>Chapitres de ${esc(x.name)} (facultatif)</span><div class="chips">${l.map(c => `<button type="button" class="chip bchip" data-bch="${c.id}" aria-pressed="${cc.has(c.id)}">${cc.has(c.id) ? I.check : ""}${esc(c.name)}</button>`).join("")}</div></div>` : ""; }).join("")}
+        ${one && ![...cc].some(id => (state.chapters.find(c => c.id === id) || {}).subject_id === sel[0].id) ? `<button type="button" class="switch" role="switch" id="bauto" aria-checked="${autoCh}"><i></i><span>Laisser Merge choisir le chapitre (${esc(one.name)})</span></button>` : ""}`;
+      el.querySelector("#bcols").innerHTML = `<button type="button" class="bcol auto" data-bc="" aria-pressed="${!v.color}" aria-label="Couleur de la matière" style="--c:${esc(blockColor({ act: v.act, s: state.subjects.filter(x => ss.has(x.id)).map(x => x.id)[0] || null }))}"><i></i><span>Matière</span></button>` + BCOLORS.map(c => `<button type="button" class="bcol" data-bc="${c}" aria-pressed="${v.color === c}" aria-label="Couleur ${c}" style="--c:${c}"><i></i></button>`).join("");
       el.querySelectorAll("[data-bc]").forEach(x => x.onclick = () => { v.color = x.dataset.bc || null; paint(el); });
       el.querySelector("#bdurs").innerHTML = durs.map(d => `<button type="button" class="chip" data-bd="${d}" aria-pressed="${v.dur === d}">${durTxt(d)}</button>`).join("") + `<button type="button" class="chip" data-bd="libre" aria-pressed="${!durs.includes(v.dur)}">Autre</button>`;
       el.querySelector("#bfree").hidden = durs.includes(v.dur) && !v.free;
       el.querySelector("#bslide").value = v.dur; el.querySelector("#bslv").textContent = durTxt(v.dur);
       // « Autre » : n'importe quelle activité (sport, coloriage, devoir…), matière et chapitre facultatifs, aucune par défaut.
-      el.querySelectorAll("[data-ba]").forEach(x => x.onclick = () => { const was = v.act; v.act = x.dataset.ba; if (v.act === "pause" && v.dur > 15) v.dur = 5; if (v.act === "libre" && was !== "libre") { v.s = null; v.ch = null; } else if (v.act !== "libre" && v.act !== "pause" && !v.s) v.s = (state.subjects[0] || {}).id || null; paint(el); });
-      el.querySelectorAll("[data-bs]").forEach(x => x.onclick = () => { v.s = x.dataset.bs || null; v.ch = null; paint(el); });
+      el.querySelectorAll("[data-ba]").forEach(x => x.onclick = () => { v.act = x.dataset.ba; if (v.act === "pause" && v.dur > 15) v.dur = 5; paint(el); });
+      el.querySelectorAll("[data-bs]").forEach(x => x.onclick = () => { const id = x.dataset.bs; if (ss.has(id)) { ss.delete(id); state.chapters.filter(c => c.subject_id === id).forEach(c => cc.delete(c.id)); } else ss.add(id); paint(el); });
+      el.querySelectorAll("[data-bch]").forEach(x => x.onclick = () => { const id = x.dataset.bch; cc.has(id) ? cc.delete(id) : cc.add(id); paint(el); });
+      if (el.querySelector("#bauto")) el.querySelector("#bauto").onclick = () => { autoCh = !autoCh; paint(el); };
       el.querySelectorAll("[data-bd]").forEach(x => x.onclick = () => { if (x.dataset.bd === "libre") { v.free = true; if (durs.includes(v.dur)) v.dur = Math.min(300, v.dur + 5); } else { v.free = false; v.dur = +x.dataset.bd; } paint(el); });
-      if (el.querySelector("#bch")) el.querySelector("#bch").onchange = e => { v.ch = e.target.value || null; };
     };
     sheet(`<h1>${edit ? "Modifier" : "Ajouter au planning"}</h1>
       <div class="bsec"><span class="label">Activité</span><div class="actgrid" id="bacts"></div></div>
@@ -256,8 +277,9 @@
       el.querySelector("#bslide").oninput = e => { v.dur = +e.target.value; v.free = true; el.querySelector("#bslv").textContent = durTxt(v.dur); el.querySelectorAll("[data-bd]").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.bd === "libre" ? true : +x.dataset.bd === v.dur && false))); };
       if (el.querySelector("#bweek")) el.querySelector("#bweek").onclick = e => { weekly = !weekly; e.currentTarget.setAttribute("aria-checked", String(weekly)); };
       el.querySelector("#bok").onclick = () => {
-        const x = jGet(), nb = { id: edit ? b.id : jid(), start: el.querySelector("#bstart").value || v.start, dur: v.dur, s: v.act === "pause" ? null : v.s, ch: v.act === "pause" || v.ch === "auto" ? null : v.ch, act: v.act, title: el.querySelector("#btitle").value.trim().slice(0, 60) }; if (v.color) nb.color = v.color; if (v.ch === "auto" && v.act !== "pause") nb.auto = true;
-        if (v.act !== "pause" && !nb.s && v.act !== "libre") return toast("Choisis une matière.");
+        const pause = v.act === "pause", subs = pause ? [] : state.subjects.filter(x => ss.has(x.id)).map(x => x.id), chs = pause ? [] : [...cc].filter(id => subs.includes((state.chapters.find(c => c.id === id) || {}).subject_id));
+        const x = jGet(), nb = { id: edit ? b.id : jid(), start: el.querySelector("#bstart").value || v.start, dur: v.dur, s: subs[0] || null, ch: chs[0] || null, act: v.act, title: el.querySelector("#btitle").value.trim().slice(0, 60) };
+        if (subs.length > 1) nb.ss = subs; if (chs.length > 1) nb.chs = chs; if (v.color) nb.color = v.color; if (autoCh && subs.length === 1 && !chs.length) nb.auto = true;
         if (v.act === "libre" && !nb.s && !nb.title) return toast("Donne un nom à ton activité.");
         if (edit && b.weekly) { const i = x.weekly.findIndex(y => y.id === b.id); if (i >= 0) x.weekly[i] = Object.assign(nb, { wd: b.wd }); }
         else if (!edit && weekly) x.weekly.push(Object.assign(nb, { wd: (dayOf(jDay).getDay() + 6) % 7 }));

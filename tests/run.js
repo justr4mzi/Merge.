@@ -1171,15 +1171,19 @@ async function journee(browser) {
     ok(await page.locator(".jd").count() === 7 && await page.locator(".jd.on.now").count() === 1 && await page.locator("#jadd").count() === 1, tag + " : semaine, jour choisi, bouton +");
     // Ajouter « Maths/SVT 30 min » : chapitre choisi par Merge.
     await page.click("#jadd"); await page.waitForTimeout(150);
-    ok((await page.locator("#sheet").innerText()).includes("Choisi par Merge"), tag + " : chapitre choisi par Merge par défaut");
+    ok(await page.locator('#sheet [data-bs][aria-pressed="true"]').count() === 0, tag + " : aucune matière imposée");
+    await page.click('[data-bs="s1"]'); await page.waitForTimeout(50);
+    ok(await page.locator("#sheet [data-bch]").count() >= 1 && await page.locator("#bauto").count() === 1, tag + " : les chapitres de la matière apparaissent, Merge peut choisir");
+    await page.click('[data-bs="s1"]'); await page.waitForTimeout(50); ok(await page.locator('#sheet [data-bs="s1"][aria-pressed="true"]').count() === 0 && await page.locator("#sheet [data-bch]").count() === 0, tag + " : un 2e appui enlève la matière");
     await page.click('[data-bs="s1"]'); await page.click('[data-bd="30"]'); await page.fill("#bstart", "18:00"); await page.click("#bok"); await page.waitForTimeout(200);
     ok(await page.locator(".jrow:not(.school)").count() === 1 && (await txt(page)).includes("18:00–18:30 (30 min)"), tag + " : bloc ajouté dans la frise");
     await page.click("[data-done]"); await page.waitForTimeout(100); ok(await page.locator(".jrow.done").count() === 1, tag + " : bloc coché");
     await page.click("[data-go]"); await page.waitForTimeout(300); ok(/#cartes-c\d|#revision-s1/.test(await page.evaluate(() => location.hash)), tag + " : toucher le bloc lance la révision", await page.evaluate(() => location.hash));
     // Remonter : jour → semaine → mois, et retrouver le niveau après rechargement.
-    await go(page, "#calendrier", 400); await page.click("#jup"); await page.waitForTimeout(200); ok(await page.locator(".wkday").count() === 7, tag + " : vue semaine");
+    await go(page, "#calendrier", 400); await page.click("#jup"); await page.waitForTimeout(200); ok(await page.locator(".wkrow").count() === 7, tag + " : vue semaine");
+    if (w === 390) await page.screenshot({ path: path.join(SHOTS, "semaine-390.png") });
     await page.click("#jup"); await page.waitForTimeout(200); ok(await page.locator(".cal.calx .day").count() >= 28 && await page.locator('.seg a[href="#mois"][aria-selected="true"]').count() === 1, tag + " : vue mois, sous-onglet Calendrier");
-    await page.click('#tabs a[href="#calendrier"]'); await page.waitForTimeout(300); ok(await page.locator(".wkday").count() === 7 && await page.locator('.seg a[href="#calendrier"][aria-selected="true"]').count() === 1 && (await page.locator('#tabs a[href="#calendrier"]').innerText()).includes("Planning"), tag + " : l'onglet Planning ouvre l'emploi du temps, pas le mois");
+    await page.click('#tabs a[href="#calendrier"]'); await page.waitForTimeout(300); ok(await page.locator(".wkrow").count() === 7 && await page.locator('.seg a[href="#calendrier"][aria-selected="true"]').count() === 1 && (await page.locator('#tabs a[href="#calendrier"]').innerText()).includes("Planning"), tag + " : l'onglet Planning ouvre l'emploi du temps, pas le mois");
     await page.click('.seg a[href="#mois"]'); await page.waitForTimeout(300);
     await page.click(".cal .day.now"); await page.waitForTimeout(300); ok(await page.locator(".jline").count() === 1, tag + " : toucher un jour ouvre sa frise");
     await page.click("#jhours"); await page.waitForTimeout(200); ok(await page.locator(".hgrid .hrow").count() === 18 && await page.locator(".hgrid .hblk").count() >= 1, tag + " : vue heure par heure");
@@ -1246,6 +1250,11 @@ async function exos(browser) {
     ok(await page.evaluate(() => window.__fake.exo.want_title === false), tag + " : nom demandé une seule fois");
     await page.click("#phist"); await page.waitForTimeout(300); ok(await page.locator("#pdrawer.open [data-conv]").count() === 2 && await page.locator("#pdrawer .pdrow.on").count() === 1 && (await page.locator("#pdrawer").innerText()).includes("Aujourd'hui"), tag + " : menu ☰ avec l'historique", String(await page.locator("#pdrawer [data-conv]").count()));
     if (w === 390) await page.screenshot({ path: path.join(SHOTS, "prof-menu-390.png") });
+    if (w === 390) {
+      await page.click("#pdrawer .pdpanel [data-pdclose]"); await page.waitForTimeout(300);
+      await page.evaluate(() => { const fire = (type, x) => { const t = new Touch({ identifier: 1, target: document.getElementById("exth"), clientX: x, clientY: 400 }); document.getElementById("exth").dispatchEvent(new TouchEvent(type, { touches: type === "touchend" ? [] : [t], changedTouches: [t], bubbles: true })); }; fire("touchstart", 80); fire("touchend", 260); });
+      await page.waitForTimeout(300); ok(await page.locator("#pdrawer.open").count() === 1, tag + " : glisser vers la droite ouvre l'historique");
+    }
     await page.click("#pdrawer .pdrow:not(.on) [data-conv]"); await page.waitForTimeout(150); ok((await txt(page)).includes("Comment bien réviser ?"), tag + " : reprendre une ancienne discussion");
     // Depuis un chapitre : le chapitre est lié.
     if (w === 390) await page.screenshot({ path: path.join(SHOTS, "prof-conv-390.png") });
@@ -1275,7 +1284,7 @@ async function planningPlus(browser) {
   ok(await page.evaluate(() => { const r = document.querySelector(".jrow:not(.school)"); return r && r.style.getPropertyValue("--c") === "#ec4899" && JSON.parse(localStorage.getItem("merge.journee")).blocks[Object.keys(JSON.parse(localStorage.getItem("merge.journee")).blocks)[0]][0].color === "#ec4899"; }), tag + " : couleur gardée sur le bloc");
   // « Autre » : n'importe quelle activité, sans matière ni chapitre.
   await page.click("#jadd"); await page.waitForTimeout(150); await page.click('[data-ba="libre"]'); await page.waitForTimeout(50);
-  ok(await page.locator('#sheet [data-bs=""][aria-pressed="true"]').count() === 1 && await page.locator("#bch").count() === 0, tag + " : Autre, sans matière par défaut");
+  ok(await page.locator('#sheet [data-bs][aria-pressed="true"]').count() === 0 && await page.locator("#sheet [data-bch]").count() === 0, tag + " : Autre, sans matière par défaut");
   await page.fill("#bstart", "21:00"); await page.click("#bok"); await page.waitForTimeout(150); ok(await page.locator("#sheet").count() === 1, tag + " : Autre sans nom ni matière refusé");
   await page.fill("#btitle", "Coloriage"); await page.click("#bok"); await page.waitForTimeout(200);
   ok((await txt(page)).includes("Coloriage") && await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem("merge.journee")).blocks).flat().some(b => b.title === "Coloriage" && b.s === null && b.act === "libre")), tag + " : activité libre ajoutée");
@@ -1332,12 +1341,18 @@ async function accueilV2(browser) {
   // Bloc : chapitre facultatif, durées longues et durée libre.
   await go(page, "#calendrier", 400); await page.evaluate(() => { const s = document.getElementById("sheet"); if (s) s.remove(); });
   await page.click("#jadd"); await page.waitForTimeout(150); await page.click('[data-bs="s1"]'); await page.waitForTimeout(50);
-  ok(await page.inputValue("#bch") === "" && (await page.locator("#bch").innerText()).includes("Aucun chapitre"), tag + " : chapitre facultatif, aucun par défaut");
+  ok(await page.locator('#sheet [data-bch][aria-pressed="true"]').count() === 0, tag + " : chapitre facultatif, aucun par défaut");
+  // Plusieurs matières et plusieurs chapitres.
+  await page.click('[data-bs="s2"]'); await page.waitForTimeout(50); await page.click('#sheet [data-bch] >> nth=0'); await page.click('#sheet [data-bch] >> nth=1'); await page.waitForTimeout(50);
+  ok(await page.locator('#sheet [data-bch][aria-pressed="true"]').count() === 2 && await page.locator("#sheet .bchgrp").count() === 2, tag + " : plusieurs matières et chapitres cochés");
+  await page.screenshot({ path: path.join(SHOTS, "ajout-multi-390.png") });
+  await page.click('#sheet [data-bch] >> nth=1'); await page.waitForTimeout(50); await page.click('#sheet [data-bch] >> nth=1'); await page.waitForTimeout(50);
   ok(await page.locator('[data-bd="120"]').count() === 1 && await page.locator('[data-bd="180"]').count() === 1, tag + " : durées 2 h à 3 h");
   await page.click('[data-bd="libre"]'); await page.waitForTimeout(50); await page.fill("#bslide", "95"); await page.dispatchEvent("#bslide", "input");
   ok((await page.locator("#bslv").innerText()).includes("1 h 35"), tag + " : durée libre au curseur");
   await page.fill("#bstart", "06:00"); await page.click("#bok"); await page.waitForTimeout(200);
-  ok(await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem("merge.journee")).blocks).flat().some(b => b.dur === 95 && b.ch === null && !b.auto)), tag + " : bloc de 1 h 35 sans chapitre");
+  ok(await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem("merge.journee")).blocks).flat().some(b => b.dur === 95 && b.ss && b.ss.length === 2 && b.chs && b.chs.length === 2)), tag + " : bloc de 1 h 35 avec 2 matières et 2 chapitres");
+  await page.evaluate(() => { const s = document.getElementById("sheet"); if (s) s.remove(); });
   const sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px", sm.join(" | "));
   ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
 }

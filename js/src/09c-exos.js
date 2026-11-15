@@ -72,6 +72,8 @@
     profJustAnswered = false;
     const q = $("exq"), grow = () => { q.style.height = "auto"; q.style.height = Math.min(160, q.scrollHeight) + "px"; };
     q.oninput = grow;
+    q.addEventListener("focus", () => document.body.classList.add("typing"));
+    q.addEventListener("blur", () => setTimeout(() => { if (document.activeElement !== q) document.body.classList.remove("typing"); }, 100));
     q.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && matchMedia("(hover: hover)").matches) { e.preventDefault(); send(); } };
     // Photo jointe (bouton +) : aperçu au-dessus du champ, retirable.
     let img = null;
@@ -122,6 +124,18 @@
     });
   }
   // Mes discussions : panneau qui glisse depuis la gauche (bouton ☰), comme dans une appli de chat. Nom donné automatiquement par l'IA.
+  // Glisser le doigt vers la droite sur l'écran Prof ouvre l'historique (comme dans les applis de chat) ; vers la gauche le referme.
+  (() => {
+    let sx = 0, sy = 0, t0 = 0, okSwipe = false;
+    document.addEventListener("touchstart", e => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; t0 = Date.now(); okSwipe = e.touches.length === 1 && !(e.target.closest && e.target.closest(".pctx,.chips,.pqchips,pre,.katex-display,textarea,input,.sheetwrap,table")); }, { passive: true });
+    document.addEventListener("touchend", e => {
+      if (!okSwipe) return; const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+      if (Math.abs(dy) > 60 || Math.abs(dx) < Math.abs(dy) * 1.5 || Date.now() - t0 > 800) return;
+      const pd = document.getElementById("pdrawer");
+      if (pd && dx < -60) { const c = pd.querySelector("[data-pdclose]"); if (c) c.click(); return; }
+      if (!pd && dx > 70 && app.classList.contains("profmode") && !document.getElementById("sheet")) histDrawer(profGet());
+    }, { passive: true });
+  })();
   function histDrawer(p) {
     const list = p.convs.filter(c => c.m.length).sort((a, b) => b.at - a.at), today = localDay();
     const when = c => { const d = localDay(new Date(c.at)); if (d === today) return "Aujourd'hui"; const y = new Date(); y.setDate(y.getDate() - 1); if (d === localDay(y)) return "Hier"; return Date.now() - c.at < 7 * 864e5 ? "7 derniers jours" : "Plus ancien"; };
