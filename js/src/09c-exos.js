@@ -127,6 +127,9 @@
   // Glisser le doigt vers la droite sur l'écran Prof ouvre l'historique (comme dans les applis de chat) ; vers la gauche le referme.
   (() => {
     let sx = 0, sy = 0, t0 = 0, okSwipe = false;
+    // Bord gauche ou droit de l'écran : iPhone y lance le geste « retour en arrière » des sites web. Dans l'appli on le coupe
+    // (sauf sur un bouton ou un champ, pour que les appuis marchent toujours) ; sur l'écran Prof ce geste ouvre l'historique.
+    document.addEventListener("touchstart", e => { const t = e.touches[0]; if ((t.clientX < 22 || t.clientX > innerWidth - 22) && !(e.target.closest && e.target.closest("a,button,input,textarea,select,label,[role=button],.sheetwrap"))) e.preventDefault(); }, { passive: false });
     document.addEventListener("touchstart", e => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; t0 = Date.now(); okSwipe = e.touches.length === 1 && !(e.target.closest && e.target.closest(".pctx,.chips,.pqchips,pre,.katex-display,textarea,input,.sheetwrap,table")); }, { passive: true });
     document.addEventListener("touchend", e => {
       if (!okSwipe) return; const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
@@ -150,9 +153,14 @@
     el.querySelectorAll("[data-pdclose]").forEach(b => b.onclick = close);
     el.querySelector("#pdnew").onclick = () => { el.remove(); $("pnew").click(); };
     el.querySelectorAll("[data-conv]").forEach(b => b.onclick = () => { p.cur = b.dataset.conv; profSave(p); el.remove(); screenExos(); });
-    el.querySelectorAll("[data-cdel]").forEach(b => b.onclick = () => {
-      if (b.dataset.ok !== "1") { b.dataset.ok = "1"; toast("Touche encore pour supprimer cette discussion."); return; }
-      p.convs = p.convs.filter(c => c.id !== b.dataset.cdel); if (p.cur === b.dataset.cdel) p.cur = null; profSave(p); el.remove(); screenExos(); if (p.convs.some(c => c.m.length)) histDrawer(profGet());
+    // Supprimer : on demande confirmation, puis on reste dans l'historique (la discussion ouverte ne change que si c'est elle qu'on supprime).
+    el.querySelectorAll("[data-cdel]").forEach(b => b.onclick = async () => {
+      const c = p.convs.find(x => x.id === b.dataset.cdel); if (!c) return;
+      if (!(await askConfirm("Supprimer cette discussion ?", "« " + (c.t || "Discussion") + " » sera effacée. Tu ne pourras pas la récupérer."))) return;
+      const wasCur = p.cur === c.id; p.convs = p.convs.filter(x => x.id !== c.id); if (wasCur) p.cur = null; profSave(p);
+      if (wasCur) screenExos();
+      el.remove(); histDrawer(profGet()); const nd = document.getElementById("pdrawer"); if (nd) nd.classList.add("open");
+      toast("Discussion supprimée.");
     });
   }
   // Champs de réponse d'un message de l'IA : choix de la façon de répondre, cases à remplir, ou réponses déjà envoyées.

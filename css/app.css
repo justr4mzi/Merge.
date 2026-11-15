@@ -378,7 +378,7 @@ table.vs tbody th{color:var(--muted);font-size:.9em;width:26%}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d0e15;--card:#171924;--card2:#1e2130;--line:#282b3b;--fg:#f3f4f9;--muted:#9da4bb;--track:#2a2d3e;--accent-soft:#252150;--glow:rgba(148,131,255,.25)}}
 :root[data-theme="dark"]{--bg:#0d0e15;--card:#171924;--card2:#1e2130;--line:#282b3b;--fg:#f3f4f9;--muted:#9da4bb;--track:#2a2d3e;--accent-soft:#252150;--glow:rgba(148,131,255,.25)}
 :root[data-theme="light"]{--card2:#f1f2f9;--glow:rgba(75,57,200,.28)}
-body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(70vw 55vh at 105% -10%,color-mix(in srgb,var(--accent) 17%,transparent),transparent 70%),radial-gradient(55vw 50vh at -10% 110%,color-mix(in srgb,#e0529c 9%,transparent),transparent 70%)}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(70vw 55vh at 105% -10%,color-mix(in srgb,var(--accent) 5%,transparent),transparent 70%)}
 .card{border:1px solid var(--line)}
 h1{font-size:1.75em;letter-spacing:-.02em}
 h2{font-size:1.1em;letter-spacing:-.01em}
@@ -1319,3 +1319,27 @@ html:has(.app.profmode),body:has(.app.profmode){overflow:hidden;overscroll-behav
 .pcomp:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--glow)}
 /* Clavier ouvert (téléphone) : la barre du bas se cache pour laisser la place à la conversation */
 @media (max-width:899px){body.typing .tabs{display:none!important}body.typing .app.profmode{padding-bottom:8px}}
+/* Fenêtre de confirmation (au-dessus de tout) */
+.confirmwrap{z-index:90;place-items:center}
+.confirmbox{max-width:400px;gap:10px}
+.confirmbox h2{margin:0;padding-right:0}
+.btn.danger{background:#ef4444;color:#fff}
+@media (hover:hover) and (pointer:fine){.btn.danger:hover{filter:brightness(1.08)}}
+/* Progrès : 3 raccourcis côte à côte */
+.prgrid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+.ptile{flex-direction:column;align-items:flex-start;gap:8px}
+.bicons{display:flex;flex-wrap:wrap;gap:6px}
+.bic{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--muted);display:grid;place-items:center;cursor:pointer}
+.bic svg{width:20px;height:20px}
+.bic[aria-pressed="true"]{border-color:var(--accent);color:#9483ff;background:color-mix(in srgb,var(--accent) 18%,var(--bg))}
+/* Collection kawaii */
+body[data-bg="paillettes"]::after,.bg-paillettes{background-image:radial-gradient(1.6px 1.6px at 10% 20%,#f9a8d4,transparent),radial-gradient(1.4px 1.4px at 30% 70%,#fde68a,transparent),radial-gradient(1.8px 1.8px at 55% 35%,#c4b5fd,transparent),radial-gradient(1.4px 1.4px at 75% 80%,#f9a8d4,transparent),radial-gradient(1.6px 1.6px at 90% 15%,#fde68a,transparent);background-size:140px 140px;animation:mpois 40s linear infinite}
+body[data-bg="barbe"]::after,.bg-barbe{background-image:radial-gradient(40% 30% at 20% 20%,rgba(249,168,212,.22),transparent 70%),radial-gradient(40% 30% at 80% 40%,rgba(196,181,253,.22),transparent 70%),radial-gradient(45% 35% at 40% 85%,rgba(147,197,253,.18),transparent 70%)}
+body[data-bg="etoilesk"]::after,.bg-etoilesk{background-image:radial-gradient(2px 2px at 15% 25%,#fde68a,transparent),radial-gradient(2.5px 2.5px at 65% 15%,#f9a8d4,transparent),radial-gradient(2px 2px at 45% 60%,#c4b5fd,transparent),radial-gradient(2.5px 2.5px at 85% 75%,#fde68a,transparent),radial-gradient(2px 2px at 25% 85%,#f9a8d4,transparent);background-size:180px 180px;animation:mpois 50s linear infinite}
+body[data-card="licorne"] .face,[data-cardprev="licorne"] .face{background:linear-gradient(135deg,#fbcfe8,#ddd6fe 40%,#bfdbfe 70%,#bbf7d0);color:#4a2f63}
+body[data-card="fraise"] .face,[data-cardprev="fraise"] .face{background:radial-gradient(circle at 20% 20%,rgba(255,255,255,.6) 2px,transparent 3px) 0 0/22px 22px,linear-gradient(135deg,#fecdd3,#fda4af);color:#7f1d1d}
+body[data-card="nuage"] .face,[data-cardprev="nuage"] .face{background:linear-gradient(180deg,#fff1f7,#fbcfe8);color:#6b2148}
+body[data-flame="bonbon"] .streak,[data-flameprev="bonbon"]{background:linear-gradient(90deg,rgba(249,168,212,.25),rgba(196,181,253,.25));color:#ec4899}
+/* Progrès : raccourcis en liste sur téléphone (3 tuiles serrées coupaient les mots) */
+@media (max-width:600px){.prgrid{grid-template-columns:1fr!important;gap:8px}.ptile{flex-direction:row;align-items:center;min-height:56px;padding:8px 12px}.ptile .grow{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}}
+.row>h1.grow{font-size:clamp(1.2rem,5.6vw,2rem)}

@@ -112,6 +112,12 @@
     tabs.innerHTML = `<div class="logo side">${esc(C.NOM_APPLI)}<b>.</b></div>` + TABS.map(t => `<a href="#${t[0]}"${t[0] === current ? ' aria-current="page"' : ""}>${I[t[2]]}<span>${t[1]}</span></a>`).join("")
       + `<div class="sidefoot"><button class="sidemusic" data-qs>${I.search}<span>Rechercher</span><kbd>Ctrl K</kbd></button><button class="sidemusic" data-pomo>${I.clock}<span>Pomodoro</span></button>${LOFI.length ? `<button class="sidemusic${music.on ? " on" : ""}" data-music>${I.listen}<span>Musique de fond</span></button>` : ""}<div class="sidecard"><b>${due ? plural(due, "carte", "cartes") + " à revoir" : "Tu es à jour"}</b><span>${st ? plural(st, "jour", "jours") + " d'affilée" : "Commence ta série aujourd'hui"}</span>${due ? '<button class="btn sm" id="sidego">Réviser</button>' : ""}</div></div>`;
     const g = document.getElementById("sidego"); if (g) g.onclick = () => { location.hash = "#cartes-jour"; };
+    // Toucher un onglet ramène à son écran d'arrivée, même si on y est déjà (Planning : aujourd'hui, en frise).
+    tabs.querySelectorAll("a[href^='#']").forEach(a => a.addEventListener("click", e => {
+      const h = a.getAttribute("href");
+      if (h === "#calendrier") jset("merge.jview", { lvl: "jour", day: localDay(), hours: false });
+      if (location.hash === h) { e.preventDefault(); route(); window.scrollTo(0, 0); }
+    }));
     // Pastille sur l'icône de l'appli installée : nombre de cartes à revoir.
     try { if (navigator.setAppBadge) { if (due) navigator.setAppBadge(due).catch(() => {}); else navigator.clearAppBadge().catch(() => {}); } } catch (e) { /* non géré */ }
   }
@@ -184,5 +190,16 @@
     el.onclick = e => { if (e.target === el || e.target.closest("[data-close]")) closeSheet(); };
     document.body.appendChild(el); if (wire) wire(el); const f = el.querySelector("a.btn,button.btn"); if (f) f.focus();
   }
-  document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); });
+  // Confirmation avant de supprimer : une petite fenêtre « Tu es sûr ? » par-dessus tout le reste (fenêtre ou menu ouverts).
+  function askConfirm(title, text, ok = "Supprimer") {
+    return new Promise(res => {
+      const old = document.getElementById("confirm"); if (old) old.remove();
+      const el = document.createElement("div"); el.className = "sheetwrap confirmwrap"; el.id = "confirm";
+      el.innerHTML = `<div class="sheet card confirmbox" role="alertdialog" aria-modal="true" aria-labelledby="cftitle"><h2 id="cftitle">${esc(title)}</h2>${text ? `<p class="muted">${esc(text)}</p>` : ""}<div class="row"><button class="btn ghost grow" data-c="0">Annuler</button><button class="btn danger grow" data-c="1">${esc(ok)}</button></div></div>`;
+      const done = v => { el.remove(); res(v); };
+      el.onclick = e => { if (e.target === el) return done(false); const b = e.target.closest("[data-c]"); if (b) done(b.dataset.c === "1"); };
+      el.done = done; document.body.appendChild(el); el.querySelector('[data-c="0"]').focus();
+    });
+  }
+  document.addEventListener("keydown", e => { if (e.key !== "Escape") return; const c = document.getElementById("confirm"); if (c) return c.done(false); closeSheet(); });
 

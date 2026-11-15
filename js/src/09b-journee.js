@@ -1,6 +1,9 @@
   // ---------- Journée : planning de révision en frise, façon « Structured » (onglet de la barre du bas) ----------
   // merge.journee (synchronisé) = { setup, blocks: { "AAAA-MM-JJ": [bloc] }, weekly: [bloc avec wd 0-6 = lundi-dimanche], off: { jour: true }, done: { "jour|id": true } }
   // bloc = { id, start "HH:MM", dur (min), s (matière), ch (chapitre ou null = choisi par Merge), act, title }
+  // Icônes au choix pour un bloc (surtout « Autre ») ; l'IA choisit aussi dans cette liste.
+  const BICONS = [["play", "Vidéo"], ["book", "Lecture"], ["steps", "Devoirs"], ["sum", "Fiche"], ["listen", "Écoute"], ["bolt", "Sport"], ["cup", "Repas"], ["bulb", "Projet"], ["duo", "À plusieurs"], ["map", "Sortie"], ["home", "Maison"], ["star", "Perso"]];
+  const bIcon = b => (b.ic && BICONS.some(x => x[0] === b.ic) ? I[b.ic] : I[actOf(b.act)[2]]);
   const ACTS = [["cartes", "Flashcards", "cards"], ["quiz", "Quiz", "quiz"], ["resume", "Résumé", "book"], ["exos", "Exercices", "steps"], ["controle", "Contrôle blanc", "check"], ["pause", "Pause", "cup"], ["libre", "Autre", "spark"]];
   const actOf = k => ACTS.find(a => a[0] === k) || ACTS[6];
   const jGet = () => { const j = jget("merge.journee", null) || {}; return { setup: !!j.setup, blocks: j.blocks && typeof j.blocks === "object" ? j.blocks : {}, weekly: Array.isArray(j.weekly) ? j.weekly : [], off: j.off || {}, done: j.done || {} }; };
@@ -82,7 +85,7 @@
     const h = mois ? "#mois" : "#calendrier"; if (location.hash !== h) location.hash = h; else if (mois) screenCalendar(); else screenPlanning();
   }
   function screenPlanning() {
-    const v = jView(); jDay = v.day; if (v.lvl === "semaine") screenSemaine(); else screenJournee();
+    const v = jView(); jDay = v.day; screenJournee();
     // Emploi du temps envoyé puis appli quittée : on récupère la lecture faite entre-temps.
     edtResume(e => { closeSheet(); if (e.ab && !e.ref) abSheet(); else if (location.hash === "#calendrier") screenPlanning(); });
   }
@@ -129,13 +132,13 @@
       if (it.school) { const sj = subjOfName(it.x.subject); rows.push(`<div class="jrow school"><span class="jpill" style="--c:${esc(sj ? sj.color : "#475569")};--h:${Math.min(96, Math.max(48, it.dur * .9))}px">${I.subj}</span><div class="jtxt"><span class="small muted">${esc(it.x.start)}–${esc(it.x.end)} (${durTxt(it.dur)})</span><b>Cours${sj ? " de " + esc(sj.name) : " : " + esc(it.x.subject)}</b>${it.x.room ? `<span class="small muted">Salle ${esc(it.x.room)}</span>` : ""}</div></div>`); }
       else { const b = it.b, done = isDone(j, jDay, b), s = subj(b.s), a = actOf(b.act), ch = b.ch && state.chapters.find(c => c.id === b.ch), auto = !b.ch && b.auto && b.s && bestChapter(b.s);
         const live = jDay === today && !done && mins(b.start) <= nowMin() && nowMin() < mins(b.start) + b.dur;
-        rows.push(`<div class="jrow${done ? " done" : ""}${live ? " live" : ""}" ${live ? liveAttrs(b) + ` ` : ""}style="--c:${esc(colorOf(b))}${live ? ";--p:" + ((nowMin() - mins(b.start)) / b.dur * 100).toFixed(1) + "%" : ""}"><button class="jpill" data-go="${b.id}" style="--h:${Math.min(120, Math.max(48, b.dur * 1.1))}px" aria-label="Lancer : ${esc(b.title || a[1])}">${I[a[2]]}</button>
+        rows.push(`<div class="jrow${done ? " done" : ""}${live ? " live" : ""}" ${live ? liveAttrs(b) + ` ` : ""}style="--c:${esc(colorOf(b))}${live ? ";--p:" + ((nowMin() - mins(b.start)) / b.dur * 100).toFixed(1) + "%" : ""}"><button class="jpill" data-go="${b.id}" style="--h:${Math.min(120, Math.max(48, b.dur * 1.1))}px" aria-label="Lancer : ${esc(b.title || a[1])}">${bIcon(b)}</button>
           <button class="jtxt" data-edit="${b.id}"><span class="small muted">${b.start}–${hm(mins(b.start) + b.dur)} (${durTxt(b.dur)})${b.weekly ? " · chaque semaine" : ""}</span><b>${esc(blockName(b))}</b>${live ? `<span class="small lrem">${remTxt(mins(b.start) + b.dur - nowMin())}</span>` : ""}${(() => { const cl = bChs(b).map(id => state.chapters.find(c => c.id === id).name); return cl.length ? `<span class="small muted">${esc(cl[0])}${cl.length > 1 ? " + " + (cl.length - 1) : ""}</span>` : auto ? `<span class="small muted">${esc(auto.name)}</span>` : ""; })()}</button>
           <button class="jcheck" data-done="${b.id}" role="checkbox" aria-checked="${done}" aria-label="Fait"><span>${done ? I.check : ""}</span></button></div>`); }
       prevEnd = Math.max(prevEnd || 0, st + it.dur);
     });
     const dots = k => { const bs = blocksOn(j, k).filter(b => b.act !== "pause").slice(0, 4); return bs.map(b => `<i style="background:${esc(colorOf(b))}"></i>`).join(""); };
-    app.innerHTML = `${planSeg("edt")}<div class="jnav"><button class="linkbtn" id="jup">${I.back}Semaine</button><span class="grow"></span>${jDay !== today ? `<button class="btn sm" id="jback">Aujourd'hui</button>` : ""}<button class="btn sm ghost" id="jhours" aria-pressed="${hours}">${I.clock}${hours ? "Frise" : "Heures"}</button></div><div class="jhead"><button class="jtitle" id="jtoday"><b>${sel.getDate()} ${esc(month.charAt(0).toUpperCase() + month.slice(1))}</b> <span>${sel.getFullYear()}</span></button>${edtGet().ab && ab ? `<span class="pill">Sem. ${ab}</span>` : ""}</div>
+    app.innerHTML = `<div class="jnav"><button class="linkbtn" id="jup">${I.back}Calendrier</button><span class="grow"></span>${jDay !== today ? `<button class="btn sm" id="jback">Aujourd'hui</button>` : ""}<button class="btn sm ghost" id="jhours" aria-pressed="${hours}">${I.clock}${hours ? "Frise" : "Heures"}</button></div><div class="jhead"><button class="jtitle" id="jtoday"><b>${sel.getDate()} ${esc(month)}</b> <span>${sel.getFullYear()}</span></button>${edtGet().ab && ab ? `<span class="pill">Sem. ${ab}</span>` : ""}</div>
       <div class="jweek"><button class="iconbtn flat" id="jprev" aria-label="Semaine précédente">${I.back}</button>${week.map(k => { const d = dayOf(k); return `<button class="jd${k === jDay ? " on" : ""}${k === today ? " now" : ""}" data-day="${k}"><span>${d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "")}</span><b>${d.getDate()}</b><span class="jdots">${dots(k)}</span></button>`; }).join("")}<button class="iconbtn flat" id="jnext" aria-label="Semaine suivante" style="transform:scaleX(-1)">${I.back}</button></div>
       <div class="jall"><button class="jround${j.off[jDay] ? " on" : ""}" id="joff" aria-pressed="${!!j.off[jDay]}"><span>${I.home}</span>Pas cours</button><button class="jround" id="jauto"><span>${I.bolt}</span>Remplir ma journée</button><button class="jround" id="jai"><span>${I.spark}</span>Demander à l'IA</button><button class="jround" id="jctl"><span>${I.plus}</span>Ajouter un contrôle</button></div>
       ${ctrlToday.length ? `<div class="jctls">${ctrlToday.map(x => `<a class="jctl" href="#matiere-${x.s.id}" style="--c:${esc(x.s.color)}"><span class="dot"></span><b>Contrôle de ${esc(x.s.name)}</b>${x.c.ch && x.c.ch.length ? `<span class="small muted">${plural(x.c.ch.length, "chapitre", "chapitres")}</span>` : ""}</a>`).join("")}</div>` : ""}
@@ -143,7 +146,7 @@
       ${edtGet().slots.length ? "" : `<button class="linkbtn" id="jedt">${I.cal}Ajouter mon emploi du temps</button>`}
       <button class="jfab" id="jadd" aria-label="Ajouter une révision">${I.plus}</button>`;
     const re = () => screenJournee();
-    $("jup").onclick = () => jGo("semaine");
+    $("jup").onclick = () => jGo("mois");
     $("jhours").onclick = () => jGo("jour", jDay, !hours);
     app.querySelectorAll(".jweek [data-day]").forEach(b => b.onclick = () => jGo("jour", b.dataset.day));
     // Semaine précédente / suivante : on se place sur le lundi (ou sur aujourd'hui si c'est la semaine en cours).
@@ -254,6 +257,9 @@
         ${one && ![...cc].some(id => (state.chapters.find(c => c.id === id) || {}).subject_id === sel[0].id) ? `<button type="button" class="switch" role="switch" id="bauto" aria-checked="${autoCh}"><i></i><span>Laisser Merge choisir le chapitre (${esc(one.name)})</span></button>` : ""}`;
       el.querySelector("#bcols").innerHTML = `<button type="button" class="bcol auto" data-bc="" aria-pressed="${!v.color}" aria-label="Couleur de la matière" style="--c:${esc(blockColor({ act: v.act, s: state.subjects.filter(x => ss.has(x.id)).map(x => x.id)[0] || null }))}"><i></i><span>Matière</span></button>` + BCOLORS.map(c => `<button type="button" class="bcol" data-bc="${c}" aria-pressed="${v.color === c}" aria-label="Couleur ${c}" style="--c:${c}"><i></i></button>`).join("");
       el.querySelectorAll("[data-bc]").forEach(x => x.onclick = () => { v.color = x.dataset.bc || null; paint(el); });
+      el.querySelector("#bicwrap").hidden = v.act === "pause";
+      el.querySelector("#bicons").innerHTML = `<button type="button" class="bic" data-bic="" aria-pressed="${!v.ic}" aria-label="Icône de l'activité">${I[actOf(v.act)[2]]}</button>` + BICONS.map(x => `<button type="button" class="bic" data-bic="${x[0]}" aria-pressed="${v.ic === x[0]}" aria-label="${x[1]}" title="${x[1]}">${I[x[0]]}</button>`).join("");
+      el.querySelectorAll("[data-bic]").forEach(x => x.onclick = () => { v.ic = x.dataset.bic || null; paint(el); });
       el.querySelector("#bdurs").innerHTML = durs.map(d => `<button type="button" class="chip" data-bd="${d}" aria-pressed="${v.dur === d}">${durTxt(d)}</button>`).join("") + `<button type="button" class="chip" data-bd="libre" aria-pressed="${!durs.includes(v.dur)}">Autre</button>`;
       el.querySelector("#bfree").hidden = durs.includes(v.dur) && !v.free;
       el.querySelector("#bslide").value = v.dur; el.querySelector("#bslv").textContent = durTxt(v.dur);
@@ -269,6 +275,7 @@
       <div class="bsec" id="bsubj"></div>
       <div class="bsec"><label class="label" for="bstart">Début</label><input id="bstart" class="btime" type="time" value="${esc(v.start)}"></div>
       <div class="bsec"><span class="label">Durée</span><div class="chips" id="bdurs"></div><div class="bfree" id="bfree" hidden><input type="range" id="bslide" min="5" max="300" step="5" aria-label="Durée en minutes"><b id="bslv"></b></div></div>
+      <div class="bsec" id="bicwrap"><span class="label">Icône</span><div class="bicons" id="bicons"></div></div>
       <div class="bsec"><span class="label">Couleur</span><div class="bcols" id="bcols"></div></div>
       <div class="bsec"><label class="label" for="btitle">Nom (facultatif)</label><input id="btitle" type="text" maxlength="60" value="${esc(v.title || "")}" placeholder="${"Ex. Fiche sur la mitose, Sport, Devoir de philo…"}"></div>
       ${edit && b.weekly ? '<p class="small muted">Ce bloc revient chaque semaine.</p>' : `<button type="button" class="switch" role="switch" id="bweek" aria-checked="false"><i></i><span>Répéter chaque semaine</span></button>`}
@@ -279,21 +286,21 @@
       el.querySelector("#bok").onclick = () => {
         const pause = v.act === "pause", subs = pause ? [] : state.subjects.filter(x => ss.has(x.id)).map(x => x.id), chs = pause ? [] : [...cc].filter(id => subs.includes((state.chapters.find(c => c.id === id) || {}).subject_id));
         const x = jGet(), nb = { id: edit ? b.id : jid(), start: el.querySelector("#bstart").value || v.start, dur: v.dur, s: subs[0] || null, ch: chs[0] || null, act: v.act, title: el.querySelector("#btitle").value.trim().slice(0, 60) };
-        if (subs.length > 1) nb.ss = subs; if (chs.length > 1) nb.chs = chs; if (v.color) nb.color = v.color; if (autoCh && subs.length === 1 && !chs.length) nb.auto = true;
+        if (subs.length > 1) nb.ss = subs; if (chs.length > 1) nb.chs = chs; if (v.color) nb.color = v.color; if (v.ic && v.act !== "pause") nb.ic = v.ic; if (autoCh && subs.length === 1 && !chs.length) nb.auto = true;
         if (v.act === "libre" && !nb.s && !nb.title) return toast("Donne un nom à ton activité.");
         if (edit && b.weekly) { const i = x.weekly.findIndex(y => y.id === b.id); if (i >= 0) x.weekly[i] = Object.assign(nb, { wd: b.wd }); }
         else if (!edit && weekly) x.weekly.push(Object.assign(nb, { wd: (dayOf(jDay).getDay() + 6) % 7 }));
         else { const l = x.blocks[jDay] || []; const i = l.findIndex(y => y.id === nb.id); if (i >= 0) l[i] = nb; else l.push(nb); x.blocks[jDay] = l; }
         jSave(x); closeSheet(); toast(edit ? "Modifié." : "Ajouté à ta journée."); screenJournee();
       };
-      if (el.querySelector("#bdel")) el.querySelector("#bdel").onclick = () => { const x = jGet(); if (b.weekly) x.weekly = x.weekly.filter(y => y.id !== b.id); else x.blocks[jDay] = (x.blocks[jDay] || []).filter(y => y.id !== b.id); jSave(x); closeSheet(); toast("Supprimé."); screenJournee(); };
+      if (el.querySelector("#bdel")) el.querySelector("#bdel").onclick = async () => { if (!(await askConfirm("Supprimer ce bloc ?", (b.weekly ? "Il revient chaque semaine : il sera supprimé de toutes les semaines. " : "") + "« " + blockName(b) + " » sera retiré de ton planning."))) return; const x = jGet(); if (b.weekly) x.weekly = x.weekly.filter(y => y.id !== b.id); else x.blocks[jDay] = (x.blocks[jDay] || []).filter(y => y.id !== b.id); jSave(x); closeSheet(); toast("Supprimé."); screenJournee(); };
     });
   }
   // Aperçu d'un plan (fait par Merge ou par l'IA) avant de l'ajouter.
   function previewSheet(plan, intro, byDay) {
     const days = byDay || { [jDay]: plan }, all = Object.entries(days).filter(([, l]) => l.length);
     sheet(`<div class="row"><span class="mico big">${I.spark}</span><h1>Ton plan</h1></div><p class="muted">${intro}</p>
-      ${all.map(([k, l]) => `${all.length > 1 || k !== jDay ? `<span class="label">${esc(fmtDate(k))}</span>` : ""}<div class="jprev">${l.map(b => { const s = state.subjects.find(x => x.id === b.s), a = actOf(b.act); return `<div class="row" style="--c:${esc(blockColor(b))}"><span class="jpill sm">${I[a[2]]}</span><span class="grow"><span class="small muted">${b.start} · ${durTxt(b.dur)}</span><br><b>${esc(b.title || (b.act === "pause" ? "Pause" : a[1] + (s ? " · " + s.name : "")))}</b></span></div>`; }).join("")}</div>`).join("")}
+      ${all.map(([k, l]) => `${all.length > 1 || k !== jDay ? `<span class="label">${esc(fmtDate(k))}</span>` : ""}<div class="jprev">${l.map(b => { const s = state.subjects.find(x => x.id === b.s), a = actOf(b.act); return `<div class="row" style="--c:${esc(blockColor(b))}"><span class="jpill sm">${bIcon(b)}</span><span class="grow"><span class="small muted">${b.start} · ${durTxt(b.dur)}</span><br><b>${esc(blockName(b))}</b></span></div>`; }).join("")}</div>`).join("")}
       <button class="btn" id="pok">Ajouter à ma journée</button><button class="btn ghost" data-close>Annuler</button>`, el => {
       el.querySelector("#pok").onclick = () => { const x = jGet(); all.forEach(([k, l]) => { x.blocks[k] = (x.blocks[k] || []).concat(l); }); jSave(x); closeSheet(); toast("Plan ajouté."); screenJournee(); };
     });
@@ -315,7 +322,7 @@
             jours: days.map(k => ({ date: k, pas_cours: !!j.off[k], cours: schoolOn(j, k).map(x => x.start + "-" + x.end + " " + x.subject), deja: blocksOn(j, k).map(b => ({ id: b.id, debut: b.start, duree: b.dur, act: b.act, matiere: (state.subjects.find(x => x.id === b.s) || {}).name || "", fait: isDone(j, k, b) })) })),
             matieres: state.subjects.map(s => ({ id: s.id, nom: s.name, controle: (nextCtrl(s) || {}).d || null, chapitres: state.chapters.filter(c => c.subject_id === s.id && cardsOf(c.id).length).map(c => ({ id: c.id, nom: c.name, a_revoir: dueCards(cardsOf(c.id)).length, maitrise: mastery(cardsOf(c.id)) })) })) };
           const r = await ai({ action: "planjour", demande: q, contexte: ctx }, "studio");
-          const ok = (r.blocks || []).map(b => ({ id: jid(), date: days.includes(b.date) ? b.date : jDay, start: /^([01]\d|2[0-3]):[0-5]\d$/.test(b.start || "") ? b.start : null, dur: Math.max(5, Math.min(240, Math.round(+b.dur || 0))), s: state.subjects.some(x => x.id === b.s) ? b.s : null, ch: state.chapters.some(c => c.id === b.ch && c.subject_id === b.s) ? b.ch : null, act: ACTS.some(a => a[0] === b.act) ? b.act : "libre", title: String(b.title || "").slice(0, 60) })).filter(b => b.start && b.dur);
+          const ok = (r.blocks || []).map(b => ({ id: jid(), date: days.includes(b.date) ? b.date : jDay, start: /^([01]\d|2[0-3]):[0-5]\d$/.test(b.start || "") ? b.start : null, dur: Math.max(5, Math.min(240, Math.round(+b.dur || 0))), s: state.subjects.some(x => x.id === b.s) ? b.s : null, ch: state.chapters.some(c => c.id === b.ch && c.subject_id === b.s) ? b.ch : null, act: ACTS.some(a => a[0] === b.act) ? b.act : "libre", title: String(b.title || "").slice(0, 60), ...(BICONS.some(x => x[0] === b.ic) ? { ic: b.ic } : {}) })).filter(b => b.start && b.dur);
           const moved = (r.deplacer || []).filter(m => m && m.id && days.includes(m.date) && /^([01]\d|2[0-3]):[0-5]\d$/.test(m.start || ""));
           if (moved.length) { const x = jGet(); moved.forEach(m => { Object.keys(x.blocks).forEach(k => { const i = (x.blocks[k] || []).findIndex(b => b.id === m.id); if (i >= 0) { const [b] = x.blocks[k].splice(i, 1); b.start = m.start; (x.blocks[m.date] = x.blocks[m.date] || []).push(b); } }); }); jSave(x); }
           if (!ok.length && !moved.length) throw new Error(r.message || "L'IA n'a rien proposé. Précise ta demande.");

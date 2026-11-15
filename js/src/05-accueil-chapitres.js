@@ -96,7 +96,7 @@
     if (openPicker) openExam();
     $("ctAdd").onclick = () => { if ($("examBox").innerHTML) { $("examBox").innerHTML = ""; $("ctAdd").setAttribute("aria-expanded", "false"); } else { openExam(); $("ctAdd").setAttribute("aria-expanded", "true"); } };
     app.querySelectorAll("[data-cch]").forEach(b => b.onclick = () => ctrlChSheet(b.dataset.cch, () => screenSubject(id)));
-    app.querySelectorAll("[data-cdel]").forEach(b => b.onclick = async () => { if (b.dataset.ok !== "1") { b.dataset.ok = "1"; b.classList.add("danger"); toast("Touche encore pour supprimer ce contrôle."); return; } await ctrlDel(b.dataset.cdel); toast("Contrôle supprimé."); screenSubject(id); });
+    app.querySelectorAll("[data-cdel]").forEach(b => b.onclick = async () => { if (!(await askConfirm("Supprimer ce contrôle ?", "Il disparaîtra du calendrier et du planning."))) return; await ctrlDel(b.dataset.cdel); toast("Contrôle supprimé."); screenSubject(id); });
     $("ctFree").onclick = async () => { const err = await saveExam(id, { date: null, free: !isFree(s) }); if (err) return fail(err, "Réglage non enregistré"); await ctrlSync(); toast(isFree(s) ? "Révision libre activée." : "Révision libre désactivée."); screenSubject(id); };
     $("addG").onclick = () => {
       if ($("gform").innerHTML) { $("gform").innerHTML = ""; return; }
@@ -159,7 +159,7 @@
       wireColor($("gcol"), async c => { const r = await sb.from("groups").update({ color: c }).eq("id", id); if (r.error) return fail(r.error, "Couleur non enregistrée"); g.color = c; toast("Couleur du dossier enregistrée."); });
       $("gren").onclick = async () => { const name = $("gn").value.trim(); if (!name) return toast("Le nom ne peut pas être vide."); const r = await sb.from("groups").update({ name }).eq("id", id); if (r.error) return fail(r.error, "Nom non enregistré"); g.name = name; draw(); toast("Dossier renommé."); };
       $("gdel").onclick = async () => {
-        if ($("gdel").dataset.ok !== "1") { $("gdel").dataset.ok = "1"; $("gdel").textContent = "Confirmer la suppression du dossier"; return; }
+        if (!(await askConfirm("Supprimer ce dossier ?", "Ses chapitres ne sont pas supprimés : ils reviennent dans la matière."))) return;
         const r1 = await sb.from("chapters").update({ group_id: null }).eq("group_id", id); if (r1.error) return fail(r1.error, "Suppression impossible");
         const r2 = await sb.from("groups").delete().eq("id", id); if (r2.error) return fail(r2.error, "Suppression impossible");
         await loadAll(); location.hash = "#matiere-" + s.id;
@@ -256,7 +256,7 @@
       const cid = b.dataset.edit || b.dataset.flag || b.dataset.save || b.dataset.cancel || b.dataset.del || b.dataset.delyes || b.dataset.img; const c = cards.find(x => x.id === cid); if (!c) return;
       const box = list.querySelector(`[data-id="${cid}"]`);
       if (b.dataset.img) return showPage(c.image_path, box.querySelector(".pagebox"));
-      if (b.dataset.del) { b.outerHTML = `<button class="mini" data-delyes="${cid}" style="color:var(--peach-ink)">Confirmer la suppression</button>`; return; }
+      if (b.dataset.del) { if (await askConfirm("Supprimer cette carte ?", "« " + String(c.front).slice(0, 80) + " »")) { const db = document.createElement("button"); db.dataset.delyes = cid; b.replaceWith(db); db.click(); } return; }
       if (b.dataset.delyes) { const { error } = await trashCard(Object.assign({ chapter_id: id }, state.cards.find(x => x.id === cid) || {}, c)); if (error) return fail(error, "Carte non supprimée"); state.cards = state.cards.filter(x => x.id !== cid); cards.splice(cards.indexOf(c), 1); box.remove(); return toast("Carte supprimée."); }
       if (b.dataset.flag) {
         const { error } = await sb.from("cards").update({ flagged: !c.flagged }).eq("id", cid); if (error) return fail(error, "Signalement impossible");

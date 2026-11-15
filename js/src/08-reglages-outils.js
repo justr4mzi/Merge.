@@ -264,7 +264,7 @@
           ${e.slots.length ? '<button class="linkbtn" id="edtclear">Tout effacer</button>' : ""}</div>`;
       $("absw").onclick = () => { e.ab = !e.ab; if (e.ab && !e.ref) return askAB(); save(); draw(); };
       if ($("swab")) $("swab").onclick = () => { const cur = weekAB(new Date()); e.ref = { monday: localDay(mondayOf(new Date())), letter: cur === "A" ? "B" : "A" }; save(); draw(); };
-      if ($("edtclear")) $("edtclear").onclick = () => { if ($("edtclear").dataset.ok !== "1") { $("edtclear").dataset.ok = "1"; $("edtclear").textContent = "Confirmer : tout effacer"; return; } e.slots = []; save(); draw(); };
+      if ($("edtclear")) $("edtclear").onclick = async () => { if (!(await askConfirm("Effacer tout l'emploi du temps ?", "Tous tes cours seront retirés. Tu pourras le renvoyer en photo ou en PDF."))) return; e.slots = []; save(); draw(); };
       $("edtadd").onclick = () => form(null);
       app.querySelectorAll("[data-ed]").forEach(b => b.onclick = () => form(+b.dataset.ed));
       $("edtf").onchange = ev => { const f = ev.target.files[0]; if (f) fromFile(f); };
@@ -279,7 +279,7 @@
         <div class="row" style="flex-wrap:wrap"><div class="field grow"><label for="er">Salle (facultatif)</label><input id="er" value="${esc(x.room || "")}" maxlength="30"></div>${e.ab ? `<div class="field"><label for="ew">Semaine</label><select id="ew"><option value="">Toutes</option><option${x.week === "A" ? " selected" : ""}>A</option><option${x.week === "B" ? " selected" : ""}>B</option></select></div>` : ""}</div>
         <div class="row"><button class="btn" id="esave">${k != null ? "Enregistrer" : "Ajouter"}</button>${k != null ? '<button class="btn ghost" id="edel">Supprimer</button>' : ""}</div></div>`;
       $("esave").onclick = () => { const y = { day: +$("ed").value, start: $("e1").value || "08:00", end: $("e2").value || "09:00", subject: $("es").value.trim().slice(0, 60), room: $("er").value.trim(), week: $("ew") ? $("ew").value : "" }; if (!y.subject) return toast("Écris la matière."); if (k != null) e.slots[k] = y; else e.slots.push(y); save(); draw(); toast(k != null ? "Cours modifié." : "Cours ajouté."); };
-      if ($("edel")) $("edel").onclick = () => { e.slots.splice(k, 1); save(); draw(); };
+      if ($("edel")) $("edel").onclick = async () => { if (!(await askConfirm("Supprimer ce cours ?", e.slots[k].subject + " · " + e.slots[k].start + "–" + e.slots[k].end))) return; e.slots.splice(k, 1); save(); draw(); };
       $("es").focus();
     }
     async function fromFile(f) {

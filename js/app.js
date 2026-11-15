@@ -658,6 +658,12 @@
     tabs.innerHTML = `<div class="logo side">${esc(C.NOM_APPLI)}<b>.</b></div>` + TABS.map(t => `<a href="#${t[0]}"${t[0] === current ? ' aria-current="page"' : ""}>${I[t[2]]}<span>${t[1]}</span></a>`).join("")
       + `<div class="sidefoot"><button class="sidemusic" data-qs>${I.search}<span>Rechercher</span><kbd>Ctrl K</kbd></button><button class="sidemusic" data-pomo>${I.clock}<span>Pomodoro</span></button>${LOFI.length ? `<button class="sidemusic${music.on ? " on" : ""}" data-music>${I.listen}<span>Musique de fond</span></button>` : ""}<div class="sidecard"><b>${due ? plural(due, "carte", "cartes") + " à revoir" : "Tu es à jour"}</b><span>${st ? plural(st, "jour", "jours") + " d'affilée" : "Commence ta série aujourd'hui"}</span>${due ? '<button class="btn sm" id="sidego">Réviser</button>' : ""}</div></div>`;
     const g = document.getElementById("sidego"); if (g) g.onclick = () => { location.hash = "#cartes-jour"; };
+    // Toucher un onglet ramène à son écran d'arrivée, même si on y est déjà (Planning : aujourd'hui, en frise).
+    tabs.querySelectorAll("a[href^='#']").forEach(a => a.addEventListener("click", e => {
+      const h = a.getAttribute("href");
+      if (h === "#calendrier") jset("merge.jview", { lvl: "jour", day: localDay(), hours: false });
+      if (location.hash === h) { e.preventDefault(); route(); window.scrollTo(0, 0); }
+    }));
     // Pastille sur l'icône de l'appli installée : nombre de cartes à revoir.
     try { if (navigator.setAppBadge) { if (due) navigator.setAppBadge(due).catch(() => {}); else navigator.clearAppBadge().catch(() => {}); } } catch (e) { /* non géré */ }
   }
@@ -730,7 +736,18 @@
     el.onclick = e => { if (e.target === el || e.target.closest("[data-close]")) closeSheet(); };
     document.body.appendChild(el); if (wire) wire(el); const f = el.querySelector("a.btn,button.btn"); if (f) f.focus();
   }
-  document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); });
+  // Confirmation avant de supprimer : une petite fenêtre « Tu es sûr ? » par-dessus tout le reste (fenêtre ou menu ouverts).
+  function askConfirm(title, text, ok = "Supprimer") {
+    return new Promise(res => {
+      const old = document.getElementById("confirm"); if (old) old.remove();
+      const el = document.createElement("div"); el.className = "sheetwrap confirmwrap"; el.id = "confirm";
+      el.innerHTML = `<div class="sheet card confirmbox" role="alertdialog" aria-modal="true" aria-labelledby="cftitle"><h2 id="cftitle">${esc(title)}</h2>${text ? `<p class="muted">${esc(text)}</p>` : ""}<div class="row"><button class="btn ghost grow" data-c="0">Annuler</button><button class="btn danger grow" data-c="1">${esc(ok)}</button></div></div>`;
+      const done = v => { el.remove(); res(v); };
+      el.onclick = e => { if (e.target === el) return done(false); const b = e.target.closest("[data-c]"); if (b) done(b.dataset.c === "1"); };
+      el.done = done; document.body.appendChild(el); el.querySelector('[data-c="0"]').focus();
+    });
+  }
+  document.addEventListener("keydown", e => { if (e.key !== "Escape") return; const c = document.getElementById("confirm"); if (c) return c.done(false); closeSheet(); });
 
   // ---------- v10 : niveau, badges, plan de révision, reprise, installation, recherche rapide, pomodoro ----------
   const jget = (k, d) => { try { const v = JSON.parse(safeGet(k) || "null"); return v == null ? d : v; } catch (e) { return d; } };
@@ -794,6 +811,15 @@
     ...[["moustache", "Mergo moustachu", 130], ["chat", "Mergo oreilles de chat", 200], ["lapin", "Mergo oreilles de lapin", 200], ["toque", "Mergo cuisinier", 200], ["echarpe", "Mergo à l'écharpe", 230], ["etoile", "Mergo la star", 270],
       ["diplome", "Mergo diplômé", 300, 4], ["masque", "Mergo super-héros", 330, 5], ["viking", "Mergo viking", 370, 6], ["pirate", "Mergo pirate", 400, 7]]
       .map(([v, n, price, need]) => ({ id: "m-" + v, type: "mascotte", n, price, v, need })),
+    // Collection kawaii : Mergo princesse, licorne, nœud rose…, couleurs et fonds tout doux.
+    ...[["princesse", "Mergo princesse", 230], ["noeudrose", "Mergo nœud rose", 170], ["kawaii", "Mergo kawaii", 170], ["couronnefleurs", "Mergo couronne de fleurs", 230], ["fraise", "Mergo fraise", 200], ["licorne", "Mergo licorne", 330, 4], ["chaton", "Mergo chaton rose", 270], ["magique", "Mergo baguette magique", 370, 5]]
+      .map(([v, n, price, need]) => ({ id: "m-" + v, type: "mascotte", n, price, v, need })),
+    ...[["rosebonbon", "Rose bonbon", 130, "#f472b6"], ["lilas", "Lilas", 130, "#b18cf2"], ["barbe", "Barbe à papa", 170, "#ec7ab8"], ["peche2", "Pêche douce", 170, "#f59e7b"], ["menthe2", "Menthe glacée", 170, "#34c2a2"]]
+      .map(([k, n, price, v, need]) => ({ id: "c-" + k, type: "couleur", n, price, v, need })),
+    ...[["paillettes", "Paillettes", 300], ["barbe", "Barbe à papa", 330], ["etoilesk", "Étoiles kawaii", 370, 4]].map(([v, n, price, need]) => ({ id: "f-" + v, type: "fond", n, price, v, need })),
+    ...[["licorne", "Cartes licorne", 300], ["fraise", "Cartes fraise", 270], ["nuage", "Cartes nuage rose", 270]].map(([v, n, price, need]) => ({ id: "d-" + v, type: "carte", n, price, v, need })),
+    ...[["bonbon", "Flamme bonbon", 200]].map(([v, n, price, need]) => ({ id: "l-" + v, type: "flamme", n, price, v, need })),
+    ...[["princesse", "Princesse des révisions", 200], ["kawaii", "Kawaii mais efficace", 170], ["licorne", "Licorne du bac", 270], ["reine", "Reine du planning", 230], ["paillettes", "Paillettes et flashcards", 200]].map(([k, n, price, need]) => ({ id: "t-k" + k, type: "titre", n, price, need })),
     ...[["pastel", "Cartes pastel", 200], ["kraft", "Cartes kraft", 230], ["foret", "Cartes forêt", 270], ["bois", "Cartes bois", 270], ["ocean", "Cartes océan", 300], ["glace", "Cartes de glace", 330, 5], ["lave", "Cartes de lave", 400, 6], ["minuit", "Cartes minuit", 430, 7]]
       .map(([v, n, price, need]) => ({ id: "d-" + v, type: "carte", n, price, v, need })),
     ...[["violette", "Flamme violette", 200], ["menthe", "Flamme menthe", 200], ["glace", "Flamme de glace", 270], ["lave", "Flamme de lave", 330, 5], ["neon", "Flamme néon", 400, 6], ["galaxie", "Flamme galaxie", 600, 9]]
@@ -907,6 +933,14 @@
     pirate: '<path d="M14 24q18-14 36 0z" fill="#1a1d28"/><circle cx="32" cy="17" r="2.6" fill="#fff"/><path d="M15 27l34 3" stroke="#1a1d28" stroke-width="1.6"/><circle cx="40" cy="34" r="7" fill="#1a1d28"/>',
     couronneor: '<path d="M17 22l3-14 7 8 5-11 5 11 7-8 3 14z" fill="#f5c542" stroke="#b8860b" stroke-width="1.2"/><circle cx="32" cy="16" r="2.4" fill="#e03b3b"/><circle cx="23" cy="18" r="1.8" fill="#3b82f6"/><circle cx="41" cy="18" r="1.8" fill="#22c55e"/>',
     dragon: '<path d="M14 26l2-14 6 8M50 26l-2-14-6 8" fill="#f59e0b"/><path d="M8 40q-8-6-4-16 4 8 10 8zM56 40q8-6 4-16-4 8-10 8z" fill="#16a34a"/><path d="M26 46l2 3 2-3M34 46l2 3 2-3" fill="#fff"/>',
+    princesse: '<path d="M18 23l3-11 6 6 5-9 5 9 6-6 3 11z" fill="#f9c4dd" stroke="#e879b4" stroke-width="1.2"/><circle cx="32" cy="17" r="2.6" fill="#ec4899"/><circle cx="23" cy="19" r="1.5" fill="#fff"/><circle cx="41" cy="19" r="1.5" fill="#fff"/><ellipse cx="18" cy="42" rx="4" ry="2.4" fill="#f9a8d4" opacity=".85"/><ellipse cx="46" cy="42" rx="4" ry="2.4" fill="#f9a8d4" opacity=".85"/>',
+    noeudrose: '<path d="M32 18l-13-8v16zM32 18l13-8v16z" fill="#f472b6"/><circle cx="32" cy="18" r="3.4" fill="#db2777"/>',
+    kawaii: '<ellipse cx="17" cy="42" rx="4.5" ry="2.6" fill="#f9a8d4"/><ellipse cx="47" cy="42" rx="4.5" ry="2.6" fill="#f9a8d4"/><circle cx="23" cy="33" r="1.4" fill="#fff"/><circle cx="39" cy="33" r="1.4" fill="#fff"/><path d="M53 14l1.2 2.8 2.8 1.2-2.8 1.2-1.2 2.8-1.2-2.8-2.8-1.2 2.8-1.2zM10 12l.9 2 2 .9-2 .9-.9 2-.9-2-2-.9 2-.9z" fill="#fde68a"/>',
+    couronnefleurs: '<path d="M15 23q17-9 34 0" stroke="#4ade80" stroke-width="2.4" fill="none"/><g fill="#f9a8d4"><circle cx="18" cy="21" r="3.2"/><circle cx="32" cy="16" r="3.4"/><circle cx="46" cy="21" r="3.2"/></g><g fill="#c4b5fd"><circle cx="25" cy="18" r="2.8"/><circle cx="39" cy="18" r="2.8"/></g><g fill="#fde68a"><circle cx="18" cy="21" r="1.2"/><circle cx="32" cy="16" r="1.2"/><circle cx="46" cy="21" r="1.2"/></g>',
+    fraise: '<path d="M17 24q15-20 30 0z" fill="#ef4444"/><path d="M27 8q5-3 10 0-5 5-10 0z" fill="#22c55e"/><g fill="#fde68a"><circle cx="24" cy="18" r="1"/><circle cx="31" cy="15" r="1"/><circle cx="38" cy="19" r="1"/><circle cx="29" cy="21" r="1"/><circle cx="36" cy="13" r="1"/></g>',
+    licorne: '<path d="M32 2l-4 18h8z" fill="#fde68a" stroke="#eab308" stroke-width="1"/><path d="M29 9l6 2M28.5 13l7 2M28 17l8 2" stroke="#eab308" stroke-width="1"/><path d="M14 26q-2-10 8-12-3 6 0 10zM50 26q2-10-8-12 3 6 0 10z" fill="#c4b5fd"/><path d="M12 30q-3-8 4-12-1 6 2 9z" fill="#f9a8d4"/>',
+    chaton: '<path d="M13 24l3-16 11 9zM51 24l-3-16-11 9z" fill="#f9a8d4"/><path d="M16 21l1.5-8 5.5 4.5zM48 21l-1.5-8-5.5 4.5z" fill="#fff"/><path d="M8 40h10M8 44h10M46 40h10M46 44h10" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><ellipse cx="17" cy="42" rx="3.4" ry="2" fill="#f9a8d4"/><ellipse cx="47" cy="42" rx="3.4" ry="2" fill="#f9a8d4"/>',
+    magique: '<path d="M50 52l10-20" stroke="#c4b5fd" stroke-width="2.6" stroke-linecap="round"/><path d="M60 22l2 4.5 4.8.7-3.5 3.4.8 4.8-4.1-2.2-4.3 2.2.8-4.8-3.5-3.4 4.8-.7z" fill="#fde68a" stroke="#eab308" stroke-width=".8" transform="translate(-3 3) scale(.92)"/><circle cx="12" cy="14" r="1.4" fill="#f9a8d4"/><circle cx="20" cy="8" r="1" fill="#c4b5fd"/>',
     fleur: '<g transform="translate(47 21)"><circle r="3.4" cy="-4.2" fill="#f9a8d4"/><circle r="3.4" cx="4.2" fill="#f9a8d4"/><circle r="3.4" cy="4.2" fill="#f9a8d4"/><circle r="3.4" cx="-4.2" fill="#f9a8d4"/><circle r="2.6" fill="#f5c542"/></g>',
   };
   const MASCOT = (v) => !v ? "" : `<svg class="mascot" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="38" rx="22" ry="20" fill="var(--accent)"/><circle cx="24" cy="34" r="6" fill="#fff"/><circle cx="40" cy="34" r="6" fill="#fff"/><circle cx="25" cy="35" r="2.6" fill="#1a1d28"/><circle cx="41" cy="35" r="2.6" fill="#1a1d28"/><path d="M27 46q5 4 10 0" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M14 26l5-12 7 9M50 26l-5-12-7 9" fill="var(--accent)"/>${v === "lunettes" ? '<g fill="none" stroke="#1a1d28" stroke-width="2.2"><circle cx="24" cy="34" r="8"/><circle cx="40" cy="34" r="8"/><path d="M32 34h0"/></g>' : ""}${v === "couronne" ? '<path d="M20 14l4 8 8-10 8 10 4-8 2 14H18z" fill="#f5c542" stroke="#b8860b" stroke-width="1.2"/>' : ""}${MASCOT_WEAR[v] || ""}</svg>`;
@@ -1295,7 +1329,7 @@
     if (openPicker) openExam();
     $("ctAdd").onclick = () => { if ($("examBox").innerHTML) { $("examBox").innerHTML = ""; $("ctAdd").setAttribute("aria-expanded", "false"); } else { openExam(); $("ctAdd").setAttribute("aria-expanded", "true"); } };
     app.querySelectorAll("[data-cch]").forEach(b => b.onclick = () => ctrlChSheet(b.dataset.cch, () => screenSubject(id)));
-    app.querySelectorAll("[data-cdel]").forEach(b => b.onclick = async () => { if (b.dataset.ok !== "1") { b.dataset.ok = "1"; b.classList.add("danger"); toast("Touche encore pour supprimer ce contrôle."); return; } await ctrlDel(b.dataset.cdel); toast("Contrôle supprimé."); screenSubject(id); });
+    app.querySelectorAll("[data-cdel]").forEach(b => b.onclick = async () => { if (!(await askConfirm("Supprimer ce contrôle ?", "Il disparaîtra du calendrier et du planning."))) return; await ctrlDel(b.dataset.cdel); toast("Contrôle supprimé."); screenSubject(id); });
     $("ctFree").onclick = async () => { const err = await saveExam(id, { date: null, free: !isFree(s) }); if (err) return fail(err, "Réglage non enregistré"); await ctrlSync(); toast(isFree(s) ? "Révision libre activée." : "Révision libre désactivée."); screenSubject(id); };
     $("addG").onclick = () => {
       if ($("gform").innerHTML) { $("gform").innerHTML = ""; return; }
@@ -1358,7 +1392,7 @@
       wireColor($("gcol"), async c => { const r = await sb.from("groups").update({ color: c }).eq("id", id); if (r.error) return fail(r.error, "Couleur non enregistrée"); g.color = c; toast("Couleur du dossier enregistrée."); });
       $("gren").onclick = async () => { const name = $("gn").value.trim(); if (!name) return toast("Le nom ne peut pas être vide."); const r = await sb.from("groups").update({ name }).eq("id", id); if (r.error) return fail(r.error, "Nom non enregistré"); g.name = name; draw(); toast("Dossier renommé."); };
       $("gdel").onclick = async () => {
-        if ($("gdel").dataset.ok !== "1") { $("gdel").dataset.ok = "1"; $("gdel").textContent = "Confirmer la suppression du dossier"; return; }
+        if (!(await askConfirm("Supprimer ce dossier ?", "Ses chapitres ne sont pas supprimés : ils reviennent dans la matière."))) return;
         const r1 = await sb.from("chapters").update({ group_id: null }).eq("group_id", id); if (r1.error) return fail(r1.error, "Suppression impossible");
         const r2 = await sb.from("groups").delete().eq("id", id); if (r2.error) return fail(r2.error, "Suppression impossible");
         await loadAll(); location.hash = "#matiere-" + s.id;
@@ -1455,7 +1489,7 @@
       const cid = b.dataset.edit || b.dataset.flag || b.dataset.save || b.dataset.cancel || b.dataset.del || b.dataset.delyes || b.dataset.img; const c = cards.find(x => x.id === cid); if (!c) return;
       const box = list.querySelector(`[data-id="${cid}"]`);
       if (b.dataset.img) return showPage(c.image_path, box.querySelector(".pagebox"));
-      if (b.dataset.del) { b.outerHTML = `<button class="mini" data-delyes="${cid}" style="color:var(--peach-ink)">Confirmer la suppression</button>`; return; }
+      if (b.dataset.del) { if (await askConfirm("Supprimer cette carte ?", "« " + String(c.front).slice(0, 80) + " »")) { const db = document.createElement("button"); db.dataset.delyes = cid; b.replaceWith(db); db.click(); } return; }
       if (b.dataset.delyes) { const { error } = await trashCard(Object.assign({ chapter_id: id }, state.cards.find(x => x.id === cid) || {}, c)); if (error) return fail(error, "Carte non supprimée"); state.cards = state.cards.filter(x => x.id !== cid); cards.splice(cards.indexOf(c), 1); box.remove(); return toast("Carte supprimée."); }
       if (b.dataset.flag) {
         const { error } = await sb.from("cards").update({ flagged: !c.flagged }).eq("id", cid); if (error) return fail(error, "Signalement impossible");
@@ -2299,7 +2333,7 @@
           ${e.slots.length ? '<button class="linkbtn" id="edtclear">Tout effacer</button>' : ""}</div>`;
       $("absw").onclick = () => { e.ab = !e.ab; if (e.ab && !e.ref) return askAB(); save(); draw(); };
       if ($("swab")) $("swab").onclick = () => { const cur = weekAB(new Date()); e.ref = { monday: localDay(mondayOf(new Date())), letter: cur === "A" ? "B" : "A" }; save(); draw(); };
-      if ($("edtclear")) $("edtclear").onclick = () => { if ($("edtclear").dataset.ok !== "1") { $("edtclear").dataset.ok = "1"; $("edtclear").textContent = "Confirmer : tout effacer"; return; } e.slots = []; save(); draw(); };
+      if ($("edtclear")) $("edtclear").onclick = async () => { if (!(await askConfirm("Effacer tout l'emploi du temps ?", "Tous tes cours seront retirés. Tu pourras le renvoyer en photo ou en PDF."))) return; e.slots = []; save(); draw(); };
       $("edtadd").onclick = () => form(null);
       app.querySelectorAll("[data-ed]").forEach(b => b.onclick = () => form(+b.dataset.ed));
       $("edtf").onchange = ev => { const f = ev.target.files[0]; if (f) fromFile(f); };
@@ -2314,7 +2348,7 @@
         <div class="row" style="flex-wrap:wrap"><div class="field grow"><label for="er">Salle (facultatif)</label><input id="er" value="${esc(x.room || "")}" maxlength="30"></div>${e.ab ? `<div class="field"><label for="ew">Semaine</label><select id="ew"><option value="">Toutes</option><option${x.week === "A" ? " selected" : ""}>A</option><option${x.week === "B" ? " selected" : ""}>B</option></select></div>` : ""}</div>
         <div class="row"><button class="btn" id="esave">${k != null ? "Enregistrer" : "Ajouter"}</button>${k != null ? '<button class="btn ghost" id="edel">Supprimer</button>' : ""}</div></div>`;
       $("esave").onclick = () => { const y = { day: +$("ed").value, start: $("e1").value || "08:00", end: $("e2").value || "09:00", subject: $("es").value.trim().slice(0, 60), room: $("er").value.trim(), week: $("ew") ? $("ew").value : "" }; if (!y.subject) return toast("Écris la matière."); if (k != null) e.slots[k] = y; else e.slots.push(y); save(); draw(); toast(k != null ? "Cours modifié." : "Cours ajouté."); };
-      if ($("edel")) $("edel").onclick = () => { e.slots.splice(k, 1); save(); draw(); };
+      if ($("edel")) $("edel").onclick = async () => { if (!(await askConfirm("Supprimer ce cours ?", e.slots[k].subject + " · " + e.slots[k].start + "–" + e.slots[k].end))) return; e.slots.splice(k, 1); save(); draw(); };
       $("es").focus();
     }
     async function fromFile(f) {
@@ -2566,10 +2600,9 @@
       box.innerHTML = `<div class="stack"><div class="field"><label for="rn">Nom du chapitre</label><input id="rn" type="text" maxlength="80" value="${esc(ch.name)}"></div><button class="btn sm" id="rnsave">Renommer</button></div>`;
       $("rnsave").onclick = async () => { const name = $("rn").value.trim(); if (!name) return toast("Le nom ne peut pas être vide."); const { error } = await sb.from("chapters").update({ name, auto_name: false }).eq("id", id); if (error) return fail(error, "Nom non enregistré"); ch.name = name; ch.auto_name = false; screenChapter(id); };
     };
-    $("tDel").onclick = () => {
-      box.innerHTML = `<div class="stack"><p>Supprimer « ${esc(ch.name)} » et ses cartes de ton appli ?</p><div class="row"><button class="btn sm peach" id="delyes">Oui, supprimer</button><button class="btn sm ghost" id="delno">Annuler</button></div></div>`;
-      $("delno").onclick = () => { box.innerHTML = ""; };
-      $("delyes").onclick = async () => { const { error } = await trashRow("chapters", id); if (error) return fail(error, "Suppression impossible"); await loadAll(); state.cards = state.cards.filter(c => c.chapter_id !== id); location.hash = "#matiere-" + (s ? s.id : ""); };
+    $("tDel").onclick = async () => {
+      if (!(await askConfirm("Supprimer ce chapitre ?", "« " + ch.name + " » et ses cartes vont dans la corbeille (récupérables pendant 30 jours)."))) return;
+      await (async () => { const { error } = await trashRow("chapters", id); if (error) return fail(error, "Suppression impossible"); await loadAll(); state.cards = state.cards.filter(c => c.chapter_id !== id); location.hash = "#matiere-" + (s ? s.id : ""); })();
     };
     $("tExport").onclick = () => {
       if (!cards.length) return toast("Aucune carte à exporter.");
@@ -2623,10 +2656,9 @@
     if (!$("ssave")) return;
     if ($("scol")) wireColor($("scol"), c => { col = c; });
     $("ssave").onclick = async () => { const name = $("sn").value.trim(); if (!name) return toast("Le nom ne peut pas être vide."); const { error } = await sb.from("subjects").update({ name, color: col }).eq("id", s.id); if (error) return fail(error, "Matière non enregistrée"); closeSheet(); await loadAll(); screenSubject(s.id); toast("Matière enregistrée."); };
-    $("sdel").onclick = () => {
-      $("sbox").innerHTML = `<div class="stack"><p>Supprimer « ${esc(s.name)} » et ses chapitres de ton appli ?</p><div class="row"><button class="btn sm peach" id="sdy">Oui, supprimer</button><button class="btn sm ghost" id="sdn">Annuler</button></div></div>`;
-      $("sdn").onclick = () => { $("sbox").innerHTML = ""; };
-      $("sdy").onclick = async () => { const { error } = await trashRow("subjects", s.id); if (error) return fail(error, "Suppression impossible"); await loadAll(); location.hash = "#matieres"; };
+    $("sdel").onclick = async () => {
+      if (!(await askConfirm("Supprimer cette matière ?", "« " + s.name + " » et tous ses chapitres vont dans la corbeille (récupérables pendant 30 jours)."))) return;
+      await (async () => { const { error } = await trashRow("subjects", s.id); if (error) return fail(error, "Suppression impossible"); await loadAll(); closeSheet(); location.hash = "#matieres"; })();
     };
   }
 
@@ -2659,7 +2691,7 @@
         cells.push(`<button type="button" class="day${key === today ? " now" : ""}${ex.length ? " has" : ""}${did[key] ? " did" : ""}${vac ? " hol" : ""}"${vac ? ` title="Vacances : ${vac[0]}"` : ""} data-day="${key}" aria-pressed="${picked === key}" aria-label="${d}${ex.length ? ", contrôle : " + esc(ex.map(x => x.name).join(", ")) : ""}${did[key] ? ", jour révisé" : ""}"><span class="dn">${d}</span><i>${ex.map(x => `<b style="background:${esc(x.color)}"></b>`).join("")}</i>${ex.slice(0, 2).map(x => `<em style="--c:${esc(x.color)}">${esc(x.name)}</em>`).join("")}</button>`);
       }
       const up = upCtrls(), free = state.subjects.filter(isFree), onDay = picked ? ctrls().filter(c => c.d === picked) : [];
-      app.innerHTML = `${planSeg("mois")}<div class="row between" style="flex-wrap:wrap"><h1>Calendrier</h1><button class="btn sm" id="todayb">Aujourd'hui</button></div>
+      app.innerHTML = `<div class="jnav"><button class="linkbtn" id="calback">${I.back}Emploi du temps</button><span class="grow"></span><button class="btn sm" id="todayb">Aujourd'hui</button></div><h1 style="margin:0">Calendrier</h1>
         <div class="calwrap"><div class="card pad stack calcard"><div class="row between"><button class="iconbtn flat" id="prev" aria-label="Mois précédent">${I.back}</button><h2 class="calmonth">${ref.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}</h2><button class="iconbtn flat" id="nextm" aria-label="Mois suivant" style="transform:scaleX(-1)">${I.back}</button></div>
           <div class="cal calx">${["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map(x => `<span class="wd">${x}</span>`).join("")}${cells.join("")}</div>
           <div class="callegend"><span><i class="lg now"></i>Aujourd'hui</span><span><i class="lg did"></i>Jour révisé</span><span><i class="lg ex"></i>Contrôle</span><span><i class="lg hol"></i>Vacances (zone A)</span></div></div>
@@ -2671,6 +2703,7 @@
           <div class="card stats two"><div class="stat s1"><span class="sico">${I.check}</span><div><b>${daysDone}</b><span>${daysDone > 1 ? "jours révisés ce mois" : "jour révisé ce mois"}</span></div></div><div class="stat s2"><span class="sico">${I.bolt}</span><div><b>${Math.round(secs / 60)} min</b><span>de révision ce mois</span></div></div></div>
         </div></div>`;
       $("todayb").onclick = () => { jGo("jour", localDay()); };
+      $("calback").onclick = () => { jGo("jour"); };
       $("prev").onclick = () => { ref.setMonth(ref.getMonth() - 1); draw(); };
       $("nextm").onclick = () => { ref.setMonth(ref.getMonth() + 1); draw(); };
       app.querySelectorAll("[data-day]").forEach(b => b.onclick = () => jGo("jour", b.dataset.day));
@@ -2711,7 +2744,7 @@
       <div class="card pad stack prohero"><div class="level"><span class="lvl">Niveau ${lv.level}</span><div class="bar grow"><i style="width:${lv.pct}%"></i></div><span class="small muted">encore ${lv.left} pts</span></div>
         <a class="pshop" href="#boutique"><span class="mico">${I.coin}</span><span class="grow"><b>Boutique</b><span class="small">${plural(coins, "pièce", "pièces")} à dépenser</span></span><span class="pshopgo">Ouvrir</span></a>
         <p class="note">${lv.xp} points au total. 10 points par bonne réponse, 2 par erreur, 100 par chapitre maîtrisé à 100 %. ${streakInfo().left ? "Gel de série disponible : un jour raté cette semaine ne cassera pas ta série." : "Ton gel de série a déjà servi cette semaine."}</p></div>
-      <div class="prgrid">${go("recompenses", "star", "Récompenses", "Coffres, cadeaux")}${go("bilan", "chart", "Bilan", "Ta semaine")}${go("erreurs", "trap", "Erreurs", "Cartes ratées")}${go("minuteur", "clock", "Minuteur", "Sessions")}</div>
+      <div class="prgrid">${go("recompenses", "star", "Récompenses", "Coffres, cadeaux")}${go("bilan", "chart", "Bilan", "Ta semaine")}${go("erreurs", "trap", "Erreurs", "Cartes ratées")}</div>
       <div class="tiles"><div class="card tile"><b>${streak()}</b><span>jours d'affilée</span></div><div class="card tile"><b>${cards7}</b><span>cartes en 7 jours</span></div><div class="card tile"><b>${mins}</b><span>minutes en 7 jours</span></div><div class="card tile"><b>${mastery(state.cards)} %</b><span>maîtrise moyenne</span></div></div>
       <div class="card pad stack"><h2>Cartes révisées, 14 derniers jours</h2><div class="bars" role="img" aria-label="Cartes révisées par jour sur 14 jours">${d14.map(d => `<div><i style="height:${Math.max(3, d.cards_reviewed / max * 100)}%" class="${d.cards_reviewed ? "" : "zero"}" title="${d.cards_reviewed}"></i><span>${d.label}</span></div>`).join("")}</div></div>
       <div class="stack"><h2>Par matière</h2><div class="grid">${state.subjects.map(s => { const chs = state.chapters.filter(c => c.subject_id === s.id), cs = state.cards.filter(k => chs.some(c => c.id === k.chapter_id)), m = mastery(cs); return `<a class="card subject" style="--c:${esc(s.color)}" href="#matiere-${s.id}"><div class="row between"><div class="row"><span class="dot"></span><b>${esc(s.name)}</b></div><span class="small muted">${m} %</span></div><div class="bar"><i style="width:${m}%"></i></div></a>`; }).join("") || '<p class="muted">Aucune matière.</p>'}</div></div>
@@ -2780,6 +2813,9 @@
   // ---------- Journée : planning de révision en frise, façon « Structured » (onglet de la barre du bas) ----------
   // merge.journee (synchronisé) = { setup, blocks: { "AAAA-MM-JJ": [bloc] }, weekly: [bloc avec wd 0-6 = lundi-dimanche], off: { jour: true }, done: { "jour|id": true } }
   // bloc = { id, start "HH:MM", dur (min), s (matière), ch (chapitre ou null = choisi par Merge), act, title }
+  // Icônes au choix pour un bloc (surtout « Autre ») ; l'IA choisit aussi dans cette liste.
+  const BICONS = [["play", "Vidéo"], ["book", "Lecture"], ["steps", "Devoirs"], ["sum", "Fiche"], ["listen", "Écoute"], ["bolt", "Sport"], ["cup", "Repas"], ["bulb", "Projet"], ["duo", "À plusieurs"], ["map", "Sortie"], ["home", "Maison"], ["star", "Perso"]];
+  const bIcon = b => (b.ic && BICONS.some(x => x[0] === b.ic) ? I[b.ic] : I[actOf(b.act)[2]]);
   const ACTS = [["cartes", "Flashcards", "cards"], ["quiz", "Quiz", "quiz"], ["resume", "Résumé", "book"], ["exos", "Exercices", "steps"], ["controle", "Contrôle blanc", "check"], ["pause", "Pause", "cup"], ["libre", "Autre", "spark"]];
   const actOf = k => ACTS.find(a => a[0] === k) || ACTS[6];
   const jGet = () => { const j = jget("merge.journee", null) || {}; return { setup: !!j.setup, blocks: j.blocks && typeof j.blocks === "object" ? j.blocks : {}, weekly: Array.isArray(j.weekly) ? j.weekly : [], off: j.off || {}, done: j.done || {} }; };
@@ -2861,7 +2897,7 @@
     const h = mois ? "#mois" : "#calendrier"; if (location.hash !== h) location.hash = h; else if (mois) screenCalendar(); else screenPlanning();
   }
   function screenPlanning() {
-    const v = jView(); jDay = v.day; if (v.lvl === "semaine") screenSemaine(); else screenJournee();
+    const v = jView(); jDay = v.day; screenJournee();
     // Emploi du temps envoyé puis appli quittée : on récupère la lecture faite entre-temps.
     edtResume(e => { closeSheet(); if (e.ab && !e.ref) abSheet(); else if (location.hash === "#calendrier") screenPlanning(); });
   }
@@ -2908,13 +2944,13 @@
       if (it.school) { const sj = subjOfName(it.x.subject); rows.push(`<div class="jrow school"><span class="jpill" style="--c:${esc(sj ? sj.color : "#475569")};--h:${Math.min(96, Math.max(48, it.dur * .9))}px">${I.subj}</span><div class="jtxt"><span class="small muted">${esc(it.x.start)}–${esc(it.x.end)} (${durTxt(it.dur)})</span><b>Cours${sj ? " de " + esc(sj.name) : " : " + esc(it.x.subject)}</b>${it.x.room ? `<span class="small muted">Salle ${esc(it.x.room)}</span>` : ""}</div></div>`); }
       else { const b = it.b, done = isDone(j, jDay, b), s = subj(b.s), a = actOf(b.act), ch = b.ch && state.chapters.find(c => c.id === b.ch), auto = !b.ch && b.auto && b.s && bestChapter(b.s);
         const live = jDay === today && !done && mins(b.start) <= nowMin() && nowMin() < mins(b.start) + b.dur;
-        rows.push(`<div class="jrow${done ? " done" : ""}${live ? " live" : ""}" ${live ? liveAttrs(b) + ` ` : ""}style="--c:${esc(colorOf(b))}${live ? ";--p:" + ((nowMin() - mins(b.start)) / b.dur * 100).toFixed(1) + "%" : ""}"><button class="jpill" data-go="${b.id}" style="--h:${Math.min(120, Math.max(48, b.dur * 1.1))}px" aria-label="Lancer : ${esc(b.title || a[1])}">${I[a[2]]}</button>
+        rows.push(`<div class="jrow${done ? " done" : ""}${live ? " live" : ""}" ${live ? liveAttrs(b) + ` ` : ""}style="--c:${esc(colorOf(b))}${live ? ";--p:" + ((nowMin() - mins(b.start)) / b.dur * 100).toFixed(1) + "%" : ""}"><button class="jpill" data-go="${b.id}" style="--h:${Math.min(120, Math.max(48, b.dur * 1.1))}px" aria-label="Lancer : ${esc(b.title || a[1])}">${bIcon(b)}</button>
           <button class="jtxt" data-edit="${b.id}"><span class="small muted">${b.start}–${hm(mins(b.start) + b.dur)} (${durTxt(b.dur)})${b.weekly ? " · chaque semaine" : ""}</span><b>${esc(blockName(b))}</b>${live ? `<span class="small lrem">${remTxt(mins(b.start) + b.dur - nowMin())}</span>` : ""}${(() => { const cl = bChs(b).map(id => state.chapters.find(c => c.id === id).name); return cl.length ? `<span class="small muted">${esc(cl[0])}${cl.length > 1 ? " + " + (cl.length - 1) : ""}</span>` : auto ? `<span class="small muted">${esc(auto.name)}</span>` : ""; })()}</button>
           <button class="jcheck" data-done="${b.id}" role="checkbox" aria-checked="${done}" aria-label="Fait"><span>${done ? I.check : ""}</span></button></div>`); }
       prevEnd = Math.max(prevEnd || 0, st + it.dur);
     });
     const dots = k => { const bs = blocksOn(j, k).filter(b => b.act !== "pause").slice(0, 4); return bs.map(b => `<i style="background:${esc(colorOf(b))}"></i>`).join(""); };
-    app.innerHTML = `${planSeg("edt")}<div class="jnav"><button class="linkbtn" id="jup">${I.back}Semaine</button><span class="grow"></span>${jDay !== today ? `<button class="btn sm" id="jback">Aujourd'hui</button>` : ""}<button class="btn sm ghost" id="jhours" aria-pressed="${hours}">${I.clock}${hours ? "Frise" : "Heures"}</button></div><div class="jhead"><button class="jtitle" id="jtoday"><b>${sel.getDate()} ${esc(month.charAt(0).toUpperCase() + month.slice(1))}</b> <span>${sel.getFullYear()}</span></button>${edtGet().ab && ab ? `<span class="pill">Sem. ${ab}</span>` : ""}</div>
+    app.innerHTML = `<div class="jnav"><button class="linkbtn" id="jup">${I.back}Calendrier</button><span class="grow"></span>${jDay !== today ? `<button class="btn sm" id="jback">Aujourd'hui</button>` : ""}<button class="btn sm ghost" id="jhours" aria-pressed="${hours}">${I.clock}${hours ? "Frise" : "Heures"}</button></div><div class="jhead"><button class="jtitle" id="jtoday"><b>${sel.getDate()} ${esc(month)}</b> <span>${sel.getFullYear()}</span></button>${edtGet().ab && ab ? `<span class="pill">Sem. ${ab}</span>` : ""}</div>
       <div class="jweek"><button class="iconbtn flat" id="jprev" aria-label="Semaine précédente">${I.back}</button>${week.map(k => { const d = dayOf(k); return `<button class="jd${k === jDay ? " on" : ""}${k === today ? " now" : ""}" data-day="${k}"><span>${d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "")}</span><b>${d.getDate()}</b><span class="jdots">${dots(k)}</span></button>`; }).join("")}<button class="iconbtn flat" id="jnext" aria-label="Semaine suivante" style="transform:scaleX(-1)">${I.back}</button></div>
       <div class="jall"><button class="jround${j.off[jDay] ? " on" : ""}" id="joff" aria-pressed="${!!j.off[jDay]}"><span>${I.home}</span>Pas cours</button><button class="jround" id="jauto"><span>${I.bolt}</span>Remplir ma journée</button><button class="jround" id="jai"><span>${I.spark}</span>Demander à l'IA</button><button class="jround" id="jctl"><span>${I.plus}</span>Ajouter un contrôle</button></div>
       ${ctrlToday.length ? `<div class="jctls">${ctrlToday.map(x => `<a class="jctl" href="#matiere-${x.s.id}" style="--c:${esc(x.s.color)}"><span class="dot"></span><b>Contrôle de ${esc(x.s.name)}</b>${x.c.ch && x.c.ch.length ? `<span class="small muted">${plural(x.c.ch.length, "chapitre", "chapitres")}</span>` : ""}</a>`).join("")}</div>` : ""}
@@ -2922,7 +2958,7 @@
       ${edtGet().slots.length ? "" : `<button class="linkbtn" id="jedt">${I.cal}Ajouter mon emploi du temps</button>`}
       <button class="jfab" id="jadd" aria-label="Ajouter une révision">${I.plus}</button>`;
     const re = () => screenJournee();
-    $("jup").onclick = () => jGo("semaine");
+    $("jup").onclick = () => jGo("mois");
     $("jhours").onclick = () => jGo("jour", jDay, !hours);
     app.querySelectorAll(".jweek [data-day]").forEach(b => b.onclick = () => jGo("jour", b.dataset.day));
     // Semaine précédente / suivante : on se place sur le lundi (ou sur aujourd'hui si c'est la semaine en cours).
@@ -3033,6 +3069,9 @@
         ${one && ![...cc].some(id => (state.chapters.find(c => c.id === id) || {}).subject_id === sel[0].id) ? `<button type="button" class="switch" role="switch" id="bauto" aria-checked="${autoCh}"><i></i><span>Laisser Merge choisir le chapitre (${esc(one.name)})</span></button>` : ""}`;
       el.querySelector("#bcols").innerHTML = `<button type="button" class="bcol auto" data-bc="" aria-pressed="${!v.color}" aria-label="Couleur de la matière" style="--c:${esc(blockColor({ act: v.act, s: state.subjects.filter(x => ss.has(x.id)).map(x => x.id)[0] || null }))}"><i></i><span>Matière</span></button>` + BCOLORS.map(c => `<button type="button" class="bcol" data-bc="${c}" aria-pressed="${v.color === c}" aria-label="Couleur ${c}" style="--c:${c}"><i></i></button>`).join("");
       el.querySelectorAll("[data-bc]").forEach(x => x.onclick = () => { v.color = x.dataset.bc || null; paint(el); });
+      el.querySelector("#bicwrap").hidden = v.act === "pause";
+      el.querySelector("#bicons").innerHTML = `<button type="button" class="bic" data-bic="" aria-pressed="${!v.ic}" aria-label="Icône de l'activité">${I[actOf(v.act)[2]]}</button>` + BICONS.map(x => `<button type="button" class="bic" data-bic="${x[0]}" aria-pressed="${v.ic === x[0]}" aria-label="${x[1]}" title="${x[1]}">${I[x[0]]}</button>`).join("");
+      el.querySelectorAll("[data-bic]").forEach(x => x.onclick = () => { v.ic = x.dataset.bic || null; paint(el); });
       el.querySelector("#bdurs").innerHTML = durs.map(d => `<button type="button" class="chip" data-bd="${d}" aria-pressed="${v.dur === d}">${durTxt(d)}</button>`).join("") + `<button type="button" class="chip" data-bd="libre" aria-pressed="${!durs.includes(v.dur)}">Autre</button>`;
       el.querySelector("#bfree").hidden = durs.includes(v.dur) && !v.free;
       el.querySelector("#bslide").value = v.dur; el.querySelector("#bslv").textContent = durTxt(v.dur);
@@ -3048,6 +3087,7 @@
       <div class="bsec" id="bsubj"></div>
       <div class="bsec"><label class="label" for="bstart">Début</label><input id="bstart" class="btime" type="time" value="${esc(v.start)}"></div>
       <div class="bsec"><span class="label">Durée</span><div class="chips" id="bdurs"></div><div class="bfree" id="bfree" hidden><input type="range" id="bslide" min="5" max="300" step="5" aria-label="Durée en minutes"><b id="bslv"></b></div></div>
+      <div class="bsec" id="bicwrap"><span class="label">Icône</span><div class="bicons" id="bicons"></div></div>
       <div class="bsec"><span class="label">Couleur</span><div class="bcols" id="bcols"></div></div>
       <div class="bsec"><label class="label" for="btitle">Nom (facultatif)</label><input id="btitle" type="text" maxlength="60" value="${esc(v.title || "")}" placeholder="${"Ex. Fiche sur la mitose, Sport, Devoir de philo…"}"></div>
       ${edit && b.weekly ? '<p class="small muted">Ce bloc revient chaque semaine.</p>' : `<button type="button" class="switch" role="switch" id="bweek" aria-checked="false"><i></i><span>Répéter chaque semaine</span></button>`}
@@ -3058,21 +3098,21 @@
       el.querySelector("#bok").onclick = () => {
         const pause = v.act === "pause", subs = pause ? [] : state.subjects.filter(x => ss.has(x.id)).map(x => x.id), chs = pause ? [] : [...cc].filter(id => subs.includes((state.chapters.find(c => c.id === id) || {}).subject_id));
         const x = jGet(), nb = { id: edit ? b.id : jid(), start: el.querySelector("#bstart").value || v.start, dur: v.dur, s: subs[0] || null, ch: chs[0] || null, act: v.act, title: el.querySelector("#btitle").value.trim().slice(0, 60) };
-        if (subs.length > 1) nb.ss = subs; if (chs.length > 1) nb.chs = chs; if (v.color) nb.color = v.color; if (autoCh && subs.length === 1 && !chs.length) nb.auto = true;
+        if (subs.length > 1) nb.ss = subs; if (chs.length > 1) nb.chs = chs; if (v.color) nb.color = v.color; if (v.ic && v.act !== "pause") nb.ic = v.ic; if (autoCh && subs.length === 1 && !chs.length) nb.auto = true;
         if (v.act === "libre" && !nb.s && !nb.title) return toast("Donne un nom à ton activité.");
         if (edit && b.weekly) { const i = x.weekly.findIndex(y => y.id === b.id); if (i >= 0) x.weekly[i] = Object.assign(nb, { wd: b.wd }); }
         else if (!edit && weekly) x.weekly.push(Object.assign(nb, { wd: (dayOf(jDay).getDay() + 6) % 7 }));
         else { const l = x.blocks[jDay] || []; const i = l.findIndex(y => y.id === nb.id); if (i >= 0) l[i] = nb; else l.push(nb); x.blocks[jDay] = l; }
         jSave(x); closeSheet(); toast(edit ? "Modifié." : "Ajouté à ta journée."); screenJournee();
       };
-      if (el.querySelector("#bdel")) el.querySelector("#bdel").onclick = () => { const x = jGet(); if (b.weekly) x.weekly = x.weekly.filter(y => y.id !== b.id); else x.blocks[jDay] = (x.blocks[jDay] || []).filter(y => y.id !== b.id); jSave(x); closeSheet(); toast("Supprimé."); screenJournee(); };
+      if (el.querySelector("#bdel")) el.querySelector("#bdel").onclick = async () => { if (!(await askConfirm("Supprimer ce bloc ?", (b.weekly ? "Il revient chaque semaine : il sera supprimé de toutes les semaines. " : "") + "« " + blockName(b) + " » sera retiré de ton planning."))) return; const x = jGet(); if (b.weekly) x.weekly = x.weekly.filter(y => y.id !== b.id); else x.blocks[jDay] = (x.blocks[jDay] || []).filter(y => y.id !== b.id); jSave(x); closeSheet(); toast("Supprimé."); screenJournee(); };
     });
   }
   // Aperçu d'un plan (fait par Merge ou par l'IA) avant de l'ajouter.
   function previewSheet(plan, intro, byDay) {
     const days = byDay || { [jDay]: plan }, all = Object.entries(days).filter(([, l]) => l.length);
     sheet(`<div class="row"><span class="mico big">${I.spark}</span><h1>Ton plan</h1></div><p class="muted">${intro}</p>
-      ${all.map(([k, l]) => `${all.length > 1 || k !== jDay ? `<span class="label">${esc(fmtDate(k))}</span>` : ""}<div class="jprev">${l.map(b => { const s = state.subjects.find(x => x.id === b.s), a = actOf(b.act); return `<div class="row" style="--c:${esc(blockColor(b))}"><span class="jpill sm">${I[a[2]]}</span><span class="grow"><span class="small muted">${b.start} · ${durTxt(b.dur)}</span><br><b>${esc(b.title || (b.act === "pause" ? "Pause" : a[1] + (s ? " · " + s.name : "")))}</b></span></div>`; }).join("")}</div>`).join("")}
+      ${all.map(([k, l]) => `${all.length > 1 || k !== jDay ? `<span class="label">${esc(fmtDate(k))}</span>` : ""}<div class="jprev">${l.map(b => { const s = state.subjects.find(x => x.id === b.s), a = actOf(b.act); return `<div class="row" style="--c:${esc(blockColor(b))}"><span class="jpill sm">${bIcon(b)}</span><span class="grow"><span class="small muted">${b.start} · ${durTxt(b.dur)}</span><br><b>${esc(blockName(b))}</b></span></div>`; }).join("")}</div>`).join("")}
       <button class="btn" id="pok">Ajouter à ma journée</button><button class="btn ghost" data-close>Annuler</button>`, el => {
       el.querySelector("#pok").onclick = () => { const x = jGet(); all.forEach(([k, l]) => { x.blocks[k] = (x.blocks[k] || []).concat(l); }); jSave(x); closeSheet(); toast("Plan ajouté."); screenJournee(); };
     });
@@ -3094,7 +3134,7 @@
             jours: days.map(k => ({ date: k, pas_cours: !!j.off[k], cours: schoolOn(j, k).map(x => x.start + "-" + x.end + " " + x.subject), deja: blocksOn(j, k).map(b => ({ id: b.id, debut: b.start, duree: b.dur, act: b.act, matiere: (state.subjects.find(x => x.id === b.s) || {}).name || "", fait: isDone(j, k, b) })) })),
             matieres: state.subjects.map(s => ({ id: s.id, nom: s.name, controle: (nextCtrl(s) || {}).d || null, chapitres: state.chapters.filter(c => c.subject_id === s.id && cardsOf(c.id).length).map(c => ({ id: c.id, nom: c.name, a_revoir: dueCards(cardsOf(c.id)).length, maitrise: mastery(cardsOf(c.id)) })) })) };
           const r = await ai({ action: "planjour", demande: q, contexte: ctx }, "studio");
-          const ok = (r.blocks || []).map(b => ({ id: jid(), date: days.includes(b.date) ? b.date : jDay, start: /^([01]\d|2[0-3]):[0-5]\d$/.test(b.start || "") ? b.start : null, dur: Math.max(5, Math.min(240, Math.round(+b.dur || 0))), s: state.subjects.some(x => x.id === b.s) ? b.s : null, ch: state.chapters.some(c => c.id === b.ch && c.subject_id === b.s) ? b.ch : null, act: ACTS.some(a => a[0] === b.act) ? b.act : "libre", title: String(b.title || "").slice(0, 60) })).filter(b => b.start && b.dur);
+          const ok = (r.blocks || []).map(b => ({ id: jid(), date: days.includes(b.date) ? b.date : jDay, start: /^([01]\d|2[0-3]):[0-5]\d$/.test(b.start || "") ? b.start : null, dur: Math.max(5, Math.min(240, Math.round(+b.dur || 0))), s: state.subjects.some(x => x.id === b.s) ? b.s : null, ch: state.chapters.some(c => c.id === b.ch && c.subject_id === b.s) ? b.ch : null, act: ACTS.some(a => a[0] === b.act) ? b.act : "libre", title: String(b.title || "").slice(0, 60), ...(BICONS.some(x => x[0] === b.ic) ? { ic: b.ic } : {}) })).filter(b => b.start && b.dur);
           const moved = (r.deplacer || []).filter(m => m && m.id && days.includes(m.date) && /^([01]\d|2[0-3]):[0-5]\d$/.test(m.start || ""));
           if (moved.length) { const x = jGet(); moved.forEach(m => { Object.keys(x.blocks).forEach(k => { const i = (x.blocks[k] || []).findIndex(b => b.id === m.id); if (i >= 0) { const [b] = x.blocks[k].splice(i, 1); b.start = m.start; (x.blocks[m.date] = x.blocks[m.date] || []).push(b); } }); }); jSave(x); }
           if (!ok.length && !moved.length) throw new Error(r.message || "L'IA n'a rien proposé. Précise ta demande.");
@@ -3279,6 +3319,9 @@
   // Glisser le doigt vers la droite sur l'écran Prof ouvre l'historique (comme dans les applis de chat) ; vers la gauche le referme.
   (() => {
     let sx = 0, sy = 0, t0 = 0, okSwipe = false;
+    // Bord gauche ou droit de l'écran : iPhone y lance le geste « retour en arrière » des sites web. Dans l'appli on le coupe
+    // (sauf sur un bouton ou un champ, pour que les appuis marchent toujours) ; sur l'écran Prof ce geste ouvre l'historique.
+    document.addEventListener("touchstart", e => { const t = e.touches[0]; if ((t.clientX < 22 || t.clientX > innerWidth - 22) && !(e.target.closest && e.target.closest("a,button,input,textarea,select,label,[role=button],.sheetwrap"))) e.preventDefault(); }, { passive: false });
     document.addEventListener("touchstart", e => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; t0 = Date.now(); okSwipe = e.touches.length === 1 && !(e.target.closest && e.target.closest(".pctx,.chips,.pqchips,pre,.katex-display,textarea,input,.sheetwrap,table")); }, { passive: true });
     document.addEventListener("touchend", e => {
       if (!okSwipe) return; const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
@@ -3302,9 +3345,14 @@
     el.querySelectorAll("[data-pdclose]").forEach(b => b.onclick = close);
     el.querySelector("#pdnew").onclick = () => { el.remove(); $("pnew").click(); };
     el.querySelectorAll("[data-conv]").forEach(b => b.onclick = () => { p.cur = b.dataset.conv; profSave(p); el.remove(); screenExos(); });
-    el.querySelectorAll("[data-cdel]").forEach(b => b.onclick = () => {
-      if (b.dataset.ok !== "1") { b.dataset.ok = "1"; toast("Touche encore pour supprimer cette discussion."); return; }
-      p.convs = p.convs.filter(c => c.id !== b.dataset.cdel); if (p.cur === b.dataset.cdel) p.cur = null; profSave(p); el.remove(); screenExos(); if (p.convs.some(c => c.m.length)) histDrawer(profGet());
+    // Supprimer : on demande confirmation, puis on reste dans l'historique (la discussion ouverte ne change que si c'est elle qu'on supprime).
+    el.querySelectorAll("[data-cdel]").forEach(b => b.onclick = async () => {
+      const c = p.convs.find(x => x.id === b.dataset.cdel); if (!c) return;
+      if (!(await askConfirm("Supprimer cette discussion ?", "« " + (c.t || "Discussion") + " » sera effacée. Tu ne pourras pas la récupérer."))) return;
+      const wasCur = p.cur === c.id; p.convs = p.convs.filter(x => x.id !== c.id); if (wasCur) p.cur = null; profSave(p);
+      if (wasCur) screenExos();
+      el.remove(); histDrawer(profGet()); const nd = document.getElementById("pdrawer"); if (nd) nd.classList.add("open");
+      toast("Discussion supprimée.");
     });
   }
   // Champs de réponse d'un message de l'IA : choix de la façon de répondre, cases à remplir, ou réponses déjà envoyées.

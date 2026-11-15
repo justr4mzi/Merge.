@@ -592,9 +592,9 @@ async function corbeille(browser) {
   page = await open(browser, { w: 390, h: 844, theme: "light", trash: true });
   await go(page, "#chapitre-c1", 400); await page.click("#cardsdrop summary"); await page.waitForTimeout(100);
   const n0 = await page.locator("#list .term").count();
-  await page.click("#list [data-del] >> nth=0"); await page.click("#list [data-delyes]"); await page.waitForTimeout(300);
+  await page.click("#list [data-del] >> nth=0"); await page.click('#confirm [data-c="1"]'); await page.waitForTimeout(300);
   ok(await page.evaluate(() => window.__fake.DB.card_trash.length === 1), "corbeille : carte supprimée mise dans la corbeille");
-  await page.click("#tools summary"); await page.click("#tDel"); await page.click("#delyes"); await page.waitForTimeout(500);
+  await page.click("#tools summary"); await page.click("#tDel"); await page.click('#confirm [data-c="1"]'); await page.waitForTimeout(500);
   ok(await page.evaluate(() => !!window.__fake.DB.chapters.find(c => c.id === "c1").deleted_at), "corbeille : chapitre supprimé daté");
   await go(page, "#corbeille", 1500); const t = await txt(page);
   ok(t.includes("Chapitres") && t.includes("Cartes") && t.includes("jours"), "corbeille : liste avec jours restants", t.slice(0, 300) + " / " + page.errors.join(" "));
@@ -1018,7 +1018,7 @@ async function controleChapitres(browser) {
     if (w === 390) await page.screenshot({ path: path.join(SHOTS, "controles-matiere-390.png"), fullPage: true });
     let sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px minimum", sm.join(" | "));
     let o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
-    await page.click("[data-cdel] >> nth=0"); await page.click("[data-cdel] >> nth=0"); await page.waitForTimeout(300);
+    await page.click("[data-cdel] >> nth=0"); await page.click('#confirm [data-c="1"]'); await page.waitForTimeout(300);
     ok(await page.locator(".ctrlrow").count() === 1 && await page.evaluate(d => window.__fake.DB.subjects.find(s => s.id === "s1").exam_date !== d, d0), tag + " : premier contrôle supprimé, la date passe au suivant", await page.evaluate(() => localStorage.getItem("merge.controles") + " / " + window.__fake.DB.subjects.find(s => s.id === "s1").exam_date + " / " + document.querySelectorAll(".ctrlrow").length));
     // Calendrier : plusieurs matières le même jour.
     await page.evaluate(() => localStorage.setItem("merge.jview", JSON.stringify({ lvl: "jour" }))); await go(page, "#mois", 300); await page.click(".cal button.day >> nth=-2"); await page.waitForTimeout(500);
@@ -1093,7 +1093,7 @@ async function genially(browser) {
 async function corbeillePartout(browser) {
   // Un chapitre mis à la corbeille disparaît de partout (bug du 14 nov.).
   const page = await open(browser, { w: 390, h: 844, theme: "dark", trash: true });
-  await go(page, "#chapitre-c2", 400); await page.click("#tools summary"); await page.click("#tDel"); await page.click("#delyes"); await page.waitForTimeout(600);
+  await go(page, "#chapitre-c2", 400); await page.click("#tools summary"); await page.click("#tDel"); await page.click('#confirm [data-c="1"]'); await page.waitForTimeout(600);
   const gone = async (where) => { const t = await txt(page) + (await page.locator("#sheet").count() ? await page.locator("#sheet").innerText() : ""); ok(!t.includes("Brassage génétique"), "corbeille partout : " + where, t.slice(0, 200)); };
   await go(page, "#matiere-s1", 400); await gone("matière");
   await page.click("[data-cch] >> nth=0"); await page.waitForTimeout(150); await gone("choix des chapitres du contrôle"); await page.keyboard.press("Escape");
@@ -1180,11 +1180,13 @@ async function journee(browser) {
     await page.click("[data-done]"); await page.waitForTimeout(100); ok(await page.locator(".jrow.done").count() === 1, tag + " : bloc coché");
     await page.click("[data-go]"); await page.waitForTimeout(300); ok(/#cartes-c\d|#revision-s1/.test(await page.evaluate(() => location.hash)), tag + " : toucher le bloc lance la révision", await page.evaluate(() => location.hash));
     // Remonter : jour → semaine → mois, et retrouver le niveau après rechargement.
-    await go(page, "#calendrier", 400); await page.click("#jup"); await page.waitForTimeout(200); ok(await page.locator(".wkrow").count() === 7, tag + " : vue semaine");
+    await go(page, "#calendrier", 400); await page.click("#jup"); await page.waitForTimeout(250);
     if (w === 390) await page.screenshot({ path: path.join(SHOTS, "semaine-390.png") });
-    await page.click("#jup"); await page.waitForTimeout(200); ok(await page.locator(".cal.calx .day").count() >= 28 && await page.locator('.seg a[href="#mois"][aria-selected="true"]').count() === 1, tag + " : vue mois, sous-onglet Calendrier");
-    await page.click('#tabs a[href="#calendrier"]'); await page.waitForTimeout(300); ok(await page.locator(".wkrow").count() === 7 && await page.locator('.seg a[href="#calendrier"][aria-selected="true"]').count() === 1 && (await page.locator('#tabs a[href="#calendrier"]').innerText()).includes("Planning"), tag + " : l'onglet Planning ouvre l'emploi du temps, pas le mois");
-    await page.click('.seg a[href="#mois"]'); await page.waitForTimeout(300);
+    ok(await page.locator(".cal.calx .day").count() >= 28 && await page.locator(".seg").count() === 0 && await page.locator("#calback").count() === 1, tag + " : ‹ Calendrier ouvre le mois (plus de vue semaine ni de sous-onglets)");
+    await page.click('#tabs a[href="#calendrier"]'); await page.waitForTimeout(300); ok(await page.locator(".jline").count() === 1 && await page.locator(".jd.on.now").count() === 1 && (await page.locator('#tabs a[href="#calendrier"]').innerText()).includes("Planning"), tag + " : l'onglet Planning ramène à aujourd'hui");
+    await page.click(".jd >> nth=0"); await page.waitForTimeout(200); await page.click('#tabs a[href="#calendrier"]'); await page.waitForTimeout(300); ok(await page.locator(".jd.on.now").count() === 1, tag + " : retoucher Planning quand on y est déjà ramène à aujourd'hui");
+    await page.click("#jup"); await page.waitForTimeout(300);
+
     await page.click(".cal .day.now"); await page.waitForTimeout(300); ok(await page.locator(".jline").count() === 1, tag + " : toucher un jour ouvre sa frise");
     await page.click("#jhours"); await page.waitForTimeout(200); ok(await page.locator(".hgrid .hrow").count() === 18 && await page.locator(".hgrid .hblk").count() >= 1, tag + " : vue heure par heure");
     await page.evaluate(() => location.reload()); await page.waitForSelector("#app > *"); await go(page, "#calendrier", 500);
@@ -1255,6 +1257,10 @@ async function exos(browser) {
       await page.evaluate(() => { const fire = (type, x) => { const t = new Touch({ identifier: 1, target: document.getElementById("exth"), clientX: x, clientY: 400 }); document.getElementById("exth").dispatchEvent(new TouchEvent(type, { touches: type === "touchend" ? [] : [t], changedTouches: [t], bubbles: true })); }; fire("touchstart", 80); fire("touchend", 260); });
       await page.waitForTimeout(300); ok(await page.locator("#pdrawer.open").count() === 1, tag + " : glisser vers la droite ouvre l'historique");
     }
+    // Supprimer une discussion : confirmation, et on reste dans l'historique.
+    await page.click("#pdrawer .pdrow:not(.on) [data-cdel]"); await page.waitForTimeout(150);
+    ok(await page.locator("#confirm").count() === 1 && await page.locator("#pdrawer [data-conv]").count() === 2, tag + " : supprimer demande confirmation, rien n'est supprimé avant");
+    await page.click('#confirm [data-c="0"]'); await page.waitForTimeout(150); ok(await page.locator("#confirm").count() === 0 && await page.locator("#pdrawer [data-conv]").count() === 2, tag + " : Annuler ne supprime rien");
     await page.click("#pdrawer .pdrow:not(.on) [data-conv]"); await page.waitForTimeout(150); ok((await txt(page)).includes("Comment bien réviser ?"), tag + " : reprendre une ancienne discussion");
     // Depuis un chapitre : le chapitre est lié.
     if (w === 390) await page.screenshot({ path: path.join(SHOTS, "prof-conv-390.png") });
@@ -1398,7 +1404,7 @@ async function audit(browser) {
         }
         return [...new Set(out)].slice(0, 6);
       });
-      if (res.length) { probs.push("#" + r + " → " + res.join(" | ")); await page.screenshot({ path: path.join(SHOTS, "audit-" + w + "-" + r + ".png"), fullPage: true }); }
+      if (res.length || process.env.SHOTALL) { if (res.length) probs.push("#" + r + " → " + res.join(" | ")); await page.screenshot({ path: path.join(SHOTS, "audit-" + w + "-" + r + ".png") }); }
     }
     // Fenêtres.
     const sheets = [["#calendrier", "#jadd"], ["#calendrier", "#jai"], ["#calendrier", "#jctl"], ["#exos", "#pplus"], ["#exos", "#pctx"], ["#exos", "#phist"], ["#edt", null], ["#reglages", null], ["#boutique", null], ["#recompenses", null]];
@@ -1418,13 +1424,34 @@ async function audit(browser) {
   }
 }
 
+async function chasse(browser) {
+  // Chasse aux bugs : sur chaque écran, on touche chaque bouton (sauf suppressions et déconnexion) et on note les erreurs JavaScript.
+  const page = await open(browser, { w: 393, h: 852, theme: "dark" }), errs = [];
+  await page.evaluate(() => { window.confirm = () => false; window.print = () => {}; });
+  for (const r of ROUTES.filter(x => !/^(import|ecouter)/.test(x))) {
+    await go(page, "#" + r, 350);
+    const n = Math.min(+(process.env.CHASSE_N || 10), await page.locator("#app button:visible").count());
+    for (let i = 0; i < n; i++) {
+      await go(page, "#" + r, 120); await page.evaluate(() => { ["sheet", "confirm", "pdrawer"].forEach(id => { const e = document.getElementById(id); if (e) e.remove(); }); });
+      const b = page.locator("#app button:visible").nth(i); let label = "";
+      try { label = ((await b.getAttribute("aria-label")) || (await b.innerText())).slice(0, 30).replace(/\s+/g, " "); } catch (e) { continue; }
+      if (/supprim|déconnect|effacer|vider|réinitialis|archiver|tout effacer|corbeille/i.test(label)) continue;
+      const before = page.errors.length;
+      try { await b.click({ timeout: 1000 }); await page.waitForTimeout(150); } catch (e) { continue; }
+      if (page.errors.length > before) errs.push("#" + r + " [" + label + "] → " + page.errors.slice(before).join(" | ").slice(0, 160));
+    }
+  }
+  ok(!errs.length, "chasse aux bugs : aucun bouton ne provoque d'erreur", "\n   " + errs.slice(0, 30).join("\n   "));
+  await page.context().close();
+}
+
 async function progresClean(browser) {
   for (const [w, h] of [[390, 844], [1280, 800]]) {
     const page = await open(browser, { w, h, theme: "dark" }), tag = "progrès " + w;
     await go(page, "#progres", 400);
     ok(await page.locator('.pshop[href="#boutique"]').count() === 1 && (await page.locator(".pshop").innerText()).includes("Boutique"), tag + " : boutique bien visible");
     ok(await page.locator('.seg a[href="#duo"]').count() === 1, tag + " : Duo en sous-onglet");
-    for (const r of ["recompenses", "bilan", "erreurs", "minuteur"]) ok(await page.locator(`.ptile[href="#${r}"]`).count() === 1, tag + " : raccourci " + r);
+    for (const r of ["recompenses", "bilan", "erreurs"]) ok(await page.locator(`.ptile[href="#${r}"]`).count() === 1, tag + " : raccourci " + r);
     await page.click(".pshop"); await page.waitForTimeout(300); ok(await page.evaluate(() => location.hash === "#boutique"), tag + " : ouvre la boutique");
     await go(page, "#progres", 300);
     if (w === 390) await page.screenshot({ path: path.join(SHOTS, "progres-390.png"), fullPage: true });
@@ -1440,9 +1467,9 @@ let BASE;
   await new Promise(r => server.listen(0, "127.0.0.1", r)); BASE = "http://127.0.0.1:" + server.address().port;
   const browser = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] });
   try {
-    const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => !only || only.includes(n);
+    const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => only ? only.includes(n) : n !== "chasse";
     if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
-    const SUITES = { flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit };
+    const SUITES = { flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
     for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();

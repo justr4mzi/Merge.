@@ -46,10 +46,9 @@
       box.innerHTML = `<div class="stack"><div class="field"><label for="rn">Nom du chapitre</label><input id="rn" type="text" maxlength="80" value="${esc(ch.name)}"></div><button class="btn sm" id="rnsave">Renommer</button></div>`;
       $("rnsave").onclick = async () => { const name = $("rn").value.trim(); if (!name) return toast("Le nom ne peut pas être vide."); const { error } = await sb.from("chapters").update({ name, auto_name: false }).eq("id", id); if (error) return fail(error, "Nom non enregistré"); ch.name = name; ch.auto_name = false; screenChapter(id); };
     };
-    $("tDel").onclick = () => {
-      box.innerHTML = `<div class="stack"><p>Supprimer « ${esc(ch.name)} » et ses cartes de ton appli ?</p><div class="row"><button class="btn sm peach" id="delyes">Oui, supprimer</button><button class="btn sm ghost" id="delno">Annuler</button></div></div>`;
-      $("delno").onclick = () => { box.innerHTML = ""; };
-      $("delyes").onclick = async () => { const { error } = await trashRow("chapters", id); if (error) return fail(error, "Suppression impossible"); await loadAll(); state.cards = state.cards.filter(c => c.chapter_id !== id); location.hash = "#matiere-" + (s ? s.id : ""); };
+    $("tDel").onclick = async () => {
+      if (!(await askConfirm("Supprimer ce chapitre ?", "« " + ch.name + " » et ses cartes vont dans la corbeille (récupérables pendant 30 jours)."))) return;
+      await (async () => { const { error } = await trashRow("chapters", id); if (error) return fail(error, "Suppression impossible"); await loadAll(); state.cards = state.cards.filter(c => c.chapter_id !== id); location.hash = "#matiere-" + (s ? s.id : ""); })();
     };
     $("tExport").onclick = () => {
       if (!cards.length) return toast("Aucune carte à exporter.");
@@ -103,10 +102,9 @@
     if (!$("ssave")) return;
     if ($("scol")) wireColor($("scol"), c => { col = c; });
     $("ssave").onclick = async () => { const name = $("sn").value.trim(); if (!name) return toast("Le nom ne peut pas être vide."); const { error } = await sb.from("subjects").update({ name, color: col }).eq("id", s.id); if (error) return fail(error, "Matière non enregistrée"); closeSheet(); await loadAll(); screenSubject(s.id); toast("Matière enregistrée."); };
-    $("sdel").onclick = () => {
-      $("sbox").innerHTML = `<div class="stack"><p>Supprimer « ${esc(s.name)} » et ses chapitres de ton appli ?</p><div class="row"><button class="btn sm peach" id="sdy">Oui, supprimer</button><button class="btn sm ghost" id="sdn">Annuler</button></div></div>`;
-      $("sdn").onclick = () => { $("sbox").innerHTML = ""; };
-      $("sdy").onclick = async () => { const { error } = await trashRow("subjects", s.id); if (error) return fail(error, "Suppression impossible"); await loadAll(); location.hash = "#matieres"; };
+    $("sdel").onclick = async () => {
+      if (!(await askConfirm("Supprimer cette matière ?", "« " + s.name + " » et tous ses chapitres vont dans la corbeille (récupérables pendant 30 jours)."))) return;
+      await (async () => { const { error } = await trashRow("subjects", s.id); if (error) return fail(error, "Suppression impossible"); await loadAll(); closeSheet(); location.hash = "#matieres"; })();
     };
   }
 
@@ -139,7 +137,7 @@
         cells.push(`<button type="button" class="day${key === today ? " now" : ""}${ex.length ? " has" : ""}${did[key] ? " did" : ""}${vac ? " hol" : ""}"${vac ? ` title="Vacances : ${vac[0]}"` : ""} data-day="${key}" aria-pressed="${picked === key}" aria-label="${d}${ex.length ? ", contrôle : " + esc(ex.map(x => x.name).join(", ")) : ""}${did[key] ? ", jour révisé" : ""}"><span class="dn">${d}</span><i>${ex.map(x => `<b style="background:${esc(x.color)}"></b>`).join("")}</i>${ex.slice(0, 2).map(x => `<em style="--c:${esc(x.color)}">${esc(x.name)}</em>`).join("")}</button>`);
       }
       const up = upCtrls(), free = state.subjects.filter(isFree), onDay = picked ? ctrls().filter(c => c.d === picked) : [];
-      app.innerHTML = `${planSeg("mois")}<div class="row between" style="flex-wrap:wrap"><h1>Calendrier</h1><button class="btn sm" id="todayb">Aujourd'hui</button></div>
+      app.innerHTML = `<div class="jnav"><button class="linkbtn" id="calback">${I.back}Emploi du temps</button><span class="grow"></span><button class="btn sm" id="todayb">Aujourd'hui</button></div><h1 style="margin:0">Calendrier</h1>
         <div class="calwrap"><div class="card pad stack calcard"><div class="row between"><button class="iconbtn flat" id="prev" aria-label="Mois précédent">${I.back}</button><h2 class="calmonth">${ref.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}</h2><button class="iconbtn flat" id="nextm" aria-label="Mois suivant" style="transform:scaleX(-1)">${I.back}</button></div>
           <div class="cal calx">${["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map(x => `<span class="wd">${x}</span>`).join("")}${cells.join("")}</div>
           <div class="callegend"><span><i class="lg now"></i>Aujourd'hui</span><span><i class="lg did"></i>Jour révisé</span><span><i class="lg ex"></i>Contrôle</span><span><i class="lg hol"></i>Vacances (zone A)</span></div></div>
@@ -151,6 +149,7 @@
           <div class="card stats two"><div class="stat s1"><span class="sico">${I.check}</span><div><b>${daysDone}</b><span>${daysDone > 1 ? "jours révisés ce mois" : "jour révisé ce mois"}</span></div></div><div class="stat s2"><span class="sico">${I.bolt}</span><div><b>${Math.round(secs / 60)} min</b><span>de révision ce mois</span></div></div></div>
         </div></div>`;
       $("todayb").onclick = () => { jGo("jour", localDay()); };
+      $("calback").onclick = () => { jGo("jour"); };
       $("prev").onclick = () => { ref.setMonth(ref.getMonth() - 1); draw(); };
       $("nextm").onclick = () => { ref.setMonth(ref.getMonth() + 1); draw(); };
       app.querySelectorAll("[data-day]").forEach(b => b.onclick = () => jGo("jour", b.dataset.day));
@@ -191,7 +190,7 @@
       <div class="card pad stack prohero"><div class="level"><span class="lvl">Niveau ${lv.level}</span><div class="bar grow"><i style="width:${lv.pct}%"></i></div><span class="small muted">encore ${lv.left} pts</span></div>
         <a class="pshop" href="#boutique"><span class="mico">${I.coin}</span><span class="grow"><b>Boutique</b><span class="small">${plural(coins, "pièce", "pièces")} à dépenser</span></span><span class="pshopgo">Ouvrir</span></a>
         <p class="note">${lv.xp} points au total. 10 points par bonne réponse, 2 par erreur, 100 par chapitre maîtrisé à 100 %. ${streakInfo().left ? "Gel de série disponible : un jour raté cette semaine ne cassera pas ta série." : "Ton gel de série a déjà servi cette semaine."}</p></div>
-      <div class="prgrid">${go("recompenses", "star", "Récompenses", "Coffres, cadeaux")}${go("bilan", "chart", "Bilan", "Ta semaine")}${go("erreurs", "trap", "Erreurs", "Cartes ratées")}${go("minuteur", "clock", "Minuteur", "Sessions")}</div>
+      <div class="prgrid">${go("recompenses", "star", "Récompenses", "Coffres, cadeaux")}${go("bilan", "chart", "Bilan", "Ta semaine")}${go("erreurs", "trap", "Erreurs", "Cartes ratées")}</div>
       <div class="tiles"><div class="card tile"><b>${streak()}</b><span>jours d'affilée</span></div><div class="card tile"><b>${cards7}</b><span>cartes en 7 jours</span></div><div class="card tile"><b>${mins}</b><span>minutes en 7 jours</span></div><div class="card tile"><b>${mastery(state.cards)} %</b><span>maîtrise moyenne</span></div></div>
       <div class="card pad stack"><h2>Cartes révisées, 14 derniers jours</h2><div class="bars" role="img" aria-label="Cartes révisées par jour sur 14 jours">${d14.map(d => `<div><i style="height:${Math.max(3, d.cards_reviewed / max * 100)}%" class="${d.cards_reviewed ? "" : "zero"}" title="${d.cards_reviewed}"></i><span>${d.label}</span></div>`).join("")}</div></div>
       <div class="stack"><h2>Par matière</h2><div class="grid">${state.subjects.map(s => { const chs = state.chapters.filter(c => c.subject_id === s.id), cs = state.cards.filter(k => chs.some(c => c.id === k.chapter_id)), m = mastery(cs); return `<a class="card subject" style="--c:${esc(s.color)}" href="#matiere-${s.id}"><div class="row between"><div class="row"><span class="dot"></span><b>${esc(s.name)}</b></div><span class="small muted">${m} %</span></div><div class="bar"><i style="width:${m}%"></i></div></a>`; }).join("") || '<p class="muted">Aucune matière.</p>'}</div></div>
