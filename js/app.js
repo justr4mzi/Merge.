@@ -725,7 +725,8 @@
   function closeSheet() { const el = document.getElementById("sheet"); if (el) el.remove(); }
   function sheet(html, wire) {
     closeSheet(); const el = document.createElement("div"); el.className = "sheetwrap"; el.id = "sheet";
-    el.innerHTML = `<div class="sheet card" role="dialog" aria-modal="true">${html}</div>`;
+    // Bouton Fermer en haut à droite de chaque fenêtre (plus besoin de toucher à côté).
+    el.innerHTML = `<div class="sheet card" role="dialog" aria-modal="true"><button class="iconbtn flat sheetx" data-close aria-label="Fermer">${I.x}</button>${html}</div>`;
     el.onclick = e => { if (e.target === el || e.target.closest("[data-close]")) closeSheet(); };
     document.body.appendChild(el); if (wire) wire(el); const f = el.querySelector("a.btn,button.btn"); if (f) f.focus();
   }
@@ -2224,14 +2225,58 @@
     return { tomorrow: tm, subs: subs.slice(0, 3) };
   }
   // Lit une photo ou un PDF d'emploi du temps avec l'IA (1 appel) : renvoie la liste des cours. Utilisé par l'emploi du temps et l'onglet Journée.
-  async function edtRead(f, say = () => {}) {
+  // Lecture de l'emploi du temps par l'IA, côté serveur et en arrière-plan : on peut quitter l'appli pendant la lecture.
+  // Le serveur range le résultat dans user_kv (merge.edtjob) ; l'appli le récupère, même après avoir été fermée (merge.edtpending).
+  const edtNorm = slots => (slots || []).filter(x => x && x.subject && x.day >= 0 && x.day <= 5).map(x => ({ day: +x.day, start: String(x.start || "08:00").slice(0, 5), end: String(x.end || "09:00").slice(0, 5), subject: String(x.subject).slice(0, 60), room: String(x.room || "").slice(0, 30), week: x.week === "A" || x.week === "B" ? x.week : "" }));
+  // Barre de progression (estimée : une lecture prend en général 10 à 30 s).
+  function edtBar(el) {
+    if (!el) return { say() {}, stop() {} };
+    const t0 = Date.now(); el.className = "edtprog"; el.innerHTML = `<span class="small" data-t>Envoi…</span><div class="bar"><i style="width:4%"></i></div><span class="small muted">Tu peux quitter l'appli, la lecture continue.</span>`;
+    const tick = setInterval(() => { const i = el.querySelector(".bar i"); if (!i) return clearInterval(tick); i.style.width = Math.min(94, 4 + 90 * (1 - Math.exp(-(Date.now() - t0) / 14000))).toFixed(0) + "%"; }, 400);
+    return { say(t) { const x = el.querySelector("[data-t]"); if (x) x.textContent = t; }, stop(ok) { clearInterval(tick); const i = el.querySelector(".bar i"); if (i && ok) i.style.width = "100%"; } };
+  }
+  let edtPolling = null;
+  function edtWait(id) {
+    if (edtPolling && edtPolling.id === id) return edtPolling.p;
+    const p = new Promise((ok, ko) => {
+      const t0 = Date.now();
+      const step = async () => {
+        let v = null; try { const r = await sb.from("user_kv").select("value").eq("key", "merge.edtjob").maybeSingle(); v = r.data ? JSON.parse(r.data.value) : null; } catch (e) { v = null; }
+        if (v && v.id === id && v.status === "done") { safeSet("merge.edtpending", ""); return ok(edtNorm(v.slots)); }
+        if (v && v.id === id && v.status === "error") { safeSet("merge.edtpending", ""); return ko(new Error(v.error === "quota" ? QUOTA_MSG : v.error)); }
+        // Rien côté serveur au bout de 25 s : l'envoi a été coupé (appli quittée pendant l'envoi).
+        if ((!v || v.id !== id) && Date.now() - t0 > 25000) { safeSet("merge.edtpending", ""); return ko(new Error("L'envoi a été coupé avant la fin. Renvoie ton emploi du temps et laisse l'appli ouverte quelques secondes.")); }
+        if (Date.now() - t0 > 240000) { safeSet("merge.edtpending", ""); return ko(new Error("La lecture prend trop de temps. Réessaie.")); }
+        setTimeout(step, 1500);
+      };
+      step();
+    });
+    edtPolling = { id, p }; p.catch(() => {}).then(() => { if (edtPolling && edtPolling.id === id) edtPolling = null; });
+    return p;
+  }
+  async function edtRead(f, msgEl) {
+    const bar = edtBar(msgEl);
     let cv = document.createElement("canvas");
     if (/pdf/i.test(f.type) || /\.pdf$/i.test(f.name)) { await needPdf(); const lib = window.pdfjsLib; lib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js"; const doc = await lib.getDocument({ data: await f.arrayBuffer() }).promise, pg = await doc.getPage(1), vp = pg.getViewport({ scale: 2 }); cv.width = vp.width; cv.height = vp.height; await pg.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise; }
     else { let bmp; try { bmp = await createImageBitmap(f); } catch (er) { if (!window.heic2any) await new Promise((ok, ko) => { const sc = document.createElement("script"); sc.src = "vendor/heic2any.min.js"; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); }); const o = await window.heic2any({ blob: f, toType: "image/jpeg", quality: 0.85 }); bmp = await createImageBitmap(Array.isArray(o) ? o[0] : o); } const kk = Math.min(1, 1800 / Math.max(bmp.width, bmp.height)); cv.width = Math.round(bmp.width * kk); cv.height = Math.round(bmp.height * kk); cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height); }
-    say("L'IA lit ton emploi du temps…");
-    const r = await ai({ action: "edt", images: [{ mime: "image/jpeg", data: cv.toDataURL("image/jpeg", 0.85).split(",")[1] }], matieres: state.subjects.map(x => x.name) });
-    const got = ((r && r.content && r.content.slots) || []).filter(x => x && x.subject && x.day >= 0 && x.day <= 5).map(x => ({ day: +x.day, start: String(x.start || "08:00").slice(0, 5), end: String(x.end || "09:00").slice(0, 5), subject: String(x.subject).slice(0, 60), room: String(x.room || "").slice(0, 30), week: x.week === "A" || x.week === "B" ? x.week : "" }));
-    return got;
+    if (state.offline) { bar.stop(); throw new Error("Il faut être connecté à Internet pour lire ton emploi du temps."); }
+    const id = "e" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    safeSet("merge.edtpending", JSON.stringify({ id, at: Date.now() }));
+    try { await ai({ action: "edt_start", job_id: id, image: { data: cv.toDataURL("image/jpeg", 0.85).split(",")[1] }, matieres: state.subjects.map(x => x.name) }, "studio"); }
+    catch (e) { if (e.code) { safeSet("merge.edtpending", ""); bar.stop(); throw e; } }
+    bar.say("L'IA lit ton emploi du temps…");
+    try { const got = await edtWait(id); bar.stop(true); return got; } catch (e) { bar.stop(); throw e; }
+  }
+  // Applique des cours lus (au retour dans l'appli si elle avait été fermée pendant la lecture).
+  function edtApply(got) {
+    const e = edtGet(); e.slots = got; if (got.some(x => x.week)) e.ab = true; jset("merge.edt", e);
+    toast(plural(got.length, "cours ajouté", "cours ajoutés") + ". Vérifie et corrige si besoin.");
+    return e;
+  }
+  function edtResume(after) {
+    let p = null; try { p = JSON.parse(safeGet("merge.edtpending") || "null"); } catch (e) { p = null; }
+    if (!p || !p.id || Date.now() - p.at > 10 * 60000 || (edtPolling && edtPolling.id === p.id)) return;
+    edtWait(p.id).then(got => { if (!got.length) return toast("Je n'ai trouvé aucun cours sur ton emploi du temps."); const e = edtApply(got); if (after) after(e); }).catch(er => toast(er.message));
   }
   function screenEdt() {
     drawTabs("calendrier"); let e = edtGet(), view = "semaine", editing = null;
@@ -2273,15 +2318,15 @@
       $("es").focus();
     }
     async function fromFile(f) {
-      const msg = $("edtmsg"); msg.className = "note"; msg.textContent = "Lecture de ton emploi du temps…";
       try {
-        const got = await edtRead(f, t => { msg.textContent = t; });
+        const got = await edtRead(f, $("edtmsg"));
         if (!got.length) throw new Error("Je n'ai trouvé aucun cours sur cette image. Essaie une photo plus nette, ou ajoute tes cours à la main.");
         e.slots = got; if (got.some(x => x.week)) e.ab = true; save(); draw(); toast(plural(got.length, "cours ajouté", "cours ajoutés") + ". Vérifie et corrige si besoin.");
         if (e.ab && !e.ref) askAB();
       } catch (er) { showErr($("edtmsg"), er); }
     }
     draw();
+    edtResume(ne => { if (!location.hash.startsWith("#edt")) return; e = ne; draw(); if (e.ab && !e.ref) askAB(); });
   }
 
   // ---------- fiche méthode par matière (IA, 1 appel, gardée et synchronisée) ----------
@@ -2802,7 +2847,11 @@
     jset("merge.jview", { lvl: mois ? (v.lvl === "mois" ? "jour" : v.lvl) : lvl, day: day || v.day, hours: hours === undefined ? v.hours : hours });
     const h = mois ? "#mois" : "#calendrier"; if (location.hash !== h) location.hash = h; else if (mois) screenCalendar(); else screenPlanning();
   }
-  function screenPlanning() { const v = jView(); jDay = v.day; if (v.lvl === "semaine") screenSemaine(); else screenJournee(); }
+  function screenPlanning() {
+    const v = jView(); jDay = v.day; if (v.lvl === "semaine") screenSemaine(); else screenJournee();
+    // Emploi du temps envoyé puis appli quittée : on récupère la lecture faite entre-temps.
+    edtResume(e => { closeSheet(); if (e.ab && !e.ref) abSheet(); else if (location.hash === "#calendrier") screenPlanning(); });
+  }
   // Vue semaine : chaque jour en une ligne, avec ses contrôles, ses cours et ses révisions prévues.
   function screenSemaine() {
     drawTabs("calendrier"); const j = jGet(), mon = mondayOf(dayOf(jDay)), today = localDay();
@@ -2847,9 +2896,10 @@
       prevEnd = Math.max(prevEnd || 0, st + it.dur);
     });
     const dots = k => { const bs = blocksOn(j, k).filter(b => b.act !== "pause").slice(0, 4); return bs.map(b => `<i style="background:${esc(colorOf(b))}"></i>`).join(""); };
-    app.innerHTML = `${planSeg("edt")}<div class="jnav"><button class="linkbtn" id="jup">${I.back}Semaine</button><span class="grow"></span><button class="btn sm ghost" id="jhours" aria-pressed="${hours}">${hours ? "Vue frise" : "Heure par heure"}</button></div><div class="jhead"><button class="jtitle" id="jtoday"><b>${sel.getDate()}. ${esc(month.charAt(0).toUpperCase() + month.slice(1))}</b> <span>${sel.getFullYear()}</span>${jDay !== today ? " ›" : ""}</button>${edtGet().ab && ab ? `<span class="pill">Semaine ${ab}</span>` : ""}</div>
+    app.innerHTML = `${planSeg("edt")}<div class="jnav"><button class="linkbtn" id="jup">${I.back}Semaine</button><span class="grow"></span>${jDay !== today ? `<button class="btn sm" id="jback">Aujourd'hui</button>` : ""}<button class="btn sm ghost" id="jhours" aria-pressed="${hours}">${hours ? "Vue frise" : "Heure par heure"}</button></div><div class="jhead"><button class="jtitle" id="jtoday"><b>${sel.getDate()}. ${esc(month.charAt(0).toUpperCase() + month.slice(1))}</b> <span>${sel.getFullYear()}</span>${jDay !== today ? " ›" : ""}</button>${edtGet().ab && ab ? `<span class="pill">Semaine ${ab}</span>` : ""}</div>
       <div class="jweek"><button class="iconbtn flat" id="jprev" aria-label="Semaine précédente">${I.back}</button>${week.map(k => { const d = dayOf(k); return `<button class="jd${k === jDay ? " on" : ""}${k === today ? " now" : ""}" data-day="${k}"><span>${d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "")}</span><b>${d.getDate()}</b><span class="jdots">${dots(k)}</span></button>`; }).join("")}<button class="iconbtn flat" id="jnext" aria-label="Semaine suivante" style="transform:scaleX(-1)">${I.back}</button></div>
-      <div class="jall"><button class="jround${j.off[jDay] ? " on" : ""}" id="joff" aria-pressed="${!!j.off[jDay]}"><span>${I.home}</span>Pas cours</button>${ctrlToday.map(x => `<a class="jround on" href="#matiere-${x.s.id}" style="--c:${esc(x.s.color)}"><span>${I.check}</span>Contrôle ${esc(x.s.name)}</a>`).join("")}<button class="jround" id="jctl"><span>${I.check}</span>Ajouter un contrôle</button><button class="jround" id="jauto"><span>${I.bolt}</span>Remplir ma journée</button><button class="jround" id="jai"><span>${I.spark}</span>IA</button></div>
+      <div class="jall"><button class="jround${j.off[jDay] ? " on" : ""}" id="joff" aria-pressed="${!!j.off[jDay]}"><span>${I.home}</span>Pas cours</button><button class="jround" id="jauto"><span>${I.bolt}</span>Remplir ma journée</button><button class="jround" id="jai"><span>${I.spark}</span>Demander à l'IA</button><button class="jround" id="jctl"><span>${I.plus}</span>Ajouter un contrôle</button></div>
+      ${ctrlToday.length ? `<div class="jctls">${ctrlToday.map(x => `<a class="jctl" href="#matiere-${x.s.id}" style="--c:${esc(x.s.color)}"><span class="dot"></span><b>Contrôle de ${esc(x.s.name)}</b>${x.c.ch && x.c.ch.length ? `<span class="small muted">${plural(x.c.ch.length, "chapitre", "chapitres")}</span>` : ""}</a>`).join("")}</div>` : ""}
       ${hours ? hoursHtml(j, jDay, school, list, colorOf) : ""}<div class="jline"${hours ? " hidden" : ""}>${rows.join("") || `<div class="card pad stack jempty"><b>Rien de prévu ${jDay === today ? "aujourd'hui" : "ce jour-là"}.</b><p class="small muted">Touche + pour ajouter une révision (par exemple « Maths, 30 min »), « Remplir ma journée » pour un plan tout fait, ou « IA » pour le demander avec tes mots.</p></div>`}</div>
       ${edtGet().slots.length ? "" : `<button class="linkbtn" id="jedt">${I.cal}Ajouter mon emploi du temps</button>`}
       <button class="jfab" id="jadd" aria-label="Ajouter une révision">${I.plus}</button>`;
@@ -2857,9 +2907,12 @@
     $("jup").onclick = () => jGo("semaine");
     $("jhours").onclick = () => jGo("jour", jDay, !hours);
     app.querySelectorAll(".jweek [data-day]").forEach(b => b.onclick = () => jGo("jour", b.dataset.day));
-    if ($("jprev")) $("jprev").onclick = () => { const d = dayOf(jDay); d.setDate(d.getDate() - 7); jGo("jour", localDay(d)); };
-    if ($("jnext")) $("jnext").onclick = () => { const d = dayOf(jDay); d.setDate(d.getDate() + 7); jGo("jour", localDay(d)); };
+    // Semaine précédente / suivante : on se place sur le lundi (ou sur aujourd'hui si c'est la semaine en cours).
+    const weekJump = n => { const d = mondayOf(dayOf(jDay)); d.setDate(d.getDate() + 7 * n); const k = localDay(d); jGo("jour", localDay(mondayOf(new Date())) === k ? today : k); };
+    if ($("jprev")) $("jprev").onclick = () => weekJump(-1);
+    if ($("jnext")) $("jnext").onclick = () => weekJump(1);
     $("jtoday").onclick = () => jGo("jour", today);
+    if ($("jback")) $("jback").onclick = () => jGo("jour", today);
     $("jctl").onclick = () => ctrlDaySheet(jDay, re);
     app.querySelectorAll("[data-hour]").forEach(b => b.onclick = () => blockSheet(null, b.dataset.hour));
     $("joff").onclick = () => { const x = jGet(); if (x.off[jDay]) delete x.off[jDay]; else x.off[jDay] = true; jSave(x); toast(x.off[jDay] ? "Pas cours ce jour-là : toute la journée est libre." : "Cours remis."); re(); };
@@ -2944,7 +2997,7 @@
     if (b && b.auto) v.ch = "auto";
     const paint = el => {
       const chs = state.chapters.filter(c => c.subject_id === v.s), auto = v.s && bestChapter(v.s), noSubj = v.act === "pause";
-      el.querySelector("#bacts").innerHTML = ACTS.map(a => `<button type="button" class="chip" data-ba="${a[0]}" aria-pressed="${v.act === a[0]}">${I[a[2]]}&nbsp;${a[1]}</button>`).join("");
+      el.querySelector("#bacts").innerHTML = ACTS.map(a => `<button type="button" class="actbtn" data-ba="${a[0]}" aria-pressed="${v.act === a[0]}">${I[a[2]]}<span>${a[1]}</span></button>`).join("");
       const optSubj = v.act === "libre";
       el.querySelector("#bsubj").innerHTML = noSubj ? "" : `<span class="label">Matière${optSubj ? " (facultatif)" : ""}</span><div class="chips">${optSubj ? `<button type="button" class="chip" data-bs="" aria-pressed="${!v.s}">Aucune</button>` : ""}${state.subjects.map(x => `<button type="button" class="chip" data-bs="${x.id}" aria-pressed="${v.s === x.id}" style="--c:${esc(x.color)}"><span class="dot"></span>&nbsp;${esc(x.name)}</button>`).join("") || '<span class="small muted">Ajoute d\'abord une matière.</span>'}</div>
         ${chs.length ? `<label class="label" for="bch">Chapitre (facultatif)</label><select id="bch"><option value="">Aucun chapitre en particulier</option>${auto ? `<option value="auto"${v.ch === "auto" ? " selected" : ""}>Choisi par Merge : ${esc(auto.name)}</option>` : ""}${chs.map(c => `<option value="${c.id}"${v.ch === c.id ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select>` : ""}`;
@@ -2959,12 +3012,15 @@
       el.querySelectorAll("[data-bd]").forEach(x => x.onclick = () => { if (x.dataset.bd === "libre") { v.free = true; if (durs.includes(v.dur)) v.dur = Math.min(300, v.dur + 5); } else { v.free = false; v.dur = +x.dataset.bd; } paint(el); });
       if (el.querySelector("#bch")) el.querySelector("#bch").onchange = e => { v.ch = e.target.value || null; };
     };
-    sheet(`<h1>${edit ? "Modifier" : "Ajouter une révision"}</h1><div class="chips" id="bacts"></div><div class="stack" id="bsubj"></div>
-      <div class="row" style="flex-wrap:wrap;gap:12px"><div class="field"><label for="bstart">Début</label><input id="bstart" type="time" value="${esc(v.start)}"></div><div class="field grow"><span class="label">Durée</span><div class="chips" id="bdurs"></div><div class="bfree" id="bfree" hidden><input type="range" id="bslide" min="5" max="300" step="5" aria-label="Durée en minutes"><b id="bslv"></b></div></div></div>
-      <div class="field"><span class="label">Couleur</span><div class="bcols" id="bcols"></div></div>
-      <div class="field"><label for="btitle">Nom (facultatif)</label><input id="btitle" type="text" maxlength="60" value="${esc(v.title || "")}" placeholder="${"Ex. Fiche sur la mitose, Sport, Devoir de philo…"}"></div>
+    sheet(`<h1>${edit ? "Modifier" : "Ajouter au planning"}</h1>
+      <div class="bsec"><span class="label">Activité</span><div class="actgrid" id="bacts"></div></div>
+      <div class="bsec" id="bsubj"></div>
+      <div class="bsec"><label class="label" for="bstart">Début</label><input id="bstart" class="btime" type="time" value="${esc(v.start)}"></div>
+      <div class="bsec"><span class="label">Durée</span><div class="chips" id="bdurs"></div><div class="bfree" id="bfree" hidden><input type="range" id="bslide" min="5" max="300" step="5" aria-label="Durée en minutes"><b id="bslv"></b></div></div>
+      <div class="bsec"><span class="label">Couleur</span><div class="bcols" id="bcols"></div></div>
+      <div class="bsec"><label class="label" for="btitle">Nom (facultatif)</label><input id="btitle" type="text" maxlength="60" value="${esc(v.title || "")}" placeholder="${"Ex. Fiche sur la mitose, Sport, Devoir de philo…"}"></div>
       ${edit && b.weekly ? '<p class="small muted">Ce bloc revient chaque semaine.</p>' : `<button type="button" class="switch" role="switch" id="bweek" aria-checked="false"><i></i><span>Répéter chaque semaine</span></button>`}
-      <button class="btn" id="bok">${edit ? "Enregistrer" : "Ajouter"}</button>${edit ? '<button class="btn ghost" id="bdel">Supprimer</button>' : ""}`, el => {
+      <div class="sheetfoot">${edit ? '<button class="btn ghost" id="bdel">Supprimer</button>' : ""}<button class="btn grow" id="bok">${edit ? "Enregistrer" : "Ajouter"}</button></div>`, el => {
       paint(el); let weekly = false;
       el.querySelector("#bslide").oninput = e => { v.dur = +e.target.value; v.free = true; el.querySelector("#bslv").textContent = durTxt(v.dur); el.querySelectorAll("[data-bd]").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.bd === "libre" ? true : +x.dataset.bd === v.dur && false))); };
       if (el.querySelector("#bweek")) el.querySelector("#bweek").onclick = e => { weekly = !weekly; e.currentTarget.setAttribute("aria-checked", String(weekly)); };
@@ -3026,7 +3082,7 @@
       el.querySelector("#sedt").onchange = async ev => {
         const f = ev.target.files[0]; if (!f) return; const msg = el.querySelector("#sedtmsg");
         try {
-          const got = await edtRead(f, t => { msg.textContent = t; }); if (!got.length) throw new Error("Je n'ai trouvé aucun cours. Essaie un fichier plus net.");
+          const got = await edtRead(f, msg); if (!got.length) throw new Error("Je n'ai trouvé aucun cours. Essaie un fichier plus net.");
           const e = edtGet(); e.slots = got; e.ab = got.some(x => x.week); jset("merge.edt", e);
           toast(plural(got.length, "cours ajouté", "cours ajoutés") + ".");
           if (e.ab) abSheet(); else { closeSheet(); screenJournee(); }
@@ -3088,6 +3144,7 @@
     let raw = JSON.stringify(p); while (raw.length > 900000 && p.convs.length > 1) { p.convs.pop(); raw = JSON.stringify(p); }
     safeSet(PROF, raw);
   }
+  let profJustAnswered = false;
   const curConv = p => p.convs.find(c => c.id === p.cur);
   // Chapitres réellement envoyés : ceux cochés + tous ceux des matières liées (20 au plus).
   const ctxChapters = ctx => [...new Set(ctx.ch.concat(state.chapters.filter(c => ctx.s.includes(c.subject_id)).map(c => c.id)))].slice(0, 20);
@@ -3105,13 +3162,12 @@
       c.ctx.ch.push(arg); c.at = Date.now(); profSave(p);
     }
     const conv = curConv(p), msgs = conv.m, linked = conv.ctx.ch.length + conv.ctx.s.length;
+    app.classList.add("profmode");
     app.innerHTML = `<div class="row profhead"><button class="iconbtn flat" id="phist" aria-label="Mes discussions" title="Mes discussions">${I.menu}</button><h1 class="grow ptitle">${esc(conv.t || "Prof")}</h1><button class="iconbtn flat" id="pnew" aria-label="Nouvelle discussion" title="Nouvelle discussion">${I.edit}</button></div>
-      <div class="pctx">${ctxChips(conv.ctx)}<button class="pchip add" id="pctx">${I.book}${linked ? "Cours" : "Lier un cours"}</button></div>
-      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") : md(m.t) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.ask}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur les cours liés en haut. " : "Pour que je m'appuie sur ton cours, touche « Lier un cours » : un ou plusieurs chapitres, ou des matières entières. "}Demande un exercice, une explication, ou envoie la photo de ta copie avec le bouton +.</p></div>`}</div>
-      <div class="chips exquick">${EXO_QUICK.map((q, i) => `<button class="chip" data-q="${i}">${q[0]}</button>`).join("")}</div>
-      <div class="pcomp"><div id="eximg" class="pimg" hidden></div><div class="pbar"><button class="iconbtn flat" id="pplus" aria-label="Ajouter une photo ou un cours">${I.plus}</button><textarea id="exq" rows="1" maxlength="2000" placeholder="Écris ton message…"></textarea>${canDictate() ? `<button class="iconbtn flat" id="exmic" aria-label="Dicter">${I.mic}</button>` : ""}<button class="iconbtn psend" id="exsend" aria-label="Envoyer">${I.send}</button></div>
-      <input id="exphoto" type="file" accept="image/*" capture="environment" hidden><input id="exfile" type="file" accept="image/*" hidden></div>
-      <p class="note">${linked ? "Le prof s'appuie sur les cours liés" : "Sans cours lié, le prof répond avec ses connaissances de lycée"} ; il peut se tromper sur un calcul. 1 message = 1 appel IA.</p>`;
+      <div class="pctx">${ctxChips(conv.ctx)}<button class="pchip add" id="pctx">${I.book}${linked ? "Modifier" : "Lier un cours"}</button></div>
+      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") : md(m.t) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.prof}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur les cours liés en haut. " : "Pour que je m'appuie sur ton cours, touche « Lier un cours » : un ou plusieurs chapitres, ou des matières entières. "}Demande un exercice, une explication, ou envoie la photo de ta copie avec le bouton +.</p><div class="chips exquick">${EXO_QUICK.map((q, i) => `<button class="chip" data-q="${i}">${q[0]}</button>`).join("")}</div><p class="small muted">${linked ? "Le prof s'appuie sur les cours liés" : "Sans cours lié, le prof répond avec ses connaissances de lycée"} ; il peut se tromper sur un calcul. 1 message = 1 appel IA.</p></div>`}</div>
+      <div class="pcomp"><div id="eximg" class="pimg" hidden></div><div class="pbar"><button class="iconbtn flat" id="pplus" aria-label="Ajouter une photo, un cours ou une demande rapide">${I.plus}</button><textarea id="exq" rows="1" maxlength="2000" placeholder="Écris ton message…"></textarea>${canDictate() ? `<button class="iconbtn flat" id="exmic" aria-label="Dicter">${I.mic}</button>` : ""}<button class="iconbtn psend" id="exsend" aria-label="Envoyer">${I.send}</button></div>
+      <input id="exphoto" type="file" accept="image/*" capture="environment" hidden><input id="exfile" type="file" accept="image/*" hidden></div>`;
     const save = () => { conv.at = Date.now(); profSave(p); };
     // Cours liés.
     app.querySelectorAll("[data-unctx]").forEach(b => b.onclick = () => { const [k, id] = b.dataset.unctx.split(":"); conv.ctx[k === "s" ? "s" : "ch"] = conv.ctx[k === "s" ? "s" : "ch"].filter(x => x !== id); save(); screenExos(); });
@@ -3130,7 +3186,10 @@
     // Façon de répondre : dans des cases ici, ou sur le cahier puis une photo de la copie.
     app.querySelectorAll("[data-fmode]").forEach(b => b.onclick = () => { const m = msgs[+b.dataset.fmode]; if (!m) return; m.ici = b.dataset.m === "ici"; m.cahier = !m.ici; save(); screenExos(); });
     app.querySelectorAll("[data-fphoto]").forEach(b => b.onclick = () => $("exphoto").click());
-    const th = $("exth"); th.scrollTop = th.scrollHeight;
+    // Défilement : on montre le début de la dernière réponse du prof (comme dans une appli de chat), sinon le bas.
+    const th = $("exth"), lastAi = th.querySelector(".exmsg.ai:last-child");
+    if (lastAi && profJustAnswered) th.scrollTop = Math.max(0, lastAi.offsetTop - th.offsetTop - 8); else th.scrollTop = th.scrollHeight;
+    profJustAnswered = false;
     const q = $("exq"), grow = () => { q.style.height = "auto"; q.style.height = Math.min(160, q.scrollHeight) + "px"; };
     q.oninput = grow;
     q.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && matchMedia("(hover: hover)").matches) { e.preventDefault(); send(); } };
@@ -3139,7 +3198,8 @@
     const showImg = () => { const el = $("eximg"); el.hidden = !img; el.innerHTML = img ? `<img src="data:image/jpeg;base64,${img.data}" alt="Photo jointe"><span class="small">Photo prête</span><button class="iconbtn flat" id="pimgx" aria-label="Retirer la photo">${I.x}</button>` : ""; if (img) $("pimgx").onclick = () => { img = null; showImg(); }; };
     const onPhoto = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; try { img = await shrinkImage(f); showImg(); if (!q.value.trim()) q.value = "Voici ma copie : dis-moi ce qui est juste dans mon raisonnement et où je me suis trompé."; grow(); } catch (er) { toast("Photo illisible."); } };
     $("exphoto").onchange = onPhoto; $("exfile").onchange = onPhoto;
-    $("pplus").onclick = () => sheet(`<h1>Ajouter</h1><div class="stack"><button class="btn ghost" id="pa-cam">${I.cam}Prendre une photo</button><button class="btn ghost" id="pa-img">${I.img}Choisir une photo</button><button class="btn ghost" id="pa-ctx">${I.book}Lier un cours</button></div>`, el => {
+    $("pplus").onclick = () => sheet(`<h1>Ajouter</h1><div class="actgrid"><button class="actbtn" id="pa-cam">${I.cam}<span>Prendre une photo</span></button><button class="actbtn" id="pa-img">${I.img}<span>Choisir une photo</span></button><button class="actbtn" id="pa-ctx">${I.book}<span>Lier un cours</span></button></div><span class="label">Demandes rapides</span><div class="chips">${EXO_QUICK.map((x, i) => x[1] ? `<button class="chip" data-pq="${i}">${x[0]}</button>` : "").join("")}</div>`, el => {
+      el.querySelectorAll("[data-pq]").forEach(b => b.onclick = () => { closeSheet(); q.value = EXO_QUICK[+b.dataset.pq][1]; send(); });
       el.querySelector("#pa-cam").onclick = () => { closeSheet(); $("exphoto").click(); };
       el.querySelector("#pa-img").onclick = () => { closeSheet(); $("exfile").click(); };
       el.querySelector("#pa-ctx").onclick = () => { closeSheet(); $("pctx").click(); };
@@ -3160,7 +3220,7 @@
         const r = await ai({ action: "exochat", want_title: !conv.named, chapter_ids: ctxChapters(conv.ctx), matieres: subjNames, messages: msgs.slice(-12).map(m => ({ r: m.r, t: m.t })), image: photo }, "studio");
         if (!conv.named && r.title) { conv.t = String(r.title).slice(0, 60); conv.named = true; }
         msgs.push(Object.assign({ r: "a", t: String(r.answer || "").slice(0, 8000) }, Array.isArray(r.fields) && r.fields.length ? { f: r.fields.map(x => String(x).slice(0, 120)).slice(0, 6) } : {})); save();
-        if (location.hash.startsWith("#exos")) screenExos();
+        profJustAnswered = true; if (location.hash.startsWith("#exos")) screenExos();
       } catch (e) { const w = th.querySelector(".wait"); if (w) { w.classList.remove("wait"); w.textContent = e.message || "L'IA n'a pas répondu. Réessaie."; } $("exsend").disabled = false; }
     }
   }
@@ -3168,14 +3228,15 @@
   function ctxSheet(conv, done) {
     const ch = new Set(conv.ctx.ch), ss = new Set(conv.ctx.s);
     const list = state.subjects.map(s => ({ s, l: state.chapters.filter(c => c.subject_id === s.id) })).filter(x => x.l.length);
-    sheet(`<h1>Cours liés</h1><p class="muted small">Le prof s'appuiera sur ces cours. Choisis autant de chapitres et de matières que tu veux.</p>
-      ${list.map(({ s, l }) => `<div class="card pad stack pctxs" style="border-left:4px solid ${esc(s.color)}"><div class="row between"><b>${esc(s.name)}</b><button class="chip${ss.has(s.id) ? " on" : ""}" data-cs="${s.id}" aria-pressed="${ss.has(s.id)}">Toute la matière</button></div><div class="chips">${l.map(c => `<button class="chip${ch.has(c.id) || ss.has(s.id) ? " on" : ""}" data-cc="${c.id}" data-sid="${s.id}" aria-pressed="${ch.has(c.id)}"${ss.has(s.id) ? " disabled" : ""}>${esc(c.name)}</button>`).join("")}</div></div>`).join("") || '<p class="muted">Crée d\'abord un chapitre dans Matières.</p>'}
-      <div class="row"><button class="btn ghost grow" id="pctxnone">Aucun cours</button><button class="btn grow" id="pctxok">Valider</button></div>`, el => {
+    const row = (c, s) => { const on = ss.has(s.id) || ch.has(c.id); return `<button type="button" class="ctxrow" data-cc="${c.id}" data-sid="${s.id}" aria-pressed="${on}"${ss.has(s.id) ? " disabled" : ""}><span class="ctxbox">${I.check}</span><span class="grow">${esc(c.name)}</span></button>`; };
+    sheet(`<h1>Cours liés</h1><p class="muted small">Le prof s'appuiera sur ces cours. Coche des chapitres, ou toute une matière.</p>
+      <div class="ctxlist">${list.map(({ s, l }) => `<div class="ctxsub" style="--c:${esc(s.color)}"><div class="ctxhead"><span class="dot"></span><b class="grow">${esc(s.name)}</b><button type="button" class="switch" role="switch" data-cs="${s.id}" aria-checked="${ss.has(s.id)}"><i></i><span>Toute la matière</span></button></div>${l.map(c => row(c, s)).join("")}</div>`).join("") || '<p class="muted">Crée d\'abord un chapitre dans Matières.</p>'}</div>
+      <div class="sheetfoot"><button class="btn ghost" id="pctxnone">Aucun cours</button><button class="btn grow" id="pctxok">Valider</button></div>`, el => {
       el.querySelectorAll("[data-cs]").forEach(b => b.onclick = () => {
-        const id = b.dataset.cs, on = !ss.has(id); on ? ss.add(id) : ss.delete(id); b.classList.toggle("on", on); b.setAttribute("aria-pressed", on);
-        el.querySelectorAll(`[data-sid="${id}"]`).forEach(c => { c.disabled = on; c.classList.toggle("on", on || ch.has(c.dataset.cc)); if (on) ch.delete(c.dataset.cc); });
+        const id = b.dataset.cs, on = !ss.has(id); on ? ss.add(id) : ss.delete(id); b.setAttribute("aria-checked", String(on));
+        el.querySelectorAll(`[data-sid="${id}"]`).forEach(c => { c.disabled = on; if (on) ch.delete(c.dataset.cc); c.setAttribute("aria-pressed", String(on || ch.has(c.dataset.cc))); });
       });
-      el.querySelectorAll("[data-cc]").forEach(b => b.onclick = () => { const id = b.dataset.cc, on = !ch.has(id); on ? ch.add(id) : ch.delete(id); b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
+      el.querySelectorAll("[data-cc]").forEach(b => b.onclick = () => { const id = b.dataset.cc, on = !ch.has(id); on ? ch.add(id) : ch.delete(id); b.setAttribute("aria-pressed", String(on)); });
       el.querySelector("#pctxnone").onclick = () => { conv.ctx = { ch: [], s: [] }; closeSheet(); done(); };
       el.querySelector("#pctxok").onclick = () => { conv.ctx = { ch: [...ch].filter(id => !ss.has((state.chapters.find(c => c.id === id) || {}).subject_id)), s: [...ss] }; closeSheet(); done(); };
     });
@@ -4234,7 +4295,7 @@
   let enterT = null;
   function route() {
     app.classList.remove("enter"); void app.offsetWidth; app.classList.add("enter"); clearTimeout(enterT); enterT = setTimeout(() => app.classList.remove("enter"), 700);
-    document.body.classList.remove("nav");
+    document.body.classList.remove("nav"); app.classList.toggle("profmode", /^#exos/.test(location.hash));
     if (location.hash.startsWith("#partage-")) return screenShared(location.hash.slice(9));
     // Lien d'invitation Duo (#duo-CODE) : on garde le code, même s'il faut d'abord se connecter, puis on ouvre l'onglet Duo.
     if (/^#duo-./.test(location.hash)) { const c = decodeURIComponent(location.hash.slice(5)).trim().slice(0, 64); if (c) safeSet("merge.duoin", c); history.replaceState(null, "", location.pathname + location.search + "#duo"); }

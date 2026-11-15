@@ -493,7 +493,10 @@ async function recompenses(browser) {
 async function edt(browser) {
   const page = await open(browser, { w: 390, h: 844, theme: "light" });
   await go(page, "#edt", 300); ok((await txt(page)).includes("Ajoute ton emploi du temps"), "emploi du temps : écran vide");
-  await page.setInputFiles("#edtf", path.join(SHOTS, "390-dark-accueil.png")); await page.waitForTimeout(800);
+  await page.setInputFiles("#edtf", path.join(SHOTS, "390-dark-accueil.png")); await page.waitForTimeout(300);
+  ok(await page.locator("#edtmsg .bar").count() === 1 && (await page.locator("#edtmsg").innerText()).includes("quitter l'appli"), "emploi du temps : barre de chargement, on peut quitter");
+  await page.waitForSelector(".edtslot", { timeout: 8000 }).catch(() => {});
+  ok(await page.evaluate(() => !!window.__fake.edt && window.__fake.edt.action === "edt_start" && !localStorage.getItem("merge.edtpending")), "emploi du temps : lu en arrière-plan côté serveur");
   ok(await page.locator(".edtslot").count() >= 3, "emploi du temps : lu depuis une photo");
   ok(await page.locator("[data-ab]").count() === 2 && /du lundi \d+.* au vendredi \d+/.test(await page.locator("#sheet").innerText()), "emploi du temps : demande semaine A ou B, avec les dates");
   await page.click('[data-ab="A"]'); await page.waitForTimeout(200);
@@ -1022,7 +1025,7 @@ async function controleChapitres(browser) {
     if (await page.locator("#sheet [data-close]").count()) { await page.click("#sheet [data-close]"); await page.waitForTimeout(150); }
     await page.click("#jctl"); await page.click('#sheet [data-sub="s1"]'); await page.waitForTimeout(250); await page.click("#ccok"); await page.waitForTimeout(150);
     await page.click("#jctl"); await page.click('#sheet [data-sub="s2"]'); await page.waitForTimeout(250); await page.click("#ccok"); await page.waitForTimeout(150);
-    ok(await page.locator('.jall a.jround.on').count() === 2, tag + " : deux contrôles le même jour");
+    ok(await page.locator('.jctls a.jctl').count() === 2 && await page.locator('#jctl').count() === 1, tag + " : deux contrôles le même jour");
     // Révision combinée : tout un dossier, puis plusieurs matières, dossiers ou chapitres au choix.
     await go(page, "#dossier-g1", 400); ok(await page.locator('a[href="#revdossier-g1"]').count() === 1, tag + " : bouton réviser tout le dossier");
     await page.click('a[href="#revdossier-g1"]'); await page.waitForTimeout(400); ok(await page.locator(".session").count() === 1, tag + " : session du dossier lancée");
@@ -1234,7 +1237,7 @@ async function exos(browser) {
     await page.click("#exsend"); await page.waitForTimeout(400);
     ok(await page.evaluate(() => !!(window.__fake.exo.image && window.__fake.exo.image.data.length > 1000)) && await page.locator("#eximg img").count() === 0, tag + " : photo envoyée à l'IA");
     // Lier une matière entière.
-    await page.click("#pctx"); await page.waitForTimeout(150); await page.click('#sheet [data-cs="s1"]'); await page.waitForTimeout(50);
+    await page.click("#pctx"); await page.waitForTimeout(150); if (w === 390) await page.screenshot({ path: path.join(SHOTS, "prof-cours-390.png") }); await page.click('#sheet [data-cs="s1"]'); await page.waitForTimeout(50);
     ok(await page.locator('#sheet [data-sid="s1"]:disabled').count() >= 1, tag + " : toute la matière coche ses chapitres");
     await page.click("#pctxok"); await page.waitForTimeout(150);
     await page.fill("#exq", "Résume-moi la matière"); await page.click("#exsend"); await page.waitForTimeout(400);
@@ -1245,9 +1248,11 @@ async function exos(browser) {
     if (w === 390) await page.screenshot({ path: path.join(SHOTS, "prof-menu-390.png") });
     await page.click("#pdrawer .pdrow:not(.on) [data-conv]"); await page.waitForTimeout(150); ok((await txt(page)).includes("Comment bien réviser ?"), tag + " : reprendre une ancienne discussion");
     // Depuis un chapitre : le chapitre est lié.
+    if (w === 390) await page.screenshot({ path: path.join(SHOTS, "prof-conv-390.png") });
     await go(page, "#chapitre-c1", 400); ok(await page.locator('a[href="#exos-c1"]').count() >= 1, tag + " : depuis le chapitre aussi");
     await go(page, "#exos-c1", 300); ok(await page.locator('[data-unctx="c:c1"]').count() === 1 && await page.locator(".exmsg").count() === 0, tag + " : chapitre lié dans une nouvelle discussion");
-    if (w === 390) await page.screenshot({ path: path.join(SHOTS, "prof-390.png"), fullPage: true });
+    if (w === 390) await page.screenshot({ path: path.join(SHOTS, "prof-390.png") });
+    ok(await page.evaluate(() => { const d = document.scrollingElement; return d.scrollHeight <= innerHeight + 2; }), tag + " : écran Prof fixe, rien ne glisse sauf la conversation");
     const sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px", sm.join(" | "));
     const o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
     // Anciennes conversations par chapitre reprises.
@@ -1280,6 +1285,18 @@ async function planningPlus(browser) {
   await page.click(".hcheck >> nth=0"); await page.waitForTimeout(150); ok(await page.locator(".hblk.done").count() === 1, tag + " : bloc coché dans la vue heures");
   const sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px", sm.join(" | "));
   await page.click("#jhours"); await page.waitForTimeout(150);
+  // Semaine suivante depuis un dimanche : on tombe sur le lundi ; bouton Aujourd'hui pour revenir.
+  await page.evaluate(() => { const d = new Date(); d.setDate(d.getDate() + 14 + ((7 - d.getDay()) % 7)); const k = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); localStorage.setItem("merge.jview", JSON.stringify({ lvl: "jour", day: k, hours: false })); });
+  await go(page, "#calendrier", 400); await page.click("#jnext"); await page.waitForTimeout(200);
+  ok(await page.evaluate(() => new Date(JSON.parse(localStorage.getItem("merge.jview")).day + "T00:00:00").getDay() === 1), tag + " : semaine suivante depuis un dimanche → lundi");
+  ok(await page.locator("#jback").count() === 1, tag + " : bouton Aujourd'hui quand on n'est pas sur aujourd'hui");
+  await page.click("#jback"); await page.waitForTimeout(200); ok(await page.locator("#jback").count() === 0 && await page.locator(".jd.on.now").count() === 1, tag + " : retour à aujourd'hui");
+  await page.screenshot({ path: path.join(SHOTS, "planning-jour-390.png") });
+  ok(await page.evaluate(() => { const g = document.querySelector(".jall"); return g.scrollWidth <= g.clientWidth + 1 && g.lastElementChild.id === "jctl"; }), tag + " : actions du jour sans glisser, « Ajouter un contrôle » à droite");
+  // Fenêtres : bouton Fermer.
+  await page.click("#jadd"); await page.waitForTimeout(150); ok(await page.locator("#sheet .sheetx").count() === 1 && await page.locator("#sheet .actbtn").count() === 7, tag + " : fenêtre d'ajout avec bouton Fermer et activités alignées");
+  if (true) await page.screenshot({ path: path.join(SHOTS, "ajout-bloc-390.png") });
+  await page.click("#sheet .sheetx"); await page.waitForTimeout(150); ok(await page.locator("#sheet").count() === 0, tag + " : le bouton Fermer ferme la fenêtre");
   // Dictée sans reconnaissance vocale du téléphone : enregistrement, transcrit par l'IA.
   await page.click("#jai"); await page.waitForTimeout(150); ok(await page.locator("#aimic").count() === 1, tag + " : micro présent même sans dictée du téléphone");
   await page.click("#aimic"); await page.waitForTimeout(1500); await page.click("#aimic"); await page.waitForTimeout(800);
@@ -1338,6 +1355,15 @@ async function icones(browser) {
   ok(!page.errors.length, "icônes : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
 }
 
+async function edtReprise(browser) {
+  // Appli quittée pendant la lecture : au retour, l'emploi du temps lu entre-temps est récupéré.
+  const page = await open(browser, { w: 390, h: 844, theme: "dark" });
+  await page.evaluate(() => { const v = JSON.stringify({ id: "eabc123", at: Date.now(), status: "done", slots: [{ day: 0, start: "08:00", end: "10:00", subject: "SVT", room: "", week: "" }, { day: 1, start: "10:00", end: "11:00", subject: "Physique-chimie", week: "" }] }); window.__fake.DB.user_kv.push({ user_id: window.__fake.DB.profiles[0].user_id, key: "merge.edtjob", value: v, updated_at: new Date().toISOString() }); localStorage.setItem("merge.edtpending", JSON.stringify({ id: "eabc123", at: Date.now() })); localStorage.setItem("merge.journee", JSON.stringify({ setup: true, blocks: {}, weekly: [], off: {}, done: {} })); });
+  await go(page, "#calendrier", 400); await page.waitForTimeout(1500);
+  ok(await page.evaluate(() => JSON.parse(localStorage.getItem("merge.edt") || "{}").slots.length === 2 && !localStorage.getItem("merge.edtpending")), "emploi du temps : lecture récupérée au retour dans l'appli");
+  ok(!page.errors.length, "emploi du temps reprise : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+}
+
 async function progresClean(browser) {
   for (const [w, h] of [[390, 844], [1280, 800]]) {
     const page = await open(browser, { w, h, theme: "dark" }), tag = "progrès " + w;
@@ -1362,7 +1388,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => !only || only.includes(n);
     if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
-    const SUITES = { flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones };
+    const SUITES = { flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise };
     for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();

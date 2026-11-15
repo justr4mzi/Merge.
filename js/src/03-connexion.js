@@ -179,7 +179,8 @@
   function closeSheet() { const el = document.getElementById("sheet"); if (el) el.remove(); }
   function sheet(html, wire) {
     closeSheet(); const el = document.createElement("div"); el.className = "sheetwrap"; el.id = "sheet";
-    el.innerHTML = `<div class="sheet card" role="dialog" aria-modal="true">${html}</div>`;
+    // Bouton Fermer en haut à droite de chaque fenêtre (plus besoin de toucher à côté).
+    el.innerHTML = `<div class="sheet card" role="dialog" aria-modal="true"><button class="iconbtn flat sheetx" data-close aria-label="Fermer">${I.x}</button>${html}</div>`;
     el.onclick = e => { if (e.target === el || e.target.closest("[data-close]")) closeSheet(); };
     document.body.appendChild(el); if (wire) wire(el); const f = el.querySelector("a.btn,button.btn"); if (f) f.focus();
   }

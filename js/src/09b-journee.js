@@ -68,7 +68,11 @@
     jset("merge.jview", { lvl: mois ? (v.lvl === "mois" ? "jour" : v.lvl) : lvl, day: day || v.day, hours: hours === undefined ? v.hours : hours });
     const h = mois ? "#mois" : "#calendrier"; if (location.hash !== h) location.hash = h; else if (mois) screenCalendar(); else screenPlanning();
   }
-  function screenPlanning() { const v = jView(); jDay = v.day; if (v.lvl === "semaine") screenSemaine(); else screenJournee(); }
+  function screenPlanning() {
+    const v = jView(); jDay = v.day; if (v.lvl === "semaine") screenSemaine(); else screenJournee();
+    // Emploi du temps envoyé puis appli quittée : on récupère la lecture faite entre-temps.
+    edtResume(e => { closeSheet(); if (e.ab && !e.ref) abSheet(); else if (location.hash === "#calendrier") screenPlanning(); });
+  }
   // Vue semaine : chaque jour en une ligne, avec ses contrôles, ses cours et ses révisions prévues.
   function screenSemaine() {
     drawTabs("calendrier"); const j = jGet(), mon = mondayOf(dayOf(jDay)), today = localDay();
@@ -113,9 +117,10 @@
       prevEnd = Math.max(prevEnd || 0, st + it.dur);
     });
     const dots = k => { const bs = blocksOn(j, k).filter(b => b.act !== "pause").slice(0, 4); return bs.map(b => `<i style="background:${esc(colorOf(b))}"></i>`).join(""); };
-    app.innerHTML = `${planSeg("edt")}<div class="jnav"><button class="linkbtn" id="jup">${I.back}Semaine</button><span class="grow"></span><button class="btn sm ghost" id="jhours" aria-pressed="${hours}">${hours ? "Vue frise" : "Heure par heure"}</button></div><div class="jhead"><button class="jtitle" id="jtoday"><b>${sel.getDate()}. ${esc(month.charAt(0).toUpperCase() + month.slice(1))}</b> <span>${sel.getFullYear()}</span>${jDay !== today ? " ›" : ""}</button>${edtGet().ab && ab ? `<span class="pill">Semaine ${ab}</span>` : ""}</div>
+    app.innerHTML = `${planSeg("edt")}<div class="jnav"><button class="linkbtn" id="jup">${I.back}Semaine</button><span class="grow"></span>${jDay !== today ? `<button class="btn sm" id="jback">Aujourd'hui</button>` : ""}<button class="btn sm ghost" id="jhours" aria-pressed="${hours}">${hours ? "Vue frise" : "Heure par heure"}</button></div><div class="jhead"><button class="jtitle" id="jtoday"><b>${sel.getDate()}. ${esc(month.charAt(0).toUpperCase() + month.slice(1))}</b> <span>${sel.getFullYear()}</span>${jDay !== today ? " ›" : ""}</button>${edtGet().ab && ab ? `<span class="pill">Semaine ${ab}</span>` : ""}</div>
       <div class="jweek"><button class="iconbtn flat" id="jprev" aria-label="Semaine précédente">${I.back}</button>${week.map(k => { const d = dayOf(k); return `<button class="jd${k === jDay ? " on" : ""}${k === today ? " now" : ""}" data-day="${k}"><span>${d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "")}</span><b>${d.getDate()}</b><span class="jdots">${dots(k)}</span></button>`; }).join("")}<button class="iconbtn flat" id="jnext" aria-label="Semaine suivante" style="transform:scaleX(-1)">${I.back}</button></div>
-      <div class="jall"><button class="jround${j.off[jDay] ? " on" : ""}" id="joff" aria-pressed="${!!j.off[jDay]}"><span>${I.home}</span>Pas cours</button>${ctrlToday.map(x => `<a class="jround on" href="#matiere-${x.s.id}" style="--c:${esc(x.s.color)}"><span>${I.check}</span>Contrôle ${esc(x.s.name)}</a>`).join("")}<button class="jround" id="jctl"><span>${I.check}</span>Ajouter un contrôle</button><button class="jround" id="jauto"><span>${I.bolt}</span>Remplir ma journée</button><button class="jround" id="jai"><span>${I.spark}</span>IA</button></div>
+      <div class="jall"><button class="jround${j.off[jDay] ? " on" : ""}" id="joff" aria-pressed="${!!j.off[jDay]}"><span>${I.home}</span>Pas cours</button><button class="jround" id="jauto"><span>${I.bolt}</span>Remplir ma journée</button><button class="jround" id="jai"><span>${I.spark}</span>Demander à l'IA</button><button class="jround" id="jctl"><span>${I.plus}</span>Ajouter un contrôle</button></div>
+      ${ctrlToday.length ? `<div class="jctls">${ctrlToday.map(x => `<a class="jctl" href="#matiere-${x.s.id}" style="--c:${esc(x.s.color)}"><span class="dot"></span><b>Contrôle de ${esc(x.s.name)}</b>${x.c.ch && x.c.ch.length ? `<span class="small muted">${plural(x.c.ch.length, "chapitre", "chapitres")}</span>` : ""}</a>`).join("")}</div>` : ""}
       ${hours ? hoursHtml(j, jDay, school, list, colorOf) : ""}<div class="jline"${hours ? " hidden" : ""}>${rows.join("") || `<div class="card pad stack jempty"><b>Rien de prévu ${jDay === today ? "aujourd'hui" : "ce jour-là"}.</b><p class="small muted">Touche + pour ajouter une révision (par exemple « Maths, 30 min »), « Remplir ma journée » pour un plan tout fait, ou « IA » pour le demander avec tes mots.</p></div>`}</div>
       ${edtGet().slots.length ? "" : `<button class="linkbtn" id="jedt">${I.cal}Ajouter mon emploi du temps</button>`}
       <button class="jfab" id="jadd" aria-label="Ajouter une révision">${I.plus}</button>`;
@@ -123,9 +128,12 @@
     $("jup").onclick = () => jGo("semaine");
     $("jhours").onclick = () => jGo("jour", jDay, !hours);
     app.querySelectorAll(".jweek [data-day]").forEach(b => b.onclick = () => jGo("jour", b.dataset.day));
-    if ($("jprev")) $("jprev").onclick = () => { const d = dayOf(jDay); d.setDate(d.getDate() - 7); jGo("jour", localDay(d)); };
-    if ($("jnext")) $("jnext").onclick = () => { const d = dayOf(jDay); d.setDate(d.getDate() + 7); jGo("jour", localDay(d)); };
+    // Semaine précédente / suivante : on se place sur le lundi (ou sur aujourd'hui si c'est la semaine en cours).
+    const weekJump = n => { const d = mondayOf(dayOf(jDay)); d.setDate(d.getDate() + 7 * n); const k = localDay(d); jGo("jour", localDay(mondayOf(new Date())) === k ? today : k); };
+    if ($("jprev")) $("jprev").onclick = () => weekJump(-1);
+    if ($("jnext")) $("jnext").onclick = () => weekJump(1);
     $("jtoday").onclick = () => jGo("jour", today);
+    if ($("jback")) $("jback").onclick = () => jGo("jour", today);
     $("jctl").onclick = () => ctrlDaySheet(jDay, re);
     app.querySelectorAll("[data-hour]").forEach(b => b.onclick = () => blockSheet(null, b.dataset.hour));
     $("joff").onclick = () => { const x = jGet(); if (x.off[jDay]) delete x.off[jDay]; else x.off[jDay] = true; jSave(x); toast(x.off[jDay] ? "Pas cours ce jour-là : toute la journée est libre." : "Cours remis."); re(); };
@@ -210,7 +218,7 @@
     if (b && b.auto) v.ch = "auto";
     const paint = el => {
       const chs = state.chapters.filter(c => c.subject_id === v.s), auto = v.s && bestChapter(v.s), noSubj = v.act === "pause";
-      el.querySelector("#bacts").innerHTML = ACTS.map(a => `<button type="button" class="chip" data-ba="${a[0]}" aria-pressed="${v.act === a[0]}">${I[a[2]]}&nbsp;${a[1]}</button>`).join("");
+      el.querySelector("#bacts").innerHTML = ACTS.map(a => `<button type="button" class="actbtn" data-ba="${a[0]}" aria-pressed="${v.act === a[0]}">${I[a[2]]}<span>${a[1]}</span></button>`).join("");
       const optSubj = v.act === "libre";
       el.querySelector("#bsubj").innerHTML = noSubj ? "" : `<span class="label">Matière${optSubj ? " (facultatif)" : ""}</span><div class="chips">${optSubj ? `<button type="button" class="chip" data-bs="" aria-pressed="${!v.s}">Aucune</button>` : ""}${state.subjects.map(x => `<button type="button" class="chip" data-bs="${x.id}" aria-pressed="${v.s === x.id}" style="--c:${esc(x.color)}"><span class="dot"></span>&nbsp;${esc(x.name)}</button>`).join("") || '<span class="small muted">Ajoute d\'abord une matière.</span>'}</div>
         ${chs.length ? `<label class="label" for="bch">Chapitre (facultatif)</label><select id="bch"><option value="">Aucun chapitre en particulier</option>${auto ? `<option value="auto"${v.ch === "auto" ? " selected" : ""}>Choisi par Merge : ${esc(auto.name)}</option>` : ""}${chs.map(c => `<option value="${c.id}"${v.ch === c.id ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select>` : ""}`;
@@ -225,12 +233,15 @@
       el.querySelectorAll("[data-bd]").forEach(x => x.onclick = () => { if (x.dataset.bd === "libre") { v.free = true; if (durs.includes(v.dur)) v.dur = Math.min(300, v.dur + 5); } else { v.free = false; v.dur = +x.dataset.bd; } paint(el); });
       if (el.querySelector("#bch")) el.querySelector("#bch").onchange = e => { v.ch = e.target.value || null; };
     };
-    sheet(`<h1>${edit ? "Modifier" : "Ajouter une révision"}</h1><div class="chips" id="bacts"></div><div class="stack" id="bsubj"></div>
-      <div class="row" style="flex-wrap:wrap;gap:12px"><div class="field"><label for="bstart">Début</label><input id="bstart" type="time" value="${esc(v.start)}"></div><div class="field grow"><span class="label">Durée</span><div class="chips" id="bdurs"></div><div class="bfree" id="bfree" hidden><input type="range" id="bslide" min="5" max="300" step="5" aria-label="Durée en minutes"><b id="bslv"></b></div></div></div>
-      <div class="field"><span class="label">Couleur</span><div class="bcols" id="bcols"></div></div>
-      <div class="field"><label for="btitle">Nom (facultatif)</label><input id="btitle" type="text" maxlength="60" value="${esc(v.title || "")}" placeholder="${"Ex. Fiche sur la mitose, Sport, Devoir de philo…"}"></div>
+    sheet(`<h1>${edit ? "Modifier" : "Ajouter au planning"}</h1>
+      <div class="bsec"><span class="label">Activité</span><div class="actgrid" id="bacts"></div></div>
+      <div class="bsec" id="bsubj"></div>
+      <div class="bsec"><label class="label" for="bstart">Début</label><input id="bstart" class="btime" type="time" value="${esc(v.start)}"></div>
+      <div class="bsec"><span class="label">Durée</span><div class="chips" id="bdurs"></div><div class="bfree" id="bfree" hidden><input type="range" id="bslide" min="5" max="300" step="5" aria-label="Durée en minutes"><b id="bslv"></b></div></div>
+      <div class="bsec"><span class="label">Couleur</span><div class="bcols" id="bcols"></div></div>
+      <div class="bsec"><label class="label" for="btitle">Nom (facultatif)</label><input id="btitle" type="text" maxlength="60" value="${esc(v.title || "")}" placeholder="${"Ex. Fiche sur la mitose, Sport, Devoir de philo…"}"></div>
       ${edit && b.weekly ? '<p class="small muted">Ce bloc revient chaque semaine.</p>' : `<button type="button" class="switch" role="switch" id="bweek" aria-checked="false"><i></i><span>Répéter chaque semaine</span></button>`}
-      <button class="btn" id="bok">${edit ? "Enregistrer" : "Ajouter"}</button>${edit ? '<button class="btn ghost" id="bdel">Supprimer</button>' : ""}`, el => {
+      <div class="sheetfoot">${edit ? '<button class="btn ghost" id="bdel">Supprimer</button>' : ""}<button class="btn grow" id="bok">${edit ? "Enregistrer" : "Ajouter"}</button></div>`, el => {
       paint(el); let weekly = false;
       el.querySelector("#bslide").oninput = e => { v.dur = +e.target.value; v.free = true; el.querySelector("#bslv").textContent = durTxt(v.dur); el.querySelectorAll("[data-bd]").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.bd === "libre" ? true : +x.dataset.bd === v.dur && false))); };
       if (el.querySelector("#bweek")) el.querySelector("#bweek").onclick = e => { weekly = !weekly; e.currentTarget.setAttribute("aria-checked", String(weekly)); };
@@ -292,7 +303,7 @@
       el.querySelector("#sedt").onchange = async ev => {
         const f = ev.target.files[0]; if (!f) return; const msg = el.querySelector("#sedtmsg");
         try {
-          const got = await edtRead(f, t => { msg.textContent = t; }); if (!got.length) throw new Error("Je n'ai trouvé aucun cours. Essaie un fichier plus net.");
+          const got = await edtRead(f, msg); if (!got.length) throw new Error("Je n'ai trouvé aucun cours. Essaie un fichier plus net.");
           const e = edtGet(); e.slots = got; e.ab = got.some(x => x.week); jset("merge.edt", e);
           toast(plural(got.length, "cours ajouté", "cours ajoutés") + ".");
           if (e.ab) abSheet(); else { closeSheet(); screenJournee(); }

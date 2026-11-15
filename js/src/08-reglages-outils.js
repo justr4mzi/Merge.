@@ -190,14 +190,58 @@
     return { tomorrow: tm, subs: subs.slice(0, 3) };
   }
   // Lit une photo ou un PDF d'emploi du temps avec l'IA (1 appel) : renvoie la liste des cours. Utilisé par l'emploi du temps et l'onglet Journée.
-  async function edtRead(f, say = () => {}) {
+  // Lecture de l'emploi du temps par l'IA, côté serveur et en arrière-plan : on peut quitter l'appli pendant la lecture.
+  // Le serveur range le résultat dans user_kv (merge.edtjob) ; l'appli le récupère, même après avoir été fermée (merge.edtpending).
+  const edtNorm = slots => (slots || []).filter(x => x && x.subject && x.day >= 0 && x.day <= 5).map(x => ({ day: +x.day, start: String(x.start || "08:00").slice(0, 5), end: String(x.end || "09:00").slice(0, 5), subject: String(x.subject).slice(0, 60), room: String(x.room || "").slice(0, 30), week: x.week === "A" || x.week === "B" ? x.week : "" }));
+  // Barre de progression (estimée : une lecture prend en général 10 à 30 s).
+  function edtBar(el) {
+    if (!el) return { say() {}, stop() {} };
+    const t0 = Date.now(); el.className = "edtprog"; el.innerHTML = `<span class="small" data-t>Envoi…</span><div class="bar"><i style="width:4%"></i></div><span class="small muted">Tu peux quitter l'appli, la lecture continue.</span>`;
+    const tick = setInterval(() => { const i = el.querySelector(".bar i"); if (!i) return clearInterval(tick); i.style.width = Math.min(94, 4 + 90 * (1 - Math.exp(-(Date.now() - t0) / 14000))).toFixed(0) + "%"; }, 400);
+    return { say(t) { const x = el.querySelector("[data-t]"); if (x) x.textContent = t; }, stop(ok) { clearInterval(tick); const i = el.querySelector(".bar i"); if (i && ok) i.style.width = "100%"; } };
+  }
+  let edtPolling = null;
+  function edtWait(id) {
+    if (edtPolling && edtPolling.id === id) return edtPolling.p;
+    const p = new Promise((ok, ko) => {
+      const t0 = Date.now();
+      const step = async () => {
+        let v = null; try { const r = await sb.from("user_kv").select("value").eq("key", "merge.edtjob").maybeSingle(); v = r.data ? JSON.parse(r.data.value) : null; } catch (e) { v = null; }
+        if (v && v.id === id && v.status === "done") { safeSet("merge.edtpending", ""); return ok(edtNorm(v.slots)); }
+        if (v && v.id === id && v.status === "error") { safeSet("merge.edtpending", ""); return ko(new Error(v.error === "quota" ? QUOTA_MSG : v.error)); }
+        // Rien côté serveur au bout de 25 s : l'envoi a été coupé (appli quittée pendant l'envoi).
+        if ((!v || v.id !== id) && Date.now() - t0 > 25000) { safeSet("merge.edtpending", ""); return ko(new Error("L'envoi a été coupé avant la fin. Renvoie ton emploi du temps et laisse l'appli ouverte quelques secondes.")); }
+        if (Date.now() - t0 > 240000) { safeSet("merge.edtpending", ""); return ko(new Error("La lecture prend trop de temps. Réessaie.")); }
+        setTimeout(step, 1500);
+      };
+      step();
+    });
+    edtPolling = { id, p }; p.catch(() => {}).then(() => { if (edtPolling && edtPolling.id === id) edtPolling = null; });
+    return p;
+  }
+  async function edtRead(f, msgEl) {
+    const bar = edtBar(msgEl);
     let cv = document.createElement("canvas");
     if (/pdf/i.test(f.type) || /\.pdf$/i.test(f.name)) { await needPdf(); const lib = window.pdfjsLib; lib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js"; const doc = await lib.getDocument({ data: await f.arrayBuffer() }).promise, pg = await doc.getPage(1), vp = pg.getViewport({ scale: 2 }); cv.width = vp.width; cv.height = vp.height; await pg.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise; }
     else { let bmp; try { bmp = await createImageBitmap(f); } catch (er) { if (!window.heic2any) await new Promise((ok, ko) => { const sc = document.createElement("script"); sc.src = "vendor/heic2any.min.js"; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); }); const o = await window.heic2any({ blob: f, toType: "image/jpeg", quality: 0.85 }); bmp = await createImageBitmap(Array.isArray(o) ? o[0] : o); } const kk = Math.min(1, 1800 / Math.max(bmp.width, bmp.height)); cv.width = Math.round(bmp.width * kk); cv.height = Math.round(bmp.height * kk); cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height); }
-    say("L'IA lit ton emploi du temps…");
-    const r = await ai({ action: "edt", images: [{ mime: "image/jpeg", data: cv.toDataURL("image/jpeg", 0.85).split(",")[1] }], matieres: state.subjects.map(x => x.name) });
-    const got = ((r && r.content && r.content.slots) || []).filter(x => x && x.subject && x.day >= 0 && x.day <= 5).map(x => ({ day: +x.day, start: String(x.start || "08:00").slice(0, 5), end: String(x.end || "09:00").slice(0, 5), subject: String(x.subject).slice(0, 60), room: String(x.room || "").slice(0, 30), week: x.week === "A" || x.week === "B" ? x.week : "" }));
-    return got;
+    if (state.offline) { bar.stop(); throw new Error("Il faut être connecté à Internet pour lire ton emploi du temps."); }
+    const id = "e" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    safeSet("merge.edtpending", JSON.stringify({ id, at: Date.now() }));
+    try { await ai({ action: "edt_start", job_id: id, image: { data: cv.toDataURL("image/jpeg", 0.85).split(",")[1] }, matieres: state.subjects.map(x => x.name) }, "studio"); }
+    catch (e) { if (e.code) { safeSet("merge.edtpending", ""); bar.stop(); throw e; } }
+    bar.say("L'IA lit ton emploi du temps…");
+    try { const got = await edtWait(id); bar.stop(true); return got; } catch (e) { bar.stop(); throw e; }
+  }
+  // Applique des cours lus (au retour dans l'appli si elle avait été fermée pendant la lecture).
+  function edtApply(got) {
+    const e = edtGet(); e.slots = got; if (got.some(x => x.week)) e.ab = true; jset("merge.edt", e);
+    toast(plural(got.length, "cours ajouté", "cours ajoutés") + ". Vérifie et corrige si besoin.");
+    return e;
+  }
+  function edtResume(after) {
+    let p = null; try { p = JSON.parse(safeGet("merge.edtpending") || "null"); } catch (e) { p = null; }
+    if (!p || !p.id || Date.now() - p.at > 10 * 60000 || (edtPolling && edtPolling.id === p.id)) return;
+    edtWait(p.id).then(got => { if (!got.length) return toast("Je n'ai trouvé aucun cours sur ton emploi du temps."); const e = edtApply(got); if (after) after(e); }).catch(er => toast(er.message));
   }
   function screenEdt() {
     drawTabs("calendrier"); let e = edtGet(), view = "semaine", editing = null;
@@ -239,15 +283,15 @@
       $("es").focus();
     }
     async function fromFile(f) {
-      const msg = $("edtmsg"); msg.className = "note"; msg.textContent = "Lecture de ton emploi du temps…";
       try {
-        const got = await edtRead(f, t => { msg.textContent = t; });
+        const got = await edtRead(f, $("edtmsg"));
         if (!got.length) throw new Error("Je n'ai trouvé aucun cours sur cette image. Essaie une photo plus nette, ou ajoute tes cours à la main.");
         e.slots = got; if (got.some(x => x.week)) e.ab = true; save(); draw(); toast(plural(got.length, "cours ajouté", "cours ajoutés") + ". Vérifie et corrige si besoin.");
         if (e.ab && !e.ref) askAB();
       } catch (er) { showErr($("edtmsg"), er); }
     }
     draw();
+    edtResume(ne => { if (!location.hash.startsWith("#edt")) return; e = ne; draw(); if (e.ab && !e.ref) askAB(); });
   }
 
   // ---------- fiche méthode par matière (IA, 1 appel, gardée et synchronisée) ----------

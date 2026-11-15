@@ -380,6 +380,27 @@ Deno.serve(async (req) => {
       const fields = (Array.isArray(g.champs) ? g.champs : []).map((c: Any) => clip(c?.label ?? c, 120)).filter(Boolean).slice(0, 6);
       return json({ answer: clip(g.texte ?? "", 12000), fields, title: body.want_title ? clip(String(g.titre ?? "").replace(/^["«\s]+|["»\s.]+$/g, ""), 60) : undefined, usage: { calls: calls + 1, quota: QUOTA } });
     }
+    // Emploi du temps (photo ou 1re page du PDF) lu par l'IA EN ARRIÈRE-PLAN : l'élève peut quitter l'appli, le résultat est rangé
+    // dans user_kv (clé merge.edtjob) et l'appli le récupère à son retour. 1 appel IA.
+    if (body.action === "edt_start") {
+      const jobId = clip(body.job_id, 40), im = body.image;
+      if (!/^[a-z0-9]{6,40}$/i.test(jobId) || !im || typeof im.data !== "string" || im.data.length > 6_000_000) return json({ error: "requete", detail: "Image trop lourde ou illisible." }, 400);
+      const calls = await callsToday(uid);
+      if (calls >= QUOTA) return json({ error: "quota", calls, quota: QUOTA }, 429);
+      const known = (Array.isArray(body.matieres) ? body.matieres : []).slice(0, 40).map((x: Any) => clip(x, 60)).join(", ");
+      const save = (st: Any) => admin.from("user_kv").upsert({ user_id: uid, key: "merge.edtjob", value: JSON.stringify({ id: jobId, at: Date.now(), ...st }), updated_at: new Date().toISOString() });
+      await save({ status: "running" });
+      background((async () => {
+        try {
+          const g = await askJson(uid, serviceAccount(), "Tu lis des emplois du temps de lycéens français. Tu relèves seulement ce qui est écrit, sans rien inventer.", [{ text: `Voici l'emploi du temps d'un élève (photo, capture ou PDF). Relève TOUS les cours de la semaine. JSON strict :\n{"slots":[{"day":0,"start":"08:00","end":"09:00","subject":"Maths","room":"B12","week":""}]}\n"day" : 0 = lundi … 5 = samedi. Heures au format HH:MM sur 24 h. "week" vaut "A", "B" ou "" si le cours a lieu toutes les semaines (mentions « semaine A », « S1/S2 », « Q1/Q2 », « sem. paire/impaire »). "room" vide si absente. Écris le nom de la matière comme l'élève l'appelle ; s'il correspond à une de ses matières (${known || "aucune"}), reprends exactement ce nom. Ignore les pauses et la cantine. N'invente aucun cours.` }, { inlineData: { mimeType: "image/jpeg", data: im.data } }], 0.1, "low");
+          await save({ status: "done", slots: Array.isArray(g.slots) ? g.slots.slice(0, 80) : [] });
+        } catch (e) {
+          console.error("edt", e);
+          await save({ status: "error", error: (e as Any).code === "quota" ? "quota" : "Je n'ai pas réussi à lire ton emploi du temps. Réessaie avec une image plus nette." });
+        }
+      })());
+      return json({ job_id: jobId });
+    }
     // Dictée quand le téléphone n'a pas de reconnaissance vocale (iPhone en appli installée) : l'audio est transcrit par l'IA (1 appel).
     if (body.action === "transcrire") {
       const au = body.audio;

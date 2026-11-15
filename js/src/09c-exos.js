@@ -24,6 +24,7 @@
     let raw = JSON.stringify(p); while (raw.length > 900000 && p.convs.length > 1) { p.convs.pop(); raw = JSON.stringify(p); }
     safeSet(PROF, raw);
   }
+  let profJustAnswered = false;
   const curConv = p => p.convs.find(c => c.id === p.cur);
   // Chapitres réellement envoyés : ceux cochés + tous ceux des matières liées (20 au plus).
   const ctxChapters = ctx => [...new Set(ctx.ch.concat(state.chapters.filter(c => ctx.s.includes(c.subject_id)).map(c => c.id)))].slice(0, 20);
@@ -41,13 +42,12 @@
       c.ctx.ch.push(arg); c.at = Date.now(); profSave(p);
     }
     const conv = curConv(p), msgs = conv.m, linked = conv.ctx.ch.length + conv.ctx.s.length;
+    app.classList.add("profmode");
     app.innerHTML = `<div class="row profhead"><button class="iconbtn flat" id="phist" aria-label="Mes discussions" title="Mes discussions">${I.menu}</button><h1 class="grow ptitle">${esc(conv.t || "Prof")}</h1><button class="iconbtn flat" id="pnew" aria-label="Nouvelle discussion" title="Nouvelle discussion">${I.edit}</button></div>
-      <div class="pctx">${ctxChips(conv.ctx)}<button class="pchip add" id="pctx">${I.book}${linked ? "Cours" : "Lier un cours"}</button></div>
-      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") : md(m.t) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.ask}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur les cours liés en haut. " : "Pour que je m'appuie sur ton cours, touche « Lier un cours » : un ou plusieurs chapitres, ou des matières entières. "}Demande un exercice, une explication, ou envoie la photo de ta copie avec le bouton +.</p></div>`}</div>
-      <div class="chips exquick">${EXO_QUICK.map((q, i) => `<button class="chip" data-q="${i}">${q[0]}</button>`).join("")}</div>
-      <div class="pcomp"><div id="eximg" class="pimg" hidden></div><div class="pbar"><button class="iconbtn flat" id="pplus" aria-label="Ajouter une photo ou un cours">${I.plus}</button><textarea id="exq" rows="1" maxlength="2000" placeholder="Écris ton message…"></textarea>${canDictate() ? `<button class="iconbtn flat" id="exmic" aria-label="Dicter">${I.mic}</button>` : ""}<button class="iconbtn psend" id="exsend" aria-label="Envoyer">${I.send}</button></div>
-      <input id="exphoto" type="file" accept="image/*" capture="environment" hidden><input id="exfile" type="file" accept="image/*" hidden></div>
-      <p class="note">${linked ? "Le prof s'appuie sur les cours liés" : "Sans cours lié, le prof répond avec ses connaissances de lycée"} ; il peut se tromper sur un calcul. 1 message = 1 appel IA.</p>`;
+      <div class="pctx">${ctxChips(conv.ctx)}<button class="pchip add" id="pctx">${I.book}${linked ? "Modifier" : "Lier un cours"}</button></div>
+      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") : md(m.t) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.prof}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur les cours liés en haut. " : "Pour que je m'appuie sur ton cours, touche « Lier un cours » : un ou plusieurs chapitres, ou des matières entières. "}Demande un exercice, une explication, ou envoie la photo de ta copie avec le bouton +.</p><div class="chips exquick">${EXO_QUICK.map((q, i) => `<button class="chip" data-q="${i}">${q[0]}</button>`).join("")}</div><p class="small muted">${linked ? "Le prof s'appuie sur les cours liés" : "Sans cours lié, le prof répond avec ses connaissances de lycée"} ; il peut se tromper sur un calcul. 1 message = 1 appel IA.</p></div>`}</div>
+      <div class="pcomp"><div id="eximg" class="pimg" hidden></div><div class="pbar"><button class="iconbtn flat" id="pplus" aria-label="Ajouter une photo, un cours ou une demande rapide">${I.plus}</button><textarea id="exq" rows="1" maxlength="2000" placeholder="Écris ton message…"></textarea>${canDictate() ? `<button class="iconbtn flat" id="exmic" aria-label="Dicter">${I.mic}</button>` : ""}<button class="iconbtn psend" id="exsend" aria-label="Envoyer">${I.send}</button></div>
+      <input id="exphoto" type="file" accept="image/*" capture="environment" hidden><input id="exfile" type="file" accept="image/*" hidden></div>`;
     const save = () => { conv.at = Date.now(); profSave(p); };
     // Cours liés.
     app.querySelectorAll("[data-unctx]").forEach(b => b.onclick = () => { const [k, id] = b.dataset.unctx.split(":"); conv.ctx[k === "s" ? "s" : "ch"] = conv.ctx[k === "s" ? "s" : "ch"].filter(x => x !== id); save(); screenExos(); });
@@ -66,7 +66,10 @@
     // Façon de répondre : dans des cases ici, ou sur le cahier puis une photo de la copie.
     app.querySelectorAll("[data-fmode]").forEach(b => b.onclick = () => { const m = msgs[+b.dataset.fmode]; if (!m) return; m.ici = b.dataset.m === "ici"; m.cahier = !m.ici; save(); screenExos(); });
     app.querySelectorAll("[data-fphoto]").forEach(b => b.onclick = () => $("exphoto").click());
-    const th = $("exth"); th.scrollTop = th.scrollHeight;
+    // Défilement : on montre le début de la dernière réponse du prof (comme dans une appli de chat), sinon le bas.
+    const th = $("exth"), lastAi = th.querySelector(".exmsg.ai:last-child");
+    if (lastAi && profJustAnswered) th.scrollTop = Math.max(0, lastAi.offsetTop - th.offsetTop - 8); else th.scrollTop = th.scrollHeight;
+    profJustAnswered = false;
     const q = $("exq"), grow = () => { q.style.height = "auto"; q.style.height = Math.min(160, q.scrollHeight) + "px"; };
     q.oninput = grow;
     q.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && matchMedia("(hover: hover)").matches) { e.preventDefault(); send(); } };
@@ -75,7 +78,8 @@
     const showImg = () => { const el = $("eximg"); el.hidden = !img; el.innerHTML = img ? `<img src="data:image/jpeg;base64,${img.data}" alt="Photo jointe"><span class="small">Photo prête</span><button class="iconbtn flat" id="pimgx" aria-label="Retirer la photo">${I.x}</button>` : ""; if (img) $("pimgx").onclick = () => { img = null; showImg(); }; };
     const onPhoto = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; try { img = await shrinkImage(f); showImg(); if (!q.value.trim()) q.value = "Voici ma copie : dis-moi ce qui est juste dans mon raisonnement et où je me suis trompé."; grow(); } catch (er) { toast("Photo illisible."); } };
     $("exphoto").onchange = onPhoto; $("exfile").onchange = onPhoto;
-    $("pplus").onclick = () => sheet(`<h1>Ajouter</h1><div class="stack"><button class="btn ghost" id="pa-cam">${I.cam}Prendre une photo</button><button class="btn ghost" id="pa-img">${I.img}Choisir une photo</button><button class="btn ghost" id="pa-ctx">${I.book}Lier un cours</button></div>`, el => {
+    $("pplus").onclick = () => sheet(`<h1>Ajouter</h1><div class="actgrid"><button class="actbtn" id="pa-cam">${I.cam}<span>Prendre une photo</span></button><button class="actbtn" id="pa-img">${I.img}<span>Choisir une photo</span></button><button class="actbtn" id="pa-ctx">${I.book}<span>Lier un cours</span></button></div><span class="label">Demandes rapides</span><div class="chips">${EXO_QUICK.map((x, i) => x[1] ? `<button class="chip" data-pq="${i}">${x[0]}</button>` : "").join("")}</div>`, el => {
+      el.querySelectorAll("[data-pq]").forEach(b => b.onclick = () => { closeSheet(); q.value = EXO_QUICK[+b.dataset.pq][1]; send(); });
       el.querySelector("#pa-cam").onclick = () => { closeSheet(); $("exphoto").click(); };
       el.querySelector("#pa-img").onclick = () => { closeSheet(); $("exfile").click(); };
       el.querySelector("#pa-ctx").onclick = () => { closeSheet(); $("pctx").click(); };
@@ -96,7 +100,7 @@
         const r = await ai({ action: "exochat", want_title: !conv.named, chapter_ids: ctxChapters(conv.ctx), matieres: subjNames, messages: msgs.slice(-12).map(m => ({ r: m.r, t: m.t })), image: photo }, "studio");
         if (!conv.named && r.title) { conv.t = String(r.title).slice(0, 60); conv.named = true; }
         msgs.push(Object.assign({ r: "a", t: String(r.answer || "").slice(0, 8000) }, Array.isArray(r.fields) && r.fields.length ? { f: r.fields.map(x => String(x).slice(0, 120)).slice(0, 6) } : {})); save();
-        if (location.hash.startsWith("#exos")) screenExos();
+        profJustAnswered = true; if (location.hash.startsWith("#exos")) screenExos();
       } catch (e) { const w = th.querySelector(".wait"); if (w) { w.classList.remove("wait"); w.textContent = e.message || "L'IA n'a pas répondu. Réessaie."; } $("exsend").disabled = false; }
     }
   }
@@ -104,14 +108,15 @@
   function ctxSheet(conv, done) {
     const ch = new Set(conv.ctx.ch), ss = new Set(conv.ctx.s);
     const list = state.subjects.map(s => ({ s, l: state.chapters.filter(c => c.subject_id === s.id) })).filter(x => x.l.length);
-    sheet(`<h1>Cours liés</h1><p class="muted small">Le prof s'appuiera sur ces cours. Choisis autant de chapitres et de matières que tu veux.</p>
-      ${list.map(({ s, l }) => `<div class="card pad stack pctxs" style="border-left:4px solid ${esc(s.color)}"><div class="row between"><b>${esc(s.name)}</b><button class="chip${ss.has(s.id) ? " on" : ""}" data-cs="${s.id}" aria-pressed="${ss.has(s.id)}">Toute la matière</button></div><div class="chips">${l.map(c => `<button class="chip${ch.has(c.id) || ss.has(s.id) ? " on" : ""}" data-cc="${c.id}" data-sid="${s.id}" aria-pressed="${ch.has(c.id)}"${ss.has(s.id) ? " disabled" : ""}>${esc(c.name)}</button>`).join("")}</div></div>`).join("") || '<p class="muted">Crée d\'abord un chapitre dans Matières.</p>'}
-      <div class="row"><button class="btn ghost grow" id="pctxnone">Aucun cours</button><button class="btn grow" id="pctxok">Valider</button></div>`, el => {
+    const row = (c, s) => { const on = ss.has(s.id) || ch.has(c.id); return `<button type="button" class="ctxrow" data-cc="${c.id}" data-sid="${s.id}" aria-pressed="${on}"${ss.has(s.id) ? " disabled" : ""}><span class="ctxbox">${I.check}</span><span class="grow">${esc(c.name)}</span></button>`; };
+    sheet(`<h1>Cours liés</h1><p class="muted small">Le prof s'appuiera sur ces cours. Coche des chapitres, ou toute une matière.</p>
+      <div class="ctxlist">${list.map(({ s, l }) => `<div class="ctxsub" style="--c:${esc(s.color)}"><div class="ctxhead"><span class="dot"></span><b class="grow">${esc(s.name)}</b><button type="button" class="switch" role="switch" data-cs="${s.id}" aria-checked="${ss.has(s.id)}"><i></i><span>Toute la matière</span></button></div>${l.map(c => row(c, s)).join("")}</div>`).join("") || '<p class="muted">Crée d\'abord un chapitre dans Matières.</p>'}</div>
+      <div class="sheetfoot"><button class="btn ghost" id="pctxnone">Aucun cours</button><button class="btn grow" id="pctxok">Valider</button></div>`, el => {
       el.querySelectorAll("[data-cs]").forEach(b => b.onclick = () => {
-        const id = b.dataset.cs, on = !ss.has(id); on ? ss.add(id) : ss.delete(id); b.classList.toggle("on", on); b.setAttribute("aria-pressed", on);
-        el.querySelectorAll(`[data-sid="${id}"]`).forEach(c => { c.disabled = on; c.classList.toggle("on", on || ch.has(c.dataset.cc)); if (on) ch.delete(c.dataset.cc); });
+        const id = b.dataset.cs, on = !ss.has(id); on ? ss.add(id) : ss.delete(id); b.setAttribute("aria-checked", String(on));
+        el.querySelectorAll(`[data-sid="${id}"]`).forEach(c => { c.disabled = on; if (on) ch.delete(c.dataset.cc); c.setAttribute("aria-pressed", String(on || ch.has(c.dataset.cc))); });
       });
-      el.querySelectorAll("[data-cc]").forEach(b => b.onclick = () => { const id = b.dataset.cc, on = !ch.has(id); on ? ch.add(id) : ch.delete(id); b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
+      el.querySelectorAll("[data-cc]").forEach(b => b.onclick = () => { const id = b.dataset.cc, on = !ch.has(id); on ? ch.add(id) : ch.delete(id); b.setAttribute("aria-pressed", String(on)); });
       el.querySelector("#pctxnone").onclick = () => { conv.ctx = { ch: [], s: [] }; closeSheet(); done(); };
       el.querySelector("#pctxok").onclick = () => { conv.ctx = { ch: [...ch].filter(id => !ss.has((state.chapters.find(c => c.id === id) || {}).subject_id)), s: [...ss] }; closeSheet(); done(); };
     });
