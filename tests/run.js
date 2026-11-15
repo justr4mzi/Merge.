@@ -574,10 +574,10 @@ async function retourFlottant(browser) {
   ok(await page.evaluate(() => document.querySelector(".floatback").classList.contains("on")), "retour flottant : apparaît en remontant");
   await page.waitForTimeout(300);
   const fd = await page.evaluate(() => { const b = document.querySelector(".floatback").getBoundingClientRect(), a = getComputedStyle(document.documentElement, "::after"); return { fade: parseFloat(a.height), btn: b.bottom, bg: a.backgroundImage.slice(0, 40), op: getComputedStyle(document.querySelector(".floatback")).backgroundColor }; });
-  ok(fd.fade >= fd.btn + 12 && fd.bg.startsWith("linear-gradient"), "retour flottant : le fondu du haut passe sous le bouton", JSON.stringify(fd));
+  ok(fd.fade < 20 && fd.bg === "none" && /rgb/.test(fd.op), "retour flottant : plus de fondu en haut, le bouton a son propre fond", JSON.stringify(fd));
   await page.screenshot({ path: path.join(SHOTS, "retour-flottant-390.png") });
   await page.evaluate(() => { document.body.dataset.bg = "aurore"; }); await page.waitForTimeout(100);
-  ok(await page.evaluate(() => getComputedStyle(document.documentElement, "::after").backgroundImage.startsWith("linear-gradient") && getComputedStyle(document.body, "::after").backgroundImage.includes("radial")), "retour flottant : fondu du haut gardé avec un fond animé");
+  ok(await page.evaluate(() => getComputedStyle(document.documentElement, "::after").backgroundImage === "none" && getComputedStyle(document.body, "::after").backgroundImage.includes("radial")), "retour flottant : pas de fondu en haut, fond animé intact");
   await page.evaluate(() => { document.body.dataset.bg = ""; });
   await page.click(".floatback"); await page.waitForTimeout(300);
   ok(await page.evaluate(() => /^#(matiere|dossier)-/.test(location.hash)), "retour flottant : ramène à la page d'avant");
@@ -1299,7 +1299,9 @@ async function planningPlus(browser) {
   await page.click("#sheet .sheetx"); await page.waitForTimeout(150); ok(await page.locator("#sheet").count() === 0, tag + " : le bouton Fermer ferme la fenêtre");
   // Dictée sans reconnaissance vocale du téléphone : enregistrement, transcrit par l'IA.
   await page.click("#jai"); await page.waitForTimeout(150); ok(await page.locator("#aimic").count() === 1, tag + " : micro présent même sans dictée du téléphone");
-  await page.click("#aimic"); await page.waitForTimeout(1500); await page.click("#aimic"); await page.waitForTimeout(800);
+  await page.click("#aimic"); await page.waitForTimeout(400); ok(await page.locator("#aimic.on").count() === 1, tag + " : micro rouge pendant l'écoute");
+  await page.waitForTimeout(1100); await page.click("#aimic"); await page.waitForTimeout(800);
+  ok(await page.locator("#aimic.on, #aimic.busy").count() === 0, tag + " : un 2e appui arrête bien le micro (jamais bloqué)");
   ok(await page.evaluate(() => !!(window.__fake.transcrire && window.__fake.transcrire.audio.data.length > 100)) && (await page.inputValue("#aiq")).includes("Maths de 18 h à 19 h"), tag + " : voix transcrite dans la demande");
   ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
 }
@@ -1364,6 +1366,43 @@ async function edtReprise(browser) {
   ok(!page.errors.length, "emploi du temps reprise : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
 }
 
+async function audit(browser) {
+  // Contrôle visuel de tous les écrans, à la taille d'un iPhone et d'un PC : rien ne dépasse de l'écran ni de sa carte.
+  for (const [w, h] of [[393, 852], [1440, 900]]) {
+    const page = await open(browser, { w, h, theme: "dark" }), probs = [];
+    for (const r of ROUTES) {
+      await go(page, "#" + r, 450); await page.evaluate(() => { const s = document.getElementById("sheet"); if (s) s.remove(); });
+      const res = await page.evaluate(() => {
+        const out = [], W = document.documentElement.clientWidth;
+        if (document.documentElement.scrollWidth > W + 1) out.push("page plus large que l'écran");
+        for (const el of document.querySelectorAll("#app *, #tabs *")) {
+          const cs = getComputedStyle(el); if (cs.display === "none" || cs.visibility === "hidden" || el.closest("[hidden]")) continue;
+          const b = el.getBoundingClientRect(); if (!b.width || !b.height) continue;
+          if (b.right > W + 1 && !el.closest(".chips,.exquick,.jweek,.pctx,.hscroll,.cardsrow,[style*=overflow]") && cs.position !== "fixed") out.push("dépasse à droite : " + el.tagName + "." + String(el.className).split(" ")[0] + " « " + (el.innerText || "").slice(0, 30).replace(/\s+/g, " ") + " »");
+          if (["BUTTON", "A", "SPAN", "B", "P", "H1", "H2", "LABEL"].includes(el.tagName) && cs.overflow === "visible" && el.scrollWidth > el.clientWidth + 2 && el.clientWidth > 0 && !el.querySelector("svg") && cs.whiteSpace === "nowrap") out.push("texte coupé : " + el.tagName + "." + String(el.className).split(" ")[0] + " « " + (el.innerText || "").slice(0, 30) + " »");
+        }
+        return [...new Set(out)].slice(0, 6);
+      });
+      if (res.length) { probs.push("#" + r + " → " + res.join(" | ")); await page.screenshot({ path: path.join(SHOTS, "audit-" + w + "-" + r + ".png"), fullPage: true }); }
+    }
+    // Fenêtres.
+    const sheets = [["#calendrier", "#jadd"], ["#calendrier", "#jai"], ["#calendrier", "#jctl"], ["#exos", "#pplus"], ["#exos", "#pctx"], ["#exos", "#phist"], ["#edt", null], ["#reglages", null], ["#boutique", null], ["#recompenses", null]];
+    for (const [hsh, sel] of sheets) {
+      await go(page, hsh, 450); await page.evaluate(() => { const s = document.getElementById("sheet"); if (s) s.remove(); });
+      if (sel) { try { await page.click(sel, { timeout: 3000 }); } catch (e) { probs.push(hsh + " " + sel + " → introuvable"); continue; } await page.waitForTimeout(350); }
+      const res = await page.evaluate(() => {
+        const out = [], root = document.getElementById("sheet") || document.getElementById("pdrawer") || document.getElementById("app"), R = root.querySelector(".sheet,.pdpanel") || root, rb = R.getBoundingClientRect();
+        for (const el of R.querySelectorAll("*")) { const b = el.getBoundingClientRect(); if (!b.width) continue; if (b.right > rb.right + 1 && !el.closest(".chips,.pctx,.jweek,.seg")) out.push("dépasse : " + el.tagName + "." + String(el.className).split(" ")[0] + " « " + (el.innerText || "").slice(0, 25) + " »"); }
+        return [...new Set(out)].slice(0, 5);
+      });
+      if (res.length) probs.push(hsh + " " + (sel || "") + " → " + res.join(" | "));
+      await page.screenshot({ path: path.join(SHOTS, "audit-" + w + "-fen-" + hsh.slice(1) + (sel ? "-" + sel.replace(/[^a-z]/gi, "") : "") + ".png") });
+    }
+    ok(!probs.length, "audit " + w + " : rien ne dépasse", "\n   " + probs.join("\n   "));
+    ok(!page.errors.length, "audit " + w + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+  }
+}
+
 async function progresClean(browser) {
   for (const [w, h] of [[390, 844], [1280, 800]]) {
     const page = await open(browser, { w, h, theme: "dark" }), tag = "progrès " + w;
@@ -1388,7 +1427,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => !only || only.includes(n);
     if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
-    const SUITES = { flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise };
+    const SUITES = { flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit };
     for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();

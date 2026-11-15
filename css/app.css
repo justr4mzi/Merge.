@@ -698,13 +698,9 @@ mark.hl.user{background:color-mix(in srgb,#f5b400 45%,transparent);color:inherit
 @media (max-width:520px){.app>.row>.homemusic~.streak{padding:6px 10px;font-size:.78em;flex:none}.streak .stl{display:none}}
 input[type=time]{-webkit-appearance:none;appearance:none;display:block;width:100%;max-width:100%;min-width:0;line-height:52px;text-align:left}
 input[type=time]::-webkit-date-and-time-value{text-align:left;margin:0}
-/* Haut de l'écran sur iPhone : fondu opaque sous la barre d'état, sans flou. */
-/* Sur html::after (et pas body::after, déjà pris par les fonds animés des récompenses, qui effaçaient ce fondu). */
-html::after{content:"";position:fixed;left:0;right:0;top:0;height:calc(env(safe-area-inset-top,0px) + 14px);background:linear-gradient(var(--bg) 0,var(--bg) calc(100% - 14px),transparent);pointer-events:none;z-index:25;transition:height .22s ease}
+/* Haut de l'écran sur iPhone : bande unie seulement sous la barre d'état (heure, batterie), sans fondu ni flou. */
+html::after{content:"";position:fixed;left:0;right:0;top:0;height:env(safe-area-inset-top,0px);background:var(--bg);pointer-events:none;z-index:25}
 html:has(body.pomo)::after{display:none}
-/* Bouton retour flottant visible : le fondu descend jusque sous le bouton, qui est posé sur un fond uni et non sur le contenu. */
-html.fbon::after{height:calc(env(safe-area-inset-top,0px) + 80px);background:linear-gradient(var(--bg) 0,var(--bg) calc(100% - 22px),transparent)}
-@media (min-width:900px){html.fbon:has(body.nav .tabs)::after{left:256px}}
 /* Calendrier : cases carrées */
 .cal.calx .day{aspect-ratio:1/1;min-height:0}
 @media (min-width:900px){.cal.calx .day{min-height:0;aspect-ratio:1/1;padding:8px}.calwrap{grid-template-columns:minmax(0,1.25fr) minmax(300px,1fr)}}
@@ -1261,3 +1257,24 @@ html:has(.app.profmode),body:has(.app.profmode){overflow:hidden;overscroll-behav
 .sheetfoot .btn{flex:1}
 .pempty .exquick{width:100%}
 .pempty .exquick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.pempty .exquick .chip{white-space:normal;line-height:1.2;padding:6px 10px;font-size:.88rem}
+/* Planning : titre et « Sem. A/B » toujours sur la même ligne, rien ne se décale */
+.jhead{flex-wrap:nowrap}
+.jtitle{font-size:clamp(1.45rem,7vw,1.9rem);white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.jhead .pill{flex:none;white-space:nowrap}
+.jnav .btn{white-space:nowrap}
+/* Réponses du prof dans une carte, pleine largeur */
+.exmsg.ai{background:var(--card);border:1px solid var(--line);border-radius:18px;border-top-left-radius:6px;padding:12px 14px}
+.exmsg.ai .exform{background:var(--bg)}
+/* Fenêtre « + » du Prof : textes à la bonne taille */
+.sheet .actbtn{font-size:.92rem;line-height:1.2;min-height:52px;padding:8px 12px}
+.pqchips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.pqchips .chip{white-space:normal;line-height:1.2;padding:6px 10px;font-size:.88rem}
+/* Micro : rouge qui pulse pendant l'écoute, grisé pendant l'écriture */
+#aimic.on,#exmic.on{background:#ef4444;color:#fff;animation:micpulse 1.2s ease-in-out infinite}
+#aimic.busy,#exmic.busy{opacity:.55;pointer-events:none}
+@keyframes micpulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.45)}50%{box-shadow:0 0 0 8px rgba(239,68,68,0)}}
+@media (prefers-reduced-motion:reduce){#aimic.on,#exmic.on{animation:none}}
+@media (max-width:430px){.seg:has(button:nth-child(5)){gap:0;justify-content:space-between}.seg:has(button:nth-child(5)) button{font-size:.86rem;padding:0 3px}}
+.sheet>.sheetfoot{align-self:stretch;max-width:none}
+/* Titre à côté d'un bouton : il rétrécit au lieu de passer sous le bouton */
+.row>h1.grow{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:clamp(1.35rem,6.4vw,2rem)}

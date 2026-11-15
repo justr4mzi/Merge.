@@ -117,7 +117,7 @@
       prevEnd = Math.max(prevEnd || 0, st + it.dur);
     });
     const dots = k => { const bs = blocksOn(j, k).filter(b => b.act !== "pause").slice(0, 4); return bs.map(b => `<i style="background:${esc(colorOf(b))}"></i>`).join(""); };
-    app.innerHTML = `${planSeg("edt")}<div class="jnav"><button class="linkbtn" id="jup">${I.back}Semaine</button><span class="grow"></span>${jDay !== today ? `<button class="btn sm" id="jback">Aujourd'hui</button>` : ""}<button class="btn sm ghost" id="jhours" aria-pressed="${hours}">${hours ? "Vue frise" : "Heure par heure"}</button></div><div class="jhead"><button class="jtitle" id="jtoday"><b>${sel.getDate()}. ${esc(month.charAt(0).toUpperCase() + month.slice(1))}</b> <span>${sel.getFullYear()}</span>${jDay !== today ? " ›" : ""}</button>${edtGet().ab && ab ? `<span class="pill">Semaine ${ab}</span>` : ""}</div>
+    app.innerHTML = `${planSeg("edt")}<div class="jnav"><button class="linkbtn" id="jup">${I.back}Semaine</button><span class="grow"></span>${jDay !== today ? `<button class="btn sm" id="jback">Aujourd'hui</button>` : ""}<button class="btn sm ghost" id="jhours" aria-pressed="${hours}">${I.clock}${hours ? "Frise" : "Heures"}</button></div><div class="jhead"><button class="jtitle" id="jtoday"><b>${sel.getDate()} ${esc(month.charAt(0).toUpperCase() + month.slice(1))}</b> <span>${sel.getFullYear()}</span></button>${edtGet().ab && ab ? `<span class="pill">Sem. ${ab}</span>` : ""}</div>
       <div class="jweek"><button class="iconbtn flat" id="jprev" aria-label="Semaine précédente">${I.back}</button>${week.map(k => { const d = dayOf(k); return `<button class="jd${k === jDay ? " on" : ""}${k === today ? " now" : ""}" data-day="${k}"><span>${d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "")}</span><b>${d.getDate()}</b><span class="jdots">${dots(k)}</span></button>`; }).join("")}<button class="iconbtn flat" id="jnext" aria-label="Semaine suivante" style="transform:scaleX(-1)">${I.back}</button></div>
       <div class="jall"><button class="jround${j.off[jDay] ? " on" : ""}" id="joff" aria-pressed="${!!j.off[jDay]}"><span>${I.home}</span>Pas cours</button><button class="jround" id="jauto"><span>${I.bolt}</span>Remplir ma journée</button><button class="jround" id="jai"><span>${I.spark}</span>Demander à l'IA</button><button class="jround" id="jctl"><span>${I.plus}</span>Ajouter un contrôle</button></div>
       ${ctrlToday.length ? `<div class="jctls">${ctrlToday.map(x => `<a class="jctl" href="#matiere-${x.s.id}" style="--c:${esc(x.s.color)}"><span class="dot"></span><b>Contrôle de ${esc(x.s.name)}</b>${x.c.ch && x.c.ch.length ? `<span class="small muted">${plural(x.c.ch.length, "chapitre", "chapitres")}</span>` : ""}</a>`).join("")}</div>` : ""}
@@ -179,37 +179,47 @@
   // Couleur d'un bloc : celle choisie à la main, sinon celle de la matière (gris pour une pause).
   const BCOLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#9483ff", "#ec4899"];
   function blockColor(b) { return b.color || (b.act === "pause" ? "#6b7280" : (state.subjects.find(x => x.id === b.s) || {}).color || "#9483ff"); }
-  // Dicter : la dictée du téléphone si elle existe ; sinon (iPhone en appli installée) on enregistre et l'IA transcrit (1 appel, action « transcrire »).
-  const canDictate = () => !!(window.SpeechRecognition || window.webkitSpeechRecognition || (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder));
+  // Dicter : on enregistre la voix puis l'IA écrit ce qui a été dit (même résultat sur iPhone et sur PC, comprend « 14 h 15 »…).
+  // Un appui = démarrer (bouton rouge), un appui = arrêter ; jamais bloqué : chaque étape a une limite de temps.
+  // Si l'enregistrement n'existe pas sur l'appareil, on se rabat sur la dictée du navigateur.
+  const canDictate = () => !!((navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder) || window.SpeechRecognition || window.webkitSpeechRecognition);
   function dictate(btn, field, after) {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let rec = null, mr = null, stopT = null;
-    const put = t => { const base = field.value.trim(); field.value = (base ? base + " " : "") + t; if (after) after(); };
+    let st = "idle", mr = null, stream = null, stopT = null, rec = null;
+    const set = s2 => { st = s2; btn.classList.toggle("on", s2 === "rec"); btn.classList.toggle("busy", s2 === "busy"); btn.setAttribute("aria-label", s2 === "rec" ? "Arrêter et écrire" : "Dicter"); btn.setAttribute("aria-pressed", String(s2 === "rec")); };
+    const put = t => { const base = field.value.trim(); field.value = (base ? base + " " : "") + t; if (after) after(); field.dispatchEvent(new Event("input")); };
+    const release = () => { clearTimeout(stopT); if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; };
+    const canRecord = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
     btn.onclick = async () => {
-      if (SR) {
-        if (rec) { rec.stop(); return; }
+      if (st === "busy") return;
+      if (st === "rec") { if (mr && mr.state !== "inactive") { try { mr.stop(); } catch (e) { release(); set("idle"); } } else if (rec) { try { rec.stop(); } catch (e) {} set("idle"); } else { release(); set("idle"); } return; }
+      if (!canRecord) {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SR) return toast("La dictée n'est pas disponible ici.");
         rec = new SR(); rec.lang = "fr-FR"; rec.interimResults = true; const base = field.value;
         rec.onresult = e => { field.value = (base ? base + " " : "") + [...e.results].map(r => r[0].transcript).join(""); if (after) after(); };
-        rec.onend = () => { rec = null; btn.classList.remove("on"); };
-        rec.onerror = () => { toast("Micro indisponible. Écris ta demande à la place."); };
-        btn.classList.add("on"); rec.start(); return;
+        rec.onend = () => { rec = null; set("idle"); }; rec.onerror = () => { rec = null; set("idle"); };
+        set("rec"); try { rec.start(); } catch (e) { rec = null; set("idle"); } return;
       }
-      if (mr) { mr.stop(); return; }
       if (state.offline) return toast("Il faut être connecté à Internet pour dicter.");
-      let stream; try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { return toast("Autorise le micro pour dicter."); }
-      const chunks = []; mr = new MediaRecorder(stream); mr.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+      set("rec");
+      try { stream = await Promise.race([navigator.mediaDevices.getUserMedia({ audio: true }), new Promise((_, ko) => setTimeout(() => ko(new Error("t")), 10000))]); }
+      catch (e) { release(); set("idle"); return toast("Autorise le micro pour dicter (Réglages du téléphone > Merge ou Safari > Micro)."); }
+      if (st !== "rec") { release(); return; }
+      const chunks = [];
+      try { mr = new MediaRecorder(stream); } catch (e) { release(); set("idle"); return toast("Le micro ne marche pas ici."); }
+      mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
       mr.onstop = async () => {
-        clearTimeout(stopT); stream.getTracks().forEach(t => t.stop()); btn.classList.remove("on"); const type = mr.mimeType || "audio/mp4"; mr = null;
-        const blob = new Blob(chunks, { type }); if (blob.size < 2000) return toast("Je n'ai rien entendu.");
-        btn.disabled = true; const ph = field.placeholder; field.placeholder = "J'écris ce que tu as dit…";
+        const type = (mr && mr.mimeType) || "audio/mp4"; mr = null; release();
+        const blob = new Blob(chunks, { type }); if (blob.size < 1500) { set("idle"); return toast("Je n'ai rien entendu. Garde le doigt loin du micro et parle normalement."); }
+        set("busy"); const ph = field.placeholder; field.placeholder = "J'écris ce que tu as dit…";
         try {
           const data = await new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = ko; r.readAsDataURL(blob); });
-          const r = await ai({ action: "transcrire", audio: { mime: type.split(";")[0], data } }, "studio");
-          if (r.text) put(String(r.text).slice(0, 2000)); else toast("Je n'ai rien compris, réessaie.");
+          const r = await Promise.race([ai({ action: "transcrire", audio: { mime: type.split(";")[0], data } }, "studio"), new Promise((_, ko) => setTimeout(() => ko(new Error("La dictée a mis trop de temps. Réessaie.")), 30000))]);
+          if (r && r.text) put(String(r.text).slice(0, 2000)); else toast("Je n'ai rien compris, réessaie.");
         } catch (e) { toast(e.message || "La dictée n'a pas marché."); }
-        btn.disabled = false; field.placeholder = ph;
+        field.placeholder = ph; set("idle");
       };
-      btn.classList.add("on"); mr.start(); toast("Je t'écoute… touche encore le micro quand tu as fini."); stopT = setTimeout(() => { if (mr) mr.stop(); }, 60000);
+      mr.start(250); stopT = setTimeout(() => { if (mr && mr.state !== "inactive") mr.stop(); }, 60000);
+      toast("Je t'écoute… touche encore le micro quand tu as fini.");
     };
   }
   function blockSheet(b, at) {

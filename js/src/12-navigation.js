@@ -3,6 +3,7 @@
   function route() {
     app.classList.remove("enter"); void app.offsetWidth; app.classList.add("enter"); clearTimeout(enterT); enterT = setTimeout(() => app.classList.remove("enter"), 700);
     document.body.classList.remove("nav"); app.classList.toggle("profmode", /^#exos/.test(location.hash));
+    const pd = document.getElementById("pdrawer"); if (pd) pd.remove();
     if (location.hash.startsWith("#partage-")) return screenShared(location.hash.slice(9));
     // Lien d'invitation Duo (#duo-CODE) : on garde le code, même s'il faut d'abord se connecter, puis on ouvre l'onglet Duo.
     if (/^#duo-./.test(location.hash)) { const c = decodeURIComponent(location.hash.slice(5)).trim().slice(0, 64); if (c) safeSet("merge.duoin", c); history.replaceState(null, "", location.pathname + location.search + "#duo"); }

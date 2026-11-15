@@ -401,14 +401,12 @@ Deno.serve(async (req) => {
       })());
       return json({ job_id: jobId });
     }
-    // Dictée quand le téléphone n'a pas de reconnaissance vocale (iPhone en appli installée) : l'audio est transcrit par l'IA (1 appel).
+    // Dictée (tous les appareils) : l'audio est transcrit par l'IA. Ne compte pas dans la limite du jour (c'est juste du texte tapé à la voix).
     if (body.action === "transcrire") {
       const au = body.audio;
       if (!au || typeof au.data !== "string" || au.data.length > 3_000_000 || !/^audio\/[a-z0-9.+-]+$/i.test(String(au.mime))) return json({ error: "requete", detail: "Enregistrement trop long ou illisible." }, 400);
-      const calls = await callsToday(uid);
-      if (calls >= QUOTA) return json({ error: "quota", calls, quota: QUOTA }, 429);
-      const t = await ask(uid, serviceAccount(), "Tu transcris des messages vocaux d'élèves français. Tu écris seulement ce qui est dit, sans rien ajouter.", [{ text: "Transcris exactement ce que dit l'élève dans cet audio, en français correct avec la ponctuation. Réponds uniquement avec le texte transcrit, sans guillemets. Si on n'entend rien de clair, réponds par une chaîne vide." }, { inlineData: { mimeType: String(au.mime), data: au.data } }], false, 0, "minimal");
-      return json({ text: clip(t.trim(), 2000), usage: { calls: calls + 1, quota: QUOTA } });
+      const r = await gemini(serviceAccount(), "Tu transcris des messages vocaux d'élèves français. Tu écris seulement ce qui est dit, sans rien ajouter ni répondre.", [{ text: "Transcris exactement ce que dit l'élève dans cet audio, en français correct avec la ponctuation. Écris les heures en chiffres (« 14 h 15 », « 18 h »), les durées en chiffres (« 30 min », « 1 h 30 »), les noms de matières avec une majuscule (Maths, SVT, Physique-chimie…). Réponds uniquement avec le texte transcrit, sans guillemets. Si on n'entend rien de clair, réponds par une chaîne vide." }, { inlineData: { mimeType: String(au.mime), data: au.data } }], false, 0, "minimal");
+      return json({ text: clip(String(r.text).trim(), 2000) });
     }
     // Onglet Journée : l'élève dit (ou écrit) ce qu'il veut faire, l'IA range ça dans ses créneaux libres (1 appel).
     if (body.action === "planjour") {
