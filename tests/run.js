@@ -1125,6 +1125,29 @@ async function saison(browser) {
 
 // js/app.js doit être reconstruit à partir de js/src/ (node tools/build-app.js).
 { const r = require("child_process").spawnSync(process.execPath, [path.join(ROOT, "tools/build-app.js"), "--check"]); ok(r.status === 0, "js/app.js à jour avec les morceaux de js/src/", String(r.stderr)); }
+async function revisionControle(browser) {
+  // Avant un contrôle (SVT dans 9 jours) : les cartes de ses chapitres reviennent tous les jours, même réussies.
+  const page = await open(browser, { w: 390, h: 844, theme: "dark" });
+  const dueTxt = async () => parseInt((await page.locator(".today .big").innerText()), 10);
+  await page.evaluate(() => localStorage.setItem("merge.boostj", "0")); await go(page, "#calendrier", 200); await go(page, "#accueil", 400); const base = await dueTxt();
+  await page.evaluate(() => localStorage.setItem("merge.boostj", "7")); await go(page, "#calendrier", 200); await go(page, "#accueil", 400);
+  ok(await dueTxt() === base, "contrôle proche : à 9 jours, rien en plus avec le réglage 7 jours");
+  await go(page, "#reglages", 400); await page.click('[data-boost="14"]'); await page.waitForTimeout(150);
+  ok(await page.evaluate(() => localStorage.getItem("merge.boostj") === "14" && window.__mergeSync.synced("merge.boostj")), "contrôle proche : réglage enregistré et synchronisé");
+  // Toutes les cartes du jour faites (calendrier FSRS repoussé), puis un nouveau jour : seules les cartes du contrôle reviennent.
+  await page.evaluate(() => localStorage.setItem("merge.boostj", "0")); await go(page, "#cartes-jour", 500); { let g = 0; while (g++ < 80 && await page.locator("#yes").count()) { await page.click("#yes"); await page.waitForTimeout(20); } }
+  await page.evaluate(() => { localStorage.setItem("merge.boostj", "14"); localStorage.removeItem("merge.vus"); });
+  await go(page, "#accueil", 400); const more = await dueTxt();
+  ok(more > 0 && (await txt(page)).includes("dont " + more + " pour ton prochain contrôle"), "contrôle proche : cartes du contrôle ajoutées aux cartes du jour", base + " → " + more);
+  const before = await page.evaluate(() => Object.fromEntries(window.__fake.DB.cards.map(c => [c.id, c.due_at])));
+  await go(page, "#cartes-jour", 500); let g = 0; while (g++ < 80 && await page.locator("#yes").count()) { await page.click("#yes"); await page.waitForTimeout(20); }
+  const after = await page.evaluate(() => window.__fake.DB.cards.map(c => ({ id: c.id, due: c.due_at, ch: c.chapter_id })));
+  ok(after.filter(c => new Date(before[c.id]).getTime() > Date.now() && c.ch === "c1").every(c => c.due === before[c.id]), "contrôle proche : une carte en plus réussie garde son calendrier de répétition espacée");
+  await go(page, "#accueil", 400); ok(await dueTxt() === 0, "contrôle proche : une fois revues, elles ne reviennent pas le même jour");
+  ok(await page.evaluate(() => JSON.parse(localStorage.getItem("merge.vus")).ids.length > 0 && window.__mergeSync.synced("merge.vus")), "contrôle proche : cartes vues aujourd'hui gardées et synchronisées");
+  ok(!page.errors.length, "contrôle proche : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+}
+
 let BASE;
 (async () => {
   fs.mkdirSync(SHOTS, { recursive: true });
@@ -1133,7 +1156,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => !only || only.includes(n);
     if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
-    const SUITES = { flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison };
+    const SUITES = { flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle };
     for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();

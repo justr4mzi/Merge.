@@ -143,7 +143,7 @@
   function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   // Ces clés sont gardées sur l'appareil ET dans le compte (table user_kv) : on retrouve la même chose sur téléphone et sur PC.
   // Restent sur l'appareil seulement : kvts (horodatages), file (révisions en attente d'envoi), cache.* et gen.* (copies de la base), erreurs.* (copie de secours de la table mistakes). Le thème est dans le profil.
-  const SYNC = /^merge\.(fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|controles|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
+  const SYNC = /^merge\.(fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|controles|vus|boostj|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
   let kvTs = {}, kvQueue = {}, kvTimer = null, kvOff = false, kvAt = 0;
   try { kvTs = JSON.parse(localStorage.getItem("merge.kvts") || "{}") || {}; } catch (e) { kvTs = {}; }
   const kvSaveTs = () => { try { localStorage.setItem("merge.kvts", JSON.stringify(kvTs)); } catch (e) { /* rien */ } };
@@ -258,7 +258,20 @@
   const isMastered = c => c.mastered != null ? !!c.mastered : c.state === 2;
   function mastery(cards) { if (!cards.length) return 0; return Math.floor(cards.filter(isMastered).length / cards.length * 100); }
   function cardsOf(chapterId) { return state.cards.filter(c => c.chapter_id === chapterId); }
-  function dueCards(list) { const now = Date.now(); return list.filter(c => new Date(c.due_at).getTime() <= now); }
+  // Cartes à revoir = celles que la répétition espacée (FSRS) ramène aujourd'hui, PLUS, avant un contrôle proche, toutes les cartes
+  // des chapitres du contrôle pas encore vues aujourd'hui (réglage « Avant un contrôle » : 7 jours par défaut, 0 = jamais).
+  // Une de ces cartes « en plus » réussie ne touche pas à son calendrier FSRS (elle est juste notée vue aujourd'hui) ;
+  // ratée, elle repasse par FSRS comme n'importe quelle carte oubliée.
+  const boostDays = () => { const n = +jget("merge.boostj", 7); return [0, 3, 7, 14].includes(n) ? n : 7; };
+  function boostChapters() {
+    const n = boostDays(); if (!n || !state.chapters) return null; const ids = new Set();
+    upCtrls().forEach(({ c, s }) => { if (daysUntil(c.d) > n) return; (c.ch && c.ch.length ? c.ch : state.chapters.filter(x => x.subject_id === s.id).map(x => x.id)).forEach(i => ids.add(i)); });
+    return ids.size ? ids : null;
+  }
+  const seenToday = () => { const v = jget("merge.vus", null); return new Set(v && v.d === localDay() && Array.isArray(v.ids) ? v.ids : []); };
+  function markSeen(id, on = true) { const v = jget("merge.vus", null), d = localDay(), l = new Set(v && v.d === d && Array.isArray(v.ids) ? v.ids : []); on ? l.add(id) : l.delete(id); jset("merge.vus", { d, ids: [...l].slice(-3000) }); }
+  const fsrsDue = c => new Date(c.due_at).getTime() <= Date.now();
+  function dueCards(list) { const b = boostChapters(), seen = b ? seenToday() : null; return list.filter(c => fsrsDue(c) || (b && b.has(c.chapter_id) && !seen.has(c.id))); }
   const VACANCES_ZONES = {
     A: [["Toussaint", "2026-10-17", "2026-11-01"], ["Noël", "2026-12-19", "2027-01-03"], ["Hiver", "2027-02-13", "2027-02-28"], ["Printemps", "2027-04-10", "2027-04-25"], ["Été", "2027-07-03", "2027-08-31"]],
     B: [["Toussaint", "2026-10-17", "2026-11-01"], ["Noël", "2026-12-19", "2027-01-03"], ["Hiver", "2027-02-20", "2027-03-07"], ["Printemps", "2027-04-17", "2027-05-02"], ["Été", "2027-07-03", "2027-08-31"]],
@@ -1187,7 +1200,7 @@
       <div class="hello"><div class="row">${MASCOT((rwEquipped("mascotte") || {}).v || "")}<h1 class="grow">Salut ${esc(p.display_name || "")}${rwEquipped("titre") && rwEquipped("titre").id !== "t-novice" && rwName(rwEquipped("titre")) ? ` <span class="rwtitle">${esc(rwName(rwEquipped("titre")))}</span>` : ""}</h1></div><p class="muted">${esc(new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }).replace(/^./, c => c.toUpperCase()))} · ${esc((rwOwned(SHOP.find(r => r.id === "p-phrase"), 0, rwState()) && rwState().custom.phrase) || PEPS[new Date().getDate() % PEPS.length])}</p></div>
       <div class="level"><a class="lvl" href="#recompenses" aria-label="Niveau ${lv.level}, voir les récompenses">Niveau ${lv.level}</a><a class="coinpill" href="#boutique" aria-label="${coinsInfo().balance} pièces, ouvrir la boutique">${I.coin}${coinsInfo().balance}</a><div class="bar grow"><i style="width:${lv.pct}%"></i></div><span class="small muted">encore ${lv.left} points</span></div>
       ${(() => { const tn = new Date().getHours() >= 15 ? tonightSuggestion() : null; return tn ? `<div class="banner"><div><h2>Ce soir</h2><p class="small">Demain tu as ${tn.subs.map(x => esc(x.name)).join(", ")}. Un petit tour avant ?</p></div><a class="btn sm" href="#revision-${tn.subs[0].id}">Réviser ${esc(tn.subs[0].name)}</a></div>` : ""; })()}${resumeHtml()}${[0, 1].includes(new Date().getDay()) && state.sessions.length ? `<div class="banner"><div><h2>Ton bilan de la semaine est prêt</h2><p class="small">Ce que tu as fait, et ton objectif pour la suite.</p></div><a class="btn sm" href="#bilan">Voir</a></div>` : ""}
-      <div class="dash"><div class="card today"><div><p class="small muted">À réviser aujourd'hui</p><div class="big">${plural(due, "carte", "cartes")}</div></div>
+      <div class="dash"><div class="card today"><div><p class="small muted">À réviser aujourd'hui</p><div class="big">${plural(due, "carte", "cartes")}</div>${(() => { const ex = due - state.cards.filter(fsrsDue).length; return ex > 0 ? `<p class="small muted">dont ${ex} pour ton prochain contrôle</p>` : ""; })()}</div>
         <div><div class="row between small muted" style="margin-bottom:6px"><span>Objectif du jour</span><span>${doneVal} / ${p.daily_goal_value} ${unit}</span></div><div class="bar"><i style="width:${Math.min(100, doneVal / p.daily_goal_value * 100)}%"></i></div></div>
         ${due ? '<a class="btn" href="#cartes-jour">Réviser maintenant</a>' : ""}${state.cards.length > 3 ? `<a class="btn ghost mixbtn" href="#melange">Révision mélangée<span class="small">${state.subjects.some(x => x.exam_date && daysUntil(x.exam_date) >= 0) ? "priorité aux contrôles proches" : "toutes tes matières"}</span></a><a class="btn ghost mixbtn" href="#perso">Choisir quoi réviser<span class="small">matières, dossiers ou chapitres au choix</span></a>` : ""}${due ? "" : `<p class="small muted">${state.cards.length ? "Tu es à jour. Reviens plus tard ou ouvre un chapitre pour t'entraîner." : "Ajoute un chapitre et importe ton cours pour créer tes premières cartes."}</p>`}</div>
         ${weekHtml(week, p)}
@@ -1895,6 +1908,7 @@
         const patch = Object.assign({}, u.prev); if (state.legacy) delete patch.mastered;
         sb.from("cards").update(patch).eq("id", u.cid).then(res => { if (res.error) queueReview(u.cid, patch); }, () => queueReview(u.cid, patch));
       }
+      markSeen(u.cid, false);
       S.queue = u.queue; S.known = u.known; S.reviews = Math.max(0, S.reviews - 1); if (!u.again) S.again.delete(u.cid);
       S.flipped = true; S.mine = "";
       if (u.mistake) Promise.resolve(u.mistake).then(() => unlogMistake(u.chapter, u.front));
@@ -1904,8 +1918,9 @@
     async function answer(ok, rating) {
       { const r0 = state.cards.find(c => c.id === S.queue[0]); if (r0) { S.undo.push({ cid: r0.id, chapter: r0.chapter_id, front: r0.front, prev: Object.fromEntries(UNDO_KEYS.map(k => [k, r0[k] === undefined ? null : r0[k]])), queue: S.queue.slice(), known: S.known, again: S.again.has(r0.id), mistake: null }); if (S.undo.length > 20) S.undo.shift(); } }
       const cid = S.queue.shift(), row = state.cards.find(c => c.id === cid); if (!row) return render();
-      const now = new Date(), r = fsrs.next(toFsrs(row), now, ok ? (rating || F.Rating.Good) : F.Rating.Again).card;
-      const patch = { due_at: r.due.toISOString(), stability: r.stability, difficulty: r.difficulty, elapsed_days: r.elapsed_days, scheduled_days: r.scheduled_days, reps: r.reps, lapses: r.lapses, state: r.state, last_review: now.toISOString(), right_count: (row.right_count || 0) + (ok ? 1 : 0), wrong_count: (row.wrong_count || 0) + (ok ? 0 : 1) };
+      const now = new Date(), bonus = ok && !fsrsDue(row) && row.last_review; markSeen(cid);
+      const r = bonus ? null : fsrs.next(toFsrs(row), now, ok ? (rating || F.Rating.Good) : F.Rating.Again).card;
+      const patch = bonus ? { right_count: (row.right_count || 0) + 1 } : { due_at: r.due.toISOString(), stability: r.stability, difficulty: r.difficulty, elapsed_days: r.elapsed_days, scheduled_days: r.scheduled_days, reps: r.reps, lapses: r.lapses, state: r.state, last_review: now.toISOString(), right_count: (row.right_count || 0) + (ok ? 1 : 0), wrong_count: (row.wrong_count || 0) + (ok ? 0 : 1) };
       if (!state.legacy) patch.mastered = ok;
       Object.assign(row, patch); row.mastered = ok; S.reviews++; S.chapters.add(row.chapter_id); S.allCh.add(row.chapter_id);
       sb.from("cards").update(patch).eq("id", cid).then(res => { if (res.error) queueReview(cid, patch); }, () => queueReview(cid, patch));
@@ -2024,6 +2039,7 @@
         <div class="field"><span class="label">Thème</span>${chips("t", [["light", "Clair"], ["dark", "Sombre"], ["system", "Comme mon téléphone"]], p.theme)}</div>
         <div class="field"><span class="label">Taille du texte</span>${chips("s", [["small", "Petit"], ["normal", "Normal"], ["large", "Grand"]], p.text_size)}</div></div>
       <div class="card pad stack"><h2>Révision</h2>
+        <div class="field"><span class="label">Avant un contrôle, revoir les cartes de ses chapitres tous les jours</span>${chips("boost", [["0", "Jamais"], ["3", "3 jours avant"], ["7", "7 jours avant"], ["14", "14 jours avant"]], String(boostDays()))}<p class="small muted">Ces cartes reviennent chaque jour, même réussies, jusqu'au contrôle. Les autres suivent la répétition espacée normale.</p></div>
         <div class="field"><span class="label">Sons et vibrations</span>${chips("snd", [["1", "Activés"], ["0", "Coupés"]], p.sounds === false ? "0" : "1")}</div>
         <div class="field"><span class="label">Voix qui lit tes cartes</span><div class="chips"><button class="chip" data-ve="merge" aria-pressed="${neuralWanted()}">Voix Merge (Laomedeia)</button><button class="chip" data-ve="appareil" aria-pressed="${!neuralWanted()}">Voix de mon appareil</button></div><div class="row"><button class="btn sm ghost" id="vtry">Écouter un exemple</button></div><p class="note">La voix Merge est plus naturelle. Sans réseau, c'est la voix de ton appareil qui prend le relais.</p></div>
         ${"speechSynthesis" in window ? `<div class="field"><label for="voice">Voix de l'appareil</label><select id="voice"><option value="">Chargement des voix…</option></select><div class="row"><label class="small muted" for="vrate">Vitesse</label><input id="vrate" class="grow" type="range" min="0.5" max="2" step="0.05" value="${voiceRate()}"><button class="btn sm ghost" id="vtest">Écouter</button></div><p class="note">Les voix viennent de ton appareil et de ton navigateur. Merge choisit la plus naturelle. Sur PC, Microsoft Edge en propose de bien meilleures que Chrome.</p></div>` : ""}
@@ -2055,6 +2071,7 @@
     $("remOn").onclick = () => { const on = p.reminders_enabled === false; patch({ reminders_enabled: on }, on ? "Rappels activés." : "Rappels coupés. Plus aucune notification."); };
     $("qWe").onclick = () => { const on = p.quiet_weekend !== true; patch({ quiet_weekend: on }, on ? "Pas de rappel le samedi et le dimanche." : "Rappels aussi le week-end."); };
     $("qVac").onclick = () => { const on = p.quiet_holidays !== true; patch({ quiet_holidays: on }, on ? "Pas de rappel pendant les vacances." : "Rappels aussi pendant les vacances."); };
+    app.querySelectorAll("[data-boost]").forEach(b => b.onclick = () => { jset("merge.boostj", +b.dataset.boost); toast(+b.dataset.boost ? "Cartes du contrôle tous les jours, " + b.dataset.boost + " jours avant." : "Répétition espacée seule."); screenSettings(); });
     app.querySelectorAll("[data-zone]").forEach(b => b.onclick = () => patch({ holiday_zone: b.dataset.zone }, "Zone " + b.dataset.zone + " enregistrée."));
     $("tuto").onclick = tutorial; wireClasse();
     if ($("voice")) {

@@ -60,6 +60,7 @@
         const patch = Object.assign({}, u.prev); if (state.legacy) delete patch.mastered;
         sb.from("cards").update(patch).eq("id", u.cid).then(res => { if (res.error) queueReview(u.cid, patch); }, () => queueReview(u.cid, patch));
       }
+      markSeen(u.cid, false);
       S.queue = u.queue; S.known = u.known; S.reviews = Math.max(0, S.reviews - 1); if (!u.again) S.again.delete(u.cid);
       S.flipped = true; S.mine = "";
       if (u.mistake) Promise.resolve(u.mistake).then(() => unlogMistake(u.chapter, u.front));
@@ -69,8 +70,9 @@
     async function answer(ok, rating) {
       { const r0 = state.cards.find(c => c.id === S.queue[0]); if (r0) { S.undo.push({ cid: r0.id, chapter: r0.chapter_id, front: r0.front, prev: Object.fromEntries(UNDO_KEYS.map(k => [k, r0[k] === undefined ? null : r0[k]])), queue: S.queue.slice(), known: S.known, again: S.again.has(r0.id), mistake: null }); if (S.undo.length > 20) S.undo.shift(); } }
       const cid = S.queue.shift(), row = state.cards.find(c => c.id === cid); if (!row) return render();
-      const now = new Date(), r = fsrs.next(toFsrs(row), now, ok ? (rating || F.Rating.Good) : F.Rating.Again).card;
-      const patch = { due_at: r.due.toISOString(), stability: r.stability, difficulty: r.difficulty, elapsed_days: r.elapsed_days, scheduled_days: r.scheduled_days, reps: r.reps, lapses: r.lapses, state: r.state, last_review: now.toISOString(), right_count: (row.right_count || 0) + (ok ? 1 : 0), wrong_count: (row.wrong_count || 0) + (ok ? 0 : 1) };
+      const now = new Date(), bonus = ok && !fsrsDue(row) && row.last_review; markSeen(cid);
+      const r = bonus ? null : fsrs.next(toFsrs(row), now, ok ? (rating || F.Rating.Good) : F.Rating.Again).card;
+      const patch = bonus ? { right_count: (row.right_count || 0) + 1 } : { due_at: r.due.toISOString(), stability: r.stability, difficulty: r.difficulty, elapsed_days: r.elapsed_days, scheduled_days: r.scheduled_days, reps: r.reps, lapses: r.lapses, state: r.state, last_review: now.toISOString(), right_count: (row.right_count || 0) + (ok ? 1 : 0), wrong_count: (row.wrong_count || 0) + (ok ? 0 : 1) };
       if (!state.legacy) patch.mastered = ok;
       Object.assign(row, patch); row.mastered = ok; S.reviews++; S.chapters.add(row.chapter_id); S.allCh.add(row.chapter_id);
       sb.from("cards").update(patch).eq("id", cid).then(res => { if (res.error) queueReview(cid, patch); }, () => queueReview(cid, patch));

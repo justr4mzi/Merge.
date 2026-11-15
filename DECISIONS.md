@@ -455,3 +455,11 @@ Liste retenue (sur 20 proposées) : plan de révision automatique, rappel la vei
 - **Ancien import Genially retiré partout** : code de l'appli, action `lien` et fichier `lien.mjs` de la fonction `studio` (redéployée en v6, identique à la v4 d'avant Genially), tests correspondants.
 - **Zoom** : le blocage du double appui ne se fait plus par un script (il empêchait deux appuis rapides sur deux boutons différents, par exemple cocher puis décocher une matière) mais par `touch-action: manipulation`, que Safari et Chrome respectent. Le pincement reste bloqué. Le test « zoom à deux doigts toujours possible » est remplacé par « zoom bloqué », à la demande de Ramzi.
 - Base de données : aucune modification.
+
+## 15 nov. 2026 : révision quotidienne avant un contrôle
+
+- **Réglage « Avant un contrôle, revoir les cartes de ses chapitres tous les jours »** (Réglages > Révision) : Jamais, 3, **7 (par défaut)** ou 14 jours avant. Synchronisé (`merge.boostj`).
+- **Fonctionnement** : les cartes du jour = les cartes que la répétition espacée (FSRS) ramène aujourd'hui, plus, quand un contrôle tombe dans ce délai, toutes les cartes des chapitres de ce contrôle (ceux choisis, sinon toute la matière) pas encore vues aujourd'hui. Les cartes vues dans la journée sont notées (`merge.vus`, remis à zéro chaque jour, synchronisé) pour ne pas revenir deux fois le même jour.
+- **Pourquoi ça ne casse pas la répétition espacée** : une carte « en plus » (pas encore due pour FSRS) réussie ne touche pas à son calendrier, seul le compteur de bonnes réponses (points, pièces) avance. Ratée, elle passe par FSRS comme une carte oubliée (elle revient vite), ce qui est la vraie information. Après le contrôle, tout reprend normalement, sans rattrapage.
+- Accueil : « À réviser aujourd'hui : 30 cartes, dont 18 pour ton prochain contrôle ».
+- Les notifications « X cartes à revoir » du serveur ne comptent que les cartes FSRS (elles ne connaissent pas ce réglage) : c'est volontaire, pas de redéploiement.

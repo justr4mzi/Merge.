@@ -10,7 +10,7 @@
   function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   // Ces clés sont gardées sur l'appareil ET dans le compte (table user_kv) : on retrouve la même chose sur téléphone et sur PC.
   // Restent sur l'appareil seulement : kvts (horodatages), file (révisions en attente d'envoi), cache.* et gen.* (copies de la base), erreurs.* (copie de secours de la table mistakes). Le thème est dans le profil.
-  const SYNC = /^merge\.(fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|controles|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
+  const SYNC = /^merge\.(fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|controles|vus|boostj|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
   let kvTs = {}, kvQueue = {}, kvTimer = null, kvOff = false, kvAt = 0;
   try { kvTs = JSON.parse(localStorage.getItem("merge.kvts") || "{}") || {}; } catch (e) { kvTs = {}; }
   const kvSaveTs = () => { try { localStorage.setItem("merge.kvts", JSON.stringify(kvTs)); } catch (e) { /* rien */ } };
@@ -125,7 +125,20 @@
   const isMastered = c => c.mastered != null ? !!c.mastered : c.state === 2;
   function mastery(cards) { if (!cards.length) return 0; return Math.floor(cards.filter(isMastered).length / cards.length * 100); }
   function cardsOf(chapterId) { return state.cards.filter(c => c.chapter_id === chapterId); }
-  function dueCards(list) { const now = Date.now(); return list.filter(c => new Date(c.due_at).getTime() <= now); }
+  // Cartes à revoir = celles que la répétition espacée (FSRS) ramène aujourd'hui, PLUS, avant un contrôle proche, toutes les cartes
+  // des chapitres du contrôle pas encore vues aujourd'hui (réglage « Avant un contrôle » : 7 jours par défaut, 0 = jamais).
+  // Une de ces cartes « en plus » réussie ne touche pas à son calendrier FSRS (elle est juste notée vue aujourd'hui) ;
+  // ratée, elle repasse par FSRS comme n'importe quelle carte oubliée.
+  const boostDays = () => { const n = +jget("merge.boostj", 7); return [0, 3, 7, 14].includes(n) ? n : 7; };
+  function boostChapters() {
+    const n = boostDays(); if (!n || !state.chapters) return null; const ids = new Set();
+    upCtrls().forEach(({ c, s }) => { if (daysUntil(c.d) > n) return; (c.ch && c.ch.length ? c.ch : state.chapters.filter(x => x.subject_id === s.id).map(x => x.id)).forEach(i => ids.add(i)); });
+    return ids.size ? ids : null;
+  }
+  const seenToday = () => { const v = jget("merge.vus", null); return new Set(v && v.d === localDay() && Array.isArray(v.ids) ? v.ids : []); };
+  function markSeen(id, on = true) { const v = jget("merge.vus", null), d = localDay(), l = new Set(v && v.d === d && Array.isArray(v.ids) ? v.ids : []); on ? l.add(id) : l.delete(id); jset("merge.vus", { d, ids: [...l].slice(-3000) }); }
+  const fsrsDue = c => new Date(c.due_at).getTime() <= Date.now();
+  function dueCards(list) { const b = boostChapters(), seen = b ? seenToday() : null; return list.filter(c => fsrsDue(c) || (b && b.has(c.chapter_id) && !seen.has(c.id))); }
   const VACANCES_ZONES = {
     A: [["Toussaint", "2026-10-17", "2026-11-01"], ["Noël", "2026-12-19", "2027-01-03"], ["Hiver", "2027-02-13", "2027-02-28"], ["Printemps", "2027-04-10", "2027-04-25"], ["Été", "2027-07-03", "2027-08-31"]],
     B: [["Toussaint", "2026-10-17", "2026-11-01"], ["Noël", "2026-12-19", "2027-01-03"], ["Hiver", "2027-02-20", "2027-03-07"], ["Printemps", "2027-04-17", "2027-05-02"], ["Été", "2027-07-03", "2027-08-31"]],
