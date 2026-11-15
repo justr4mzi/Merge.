@@ -187,7 +187,7 @@ async function step(id: string) {
       for (let i = 0; i < pending.length; i += 4) batches.push(pending.slice(i, i + 4));
       let next = 0;
       const worker = async () => {
-        while (next < batches.length && Date.now() - t0 < 40000) {
+        while (next < batches.length && Date.now() - t0 < 25000) {
           const batch = batches[next++];
           const imgs: Part[] = [];
           for (const i of batch) {
@@ -202,10 +202,19 @@ async function step(id: string) {
           // 2) Relecture : on compare la transcription aux photos, mot à mot, et on corrige ce qui ne correspond pas (surtout pour l'écriture à la main).
           try {
             // Ne compte pas dans la limite du jour : c'est une vérification de la même lecture, pas une nouvelle demande.
-            const rel: string = (await gemini(sa, sys, [{ text: "Voici des photos de pages de cours et leur transcription. Relis la transcription mot à mot en la comparant aux photos. Corrige : mot ou nombre mal lu, chiffre, signe, exposant, indice ou unité faux, mot ajouté qui n'est PAS sur la photo, passage oublié. Tout ce qui ne se lit pas avec certitude sur la photo devient [illisible]. N'ajoute aucune connaissance extérieure et ne corrige pas les erreurs de l'auteur du cours. Renvoie UNIQUEMENT la transcription corrigée complète, dans le même format, pages séparées par [[PAGE]].\n\nTranscription :\n<<<\n" + txt + "\n>>>" }, ...imgs], false, 0, "low")).text;
+            const rel: string = (await gemini(sa, sys, [{ text: "Voici des photos de pages de cours et leur transcription. Relis la transcription mot à mot en la comparant aux photos. Corrige : mot ou nombre mal lu, chiffre, signe, exposant, indice ou unité faux, mot ajouté qui n'est PAS sur la photo, passage oublié. Pour chaque [illisible] déjà présent, regarde cet endroit de très près et remplace-le par le texte exact si tu peux le lire avec certitude. Ce qui ne se lit vraiment pas avec certitude reste [illisible]. N'ajoute aucune connaissance extérieure et ne corrige pas les erreurs de l'auteur du cours. Renvoie UNIQUEMENT la transcription corrigée complète, dans le même format, pages séparées par [[PAGE]].\n\nTranscription :\n<<<\n" + txt + "\n>>>" }, ...imgs], false, 0, "low")).text;
             const a = txt.split("[[PAGE]]").filter((x) => x.trim()).length, b = rel.split("[[PAGE]]").filter((x: string) => x.trim()).length;
             if (rel.trim().length > txt.trim().length * 0.6 && b === a) txt = rel;
           } catch (e) { console.error("relecture", e); }
+          // 3) Déchiffrage : s'il reste des [illisible], un passage dédié uniquement à ces endroits (ne compte pas non plus dans la limite).
+          if (/\[illisible\]/i.test(txt)) {
+            try {
+              const dec: string = (await gemini(sa, sys, [{ text: "Cette transcription de pages de cours contient des passages marqués [illisible]. Concentre-toi UNIQUEMENT sur eux : pour chacun, retrouve l'endroit sur la photo et regarde-le de très près. Aide-toi de la façon dont l'auteur forme les mêmes lettres et chiffres ailleurs sur la page, des mots autour et de la grammaire de la phrase, et du même mot écrit plus clairement ailleurs dans ces pages. Remplace [illisible] par le texte exact quand tu peux le lire avec certitude ; si un seul mot reste douteux dans un passage, garde [illisible] juste pour ce mot. N'invente jamais un mot, un nombre ou une formule qui n'est pas écrit, n'utilise pas tes connaissances du sujet pour combler un trou, et ne change RIEN d'autre dans le texte. Renvoie UNIQUEMENT la transcription complète, même format, pages séparées par [[PAGE]].\n\nTranscription :\n<<<\n" + txt + "\n>>>" }, ...imgs], false, 0, "high")).text;
+              const a = txt.split("[[PAGE]]").filter((x) => x.trim()).length, b = dec.split("[[PAGE]]").filter((x: string) => x.trim()).length;
+              const ill = (t: string) => (t.match(/\[illisible\]/gi) || []).length;
+              if (b === a && dec.trim().length > txt.trim().length * 0.8 && ill(dec) <= ill(txt)) txt = dec;
+            } catch (e) { console.error("dechiffrage", e); }
+          }
           const pages = txt.split("[[PAGE]]").map((x) => x.trim()).filter(Boolean);
           batch.forEach((i, k) => { st.texts[i] = pages.length === batch.length ? pages[k] : (k === 0 ? txt : ""); });
           const done = Object.keys(st.texts).length;

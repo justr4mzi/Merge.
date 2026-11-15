@@ -2945,22 +2945,24 @@
     const paint = el => {
       const chs = state.chapters.filter(c => c.subject_id === v.s), auto = v.s && bestChapter(v.s), noSubj = v.act === "pause";
       el.querySelector("#bacts").innerHTML = ACTS.map(a => `<button type="button" class="chip" data-ba="${a[0]}" aria-pressed="${v.act === a[0]}">${I[a[2]]}&nbsp;${a[1]}</button>`).join("");
-      el.querySelector("#bsubj").innerHTML = noSubj ? "" : `<span class="label">Matière</span><div class="chips">${state.subjects.map(x => `<button type="button" class="chip" data-bs="${x.id}" aria-pressed="${v.s === x.id}" style="--c:${esc(x.color)}"><span class="dot"></span>&nbsp;${esc(x.name)}</button>`).join("") || '<span class="small muted">Ajoute d\'abord une matière.</span>'}</div>
+      const optSubj = v.act === "libre";
+      el.querySelector("#bsubj").innerHTML = noSubj ? "" : `<span class="label">Matière${optSubj ? " (facultatif)" : ""}</span><div class="chips">${optSubj ? `<button type="button" class="chip" data-bs="" aria-pressed="${!v.s}">Aucune</button>` : ""}${state.subjects.map(x => `<button type="button" class="chip" data-bs="${x.id}" aria-pressed="${v.s === x.id}" style="--c:${esc(x.color)}"><span class="dot"></span>&nbsp;${esc(x.name)}</button>`).join("") || '<span class="small muted">Ajoute d\'abord une matière.</span>'}</div>
         ${chs.length ? `<label class="label" for="bch">Chapitre (facultatif)</label><select id="bch"><option value="">Aucun chapitre en particulier</option>${auto ? `<option value="auto"${v.ch === "auto" ? " selected" : ""}>Choisi par Merge : ${esc(auto.name)}</option>` : ""}${chs.map(c => `<option value="${c.id}"${v.ch === c.id ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select>` : ""}`;
       el.querySelector("#bcols").innerHTML = `<button type="button" class="bcol auto" data-bc="" aria-pressed="${!v.color}" aria-label="Couleur de la matière" style="--c:${esc(blockColor(Object.assign({}, v, { color: null })))}"><i></i><span>Matière</span></button>` + BCOLORS.map(c => `<button type="button" class="bcol" data-bc="${c}" aria-pressed="${v.color === c}" aria-label="Couleur ${c}" style="--c:${c}"><i></i></button>`).join("");
       el.querySelectorAll("[data-bc]").forEach(x => x.onclick = () => { v.color = x.dataset.bc || null; paint(el); });
       el.querySelector("#bdurs").innerHTML = durs.map(d => `<button type="button" class="chip" data-bd="${d}" aria-pressed="${v.dur === d}">${durTxt(d)}</button>`).join("") + `<button type="button" class="chip" data-bd="libre" aria-pressed="${!durs.includes(v.dur)}">Autre</button>`;
       el.querySelector("#bfree").hidden = durs.includes(v.dur) && !v.free;
       el.querySelector("#bslide").value = v.dur; el.querySelector("#bslv").textContent = durTxt(v.dur);
-      el.querySelectorAll("[data-ba]").forEach(x => x.onclick = () => { v.act = x.dataset.ba; if (v.act === "pause" && v.dur > 15) v.dur = 5; paint(el); });
-      el.querySelectorAll("[data-bs]").forEach(x => x.onclick = () => { v.s = x.dataset.bs; v.ch = null; paint(el); });
+      // « Autre » : n'importe quelle activité (sport, coloriage, devoir…), matière et chapitre facultatifs, aucune par défaut.
+      el.querySelectorAll("[data-ba]").forEach(x => x.onclick = () => { const was = v.act; v.act = x.dataset.ba; if (v.act === "pause" && v.dur > 15) v.dur = 5; if (v.act === "libre" && was !== "libre") { v.s = null; v.ch = null; } else if (v.act !== "libre" && v.act !== "pause" && !v.s) v.s = (state.subjects[0] || {}).id || null; paint(el); });
+      el.querySelectorAll("[data-bs]").forEach(x => x.onclick = () => { v.s = x.dataset.bs || null; v.ch = null; paint(el); });
       el.querySelectorAll("[data-bd]").forEach(x => x.onclick = () => { if (x.dataset.bd === "libre") { v.free = true; if (durs.includes(v.dur)) v.dur = Math.min(300, v.dur + 5); } else { v.free = false; v.dur = +x.dataset.bd; } paint(el); });
       if (el.querySelector("#bch")) el.querySelector("#bch").onchange = e => { v.ch = e.target.value || null; };
     };
     sheet(`<h1>${edit ? "Modifier" : "Ajouter une révision"}</h1><div class="chips" id="bacts"></div><div class="stack" id="bsubj"></div>
       <div class="row" style="flex-wrap:wrap;gap:12px"><div class="field"><label for="bstart">Début</label><input id="bstart" type="time" value="${esc(v.start)}"></div><div class="field grow"><span class="label">Durée</span><div class="chips" id="bdurs"></div><div class="bfree" id="bfree" hidden><input type="range" id="bslide" min="5" max="300" step="5" aria-label="Durée en minutes"><b id="bslv"></b></div></div></div>
       <div class="field"><span class="label">Couleur</span><div class="bcols" id="bcols"></div></div>
-      <div class="field"><label for="btitle">Nom (facultatif)</label><input id="btitle" type="text" maxlength="60" value="${esc(v.title || "")}" placeholder="Ex. Fiche sur la mitose"></div>
+      <div class="field"><label for="btitle">Nom (facultatif)</label><input id="btitle" type="text" maxlength="60" value="${esc(v.title || "")}" placeholder="${"Ex. Fiche sur la mitose, Sport, Devoir de philo…"}"></div>
       ${edit && b.weekly ? '<p class="small muted">Ce bloc revient chaque semaine.</p>' : `<button type="button" class="switch" role="switch" id="bweek" aria-checked="false"><i></i><span>Répéter chaque semaine</span></button>`}
       <button class="btn" id="bok">${edit ? "Enregistrer" : "Ajouter"}</button>${edit ? '<button class="btn ghost" id="bdel">Supprimer</button>' : ""}`, el => {
       paint(el); let weekly = false;
@@ -2969,6 +2971,7 @@
       el.querySelector("#bok").onclick = () => {
         const x = jGet(), nb = { id: edit ? b.id : jid(), start: el.querySelector("#bstart").value || v.start, dur: v.dur, s: v.act === "pause" ? null : v.s, ch: v.act === "pause" || v.ch === "auto" ? null : v.ch, act: v.act, title: el.querySelector("#btitle").value.trim().slice(0, 60) }; if (v.color) nb.color = v.color; if (v.ch === "auto" && v.act !== "pause") nb.auto = true;
         if (v.act !== "pause" && !nb.s && v.act !== "libre") return toast("Choisis une matière.");
+        if (v.act === "libre" && !nb.s && !nb.title) return toast("Donne un nom à ton activité.");
         if (edit && b.weekly) { const i = x.weekly.findIndex(y => y.id === b.id); if (i >= 0) x.weekly[i] = Object.assign(nb, { wd: b.wd }); }
         else if (!edit && weekly) x.weekly.push(Object.assign(nb, { wd: (dayOf(jDay).getDay() + 6) % 7 }));
         else { const l = x.blocks[jDay] || []; const i = l.findIndex(y => y.id === nb.id); if (i >= 0) l[i] = nb; else l.push(nb); x.blocks[jDay] = l; }

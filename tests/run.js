@@ -1268,10 +1268,16 @@ async function planningPlus(browser) {
   ok(await page.locator("#sheet [data-bc]").count() === 9, tag + " : choix de couleur (matière + 8)");
   await page.click('[data-bs="s1"]'); await page.click('#sheet [data-bc="#ec4899"]'); await page.fill("#bstart", "18:00"); await page.click("#bok"); await page.waitForTimeout(200);
   ok(await page.evaluate(() => { const r = document.querySelector(".jrow:not(.school)"); return r && r.style.getPropertyValue("--c") === "#ec4899" && JSON.parse(localStorage.getItem("merge.journee")).blocks[Object.keys(JSON.parse(localStorage.getItem("merge.journee")).blocks)[0]][0].color === "#ec4899"; }), tag + " : couleur gardée sur le bloc");
+  // « Autre » : n'importe quelle activité, sans matière ni chapitre.
+  await page.click("#jadd"); await page.waitForTimeout(150); await page.click('[data-ba="libre"]'); await page.waitForTimeout(50);
+  ok(await page.locator('#sheet [data-bs=""][aria-pressed="true"]').count() === 1 && await page.locator("#bch").count() === 0, tag + " : Autre, sans matière par défaut");
+  await page.fill("#bstart", "21:00"); await page.click("#bok"); await page.waitForTimeout(150); ok(await page.locator("#sheet").count() === 1, tag + " : Autre sans nom ni matière refusé");
+  await page.fill("#btitle", "Coloriage"); await page.click("#bok"); await page.waitForTimeout(200);
+  ok((await txt(page)).includes("Coloriage") && await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem("merge.journee")).blocks).flat().some(b => b.title === "Coloriage" && b.s === null && b.act === "libre")), tag + " : activité libre ajoutée");
   // Vue heure par heure : on peut cocher.
   await page.click("#jhours"); await page.waitForTimeout(200);
-  ok(await page.locator(".hblk .hcheck").count() === 1 && await page.locator(".hblk .hedit").count() === 1, tag + " : case à cocher dans la vue heures");
-  await page.click(".hcheck"); await page.waitForTimeout(150); ok(await page.locator(".hblk.done").count() === 1, tag + " : bloc coché dans la vue heures");
+  ok(await page.locator(".hblk .hcheck").count() === 2 && await page.locator(".hblk .hedit").count() === 2, tag + " : case à cocher dans la vue heures");
+  await page.click(".hcheck >> nth=0"); await page.waitForTimeout(150); ok(await page.locator(".hblk.done").count() === 1, tag + " : bloc coché dans la vue heures");
   const sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px", sm.join(" | "));
   await page.click("#jhours"); await page.waitForTimeout(150);
   // Dictée sans reconnaissance vocale du téléphone : enregistrement, transcrit par l'IA.
