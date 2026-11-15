@@ -105,7 +105,7 @@
     draw();
   }
 
-  const TABS = [["accueil", "Accueil", "home"], ["matieres", "Matières", "subj"], ["calendrier", "Calendrier", "cal"], ["exos", "Prof", "ask"], ["progres", "Progrès", "chart"], ["reglages", "Réglages", "gear"]];
+  const TABS = [["accueil", "Accueil", "home"], ["matieres", "Matières", "subj"], ["calendrier", "Planning", "day"], ["exos", "Prof", "prof"], ["progres", "Progrès", "chart"], ["reglages", "Réglages", "gear"]];
   function drawTabs(current) {
     tabs.hidden = false;
     const due = state.cards ? dueCards(state.cards).length : 0, st = state.sessions ? streak() : 0;

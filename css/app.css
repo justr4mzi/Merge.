@@ -1122,3 +1122,90 @@ html,body{touch-action:manipulation}
 .hnow{position:absolute;left:48px;right:0;height:2px;background:#ef4444;z-index:2}
 .hnow::before{content:"";position:absolute;left:-5px;top:-4px;width:10px;height:10px;border-radius:50%;background:#ef4444}
 @media (max-width:359px){.jweek{grid-template-columns:repeat(7,1fr)}.jweek .iconbtn{display:none}}
+/* Progrès : boutique bien visible, raccourcis en tuiles */
+.pshop{display:flex;align-items:center;gap:12px;min-height:56px;padding:10px 12px;border-radius:16px;text-decoration:none;color:#fff;background:linear-gradient(135deg,#4b39c8,#9483ff)}
+.pshop .mico{background:rgba(255,255,255,.18);color:#fff}.pshop b{display:block;font-size:1.05rem}.pshop .small{opacity:.9}
+.pshopgo{flex:none;padding:10px 14px;min-height:44px;display:grid;place-items:center;border-radius:12px;background:#fff;color:#4b39c8;font-weight:800}
+.prgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (min-width:900px){.prgrid{grid-template-columns:repeat(4,1fr)}}
+@media (max-width:420px){.ptile{gap:10px;padding:10px}.ptile .mico{width:40px;height:40px}}
+.ptile{display:flex;align-items:center;gap:12px;padding:12px;min-height:64px;min-width:0;text-decoration:none;color:inherit}
+.ptile b,.ptile .small{overflow-wrap:anywhere}
+.ptile b{display:block}.ptile .small{display:block}
+/* Prof : chat libre */
+.pctx{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pchip{display:inline-flex;align-items:center;gap:4px;min-height:44px;padding:0 0 0 12px;border-radius:999px;background:color-mix(in srgb,var(--c,#9483ff) 16%,transparent);border:1px solid color-mix(in srgb,var(--c,#9483ff) 40%,transparent);font-weight:700;font-size:.9rem;max-width:100%}
+.pchip .dot{background:var(--c,#9483ff)}
+.pchipx{width:44px;height:44px;min-height:44px;margin:-1px 0;border:0;background:transparent;color:inherit;display:grid;place-items:center;border-radius:50%;cursor:pointer}
+.pchipx svg{width:16px;height:16px}
+.pchip.add{padding:0 14px;cursor:pointer;color:var(--fg);background:transparent;border-style:dashed;border-color:var(--line);font:inherit;font-weight:700}
+.pchip.add svg{width:18px;height:18px}
+.pempty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:24px 12px;margin:auto 0}
+.pempty .pico{width:56px;height:56px;border-radius:18px;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 18%,transparent);color:#9483ff}
+.pcomp{display:flex;flex-direction:column;gap:8px;padding:8px;border-radius:26px;background:var(--card);border:1px solid var(--line)}
+.pbar{display:flex;align-items:flex-end;gap:4px}
+.pbar textarea{flex:1;min-width:0;border:0;background:transparent;resize:none;min-height:44px;max-height:160px;padding:11px 6px;color:var(--fg);font:inherit;line-height:1.4;outline:none}
+.psend{background:var(--accent);color:#fff;border-radius:50%}
+.psend:disabled{opacity:.5}
+#exmic.on{color:#ff6b6b}
+.pimg{display:flex;align-items:center;gap:10px;padding:4px}
+.pimg img{width:56px;height:56px;object-fit:cover;border-radius:12px}
+.pimg .small{flex:1}
+.phbtn{justify-content:flex-start;text-align:left;min-height:56px}.phbtn.on{border-color:var(--accent)}
+.pctxs .chip:disabled{opacity:.75}
+.ptitle{font-size:1.25rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.pdwrap{position:fixed;inset:0;z-index:60}
+.pdshade{position:absolute;inset:0;background:rgba(0,0,0,.5);opacity:0;transition:opacity .2s}
+.pdpanel{position:absolute;top:0;bottom:0;left:0;width:min(320px,86vw);background:var(--bg);border-right:1px solid var(--line);padding:calc(14px + env(safe-area-inset-top)) 14px 14px;display:flex;flex-direction:column;gap:12px;transform:translateX(-100%);transition:transform .2s ease;overflow-y:auto}
+.pdwrap.open .pdshade{opacity:1}.pdwrap.open .pdpanel{transform:none}
+.pdlist{display:flex;flex-direction:column;gap:4px}
+.pdgrp{margin:10px 0 2px}
+.pdrow{display:flex;align-items:center;gap:4px;border-radius:12px}
+.pdrow.on{background:color-mix(in srgb,var(--accent) 22%,transparent)}
+.pdconv{flex:1;min-width:0;min-height:52px;text-align:left;background:transparent;border:0;color:var(--fg);font:inherit;padding:6px 10px;border-radius:12px;cursor:pointer;display:flex;flex-direction:column;justify-content:center}
+.pdconv b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (prefers-reduced-motion:reduce){.pdpanel,.pdshade{transition:none}}
+/* Couleur d'un bloc */
+.bcols{display:flex;flex-wrap:wrap;gap:8px}
+.bcol{width:44px;height:44px;border-radius:50%;border:2px solid transparent;background:transparent;display:grid;place-items:center;cursor:pointer;padding:0}
+.bcol i{width:30px;height:30px;border-radius:50%;background:var(--c)}
+.bcol[aria-pressed="true"]{border-color:var(--fg)}
+.bcol.auto{width:auto;padding:0 12px 0 6px;border-radius:999px;display:flex;gap:6px;border-color:var(--line);color:var(--fg);font:inherit;font-weight:700}
+.bcol.auto[aria-pressed="true"]{border-color:var(--fg)}
+/* Vue heures : bloc = zone pour modifier + case à cocher */
+.hblk.hb{flex-direction:row;align-items:stretch;padding:0;gap:0}
+.hedit{flex:1;min-width:0;background:transparent;border:0;color:#fff;text-align:left;padding:4px 10px;display:flex;flex-direction:column;font:inherit;cursor:pointer;overflow:hidden}
+.hedit b{font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hcheck{flex:none;align-self:center;margin-right:4px}
+.hcheck span{border-color:rgba(255,255,255,.85)!important}
+/* Accueil : autres façons de réviser, repliées */
+.moreways{display:flex;flex-direction:column;gap:10px}
+.moreways>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.moreways>summary::-webkit-details-marker{display:none}
+.moreways>summary::after{content:"";width:8px;height:8px;border-right:2.5px solid currentColor;border-bottom:2.5px solid currentColor;transform:translateY(-2px) rotate(45deg);transition:transform .2s}
+.moreways[open]>summary::after{transform:translateY(2px) rotate(-135deg)}
+.moreways>.stack{margin-top:10px}
+/* Tâche en cours : la couleur de la matière avance avec le temps */
+.ntbody{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.ntname{font-size:1.1rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ntgo svg{width:18px;height:18px}
+.ntnext{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 4px;color:var(--muted);text-decoration:none}
+.ntnext b{color:var(--fg)}
+.lrem{font-weight:800;color:var(--fg)}
+.bfree{display:flex;align-items:center;gap:12px;margin-top:8px}
+.bfree input[type=range]{flex:1;min-height:44px;accent-color:#9483ff}
+.bfree b{min-width:72px;text-align:right}
+.today .moreways>summary.btn{background:rgba(255,255,255,.12);color:#fff;border:1.5px solid rgba(255,255,255,.4);box-shadow:none}
+
+/* Tâche en cours : sobre. Fond de carte, le temps écoulé se remplit d'une teinte douce de la couleur de la matière, barre fine en bas. */
+.nowtask{position:relative;display:flex;align-items:center;gap:12px;min-height:76px;padding:14px 16px 18px;border-radius:20px;overflow:hidden;text-decoration:none;color:var(--fg);isolation:isolate;background:var(--card);border:1px solid var(--line)}
+.ntfill{position:absolute;inset:0 auto 0 0;width:var(--p);z-index:-1;background:linear-gradient(90deg,color-mix(in srgb,var(--c) 8%,transparent),color-mix(in srgb,var(--c) 22%,transparent));transition:width 1.2s ease}
+.nowtask::after{content:"";position:absolute;left:0;bottom:0;height:4px;width:var(--p);background:var(--c);border-radius:0 4px 4px 0;transition:width 1.2s ease}
+.ntgo{position:relative;flex:none;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--c);color:#fff}
+.ntgo svg{width:18px;height:18px;margin-left:2px}
+.nowtask .small{color:var(--muted)}
+.nowtask .small b{color:var(--c)}
+.jrow.live .jtxt{position:relative;border-radius:12px;padding:6px 12px;isolation:isolate;overflow:hidden;background:color-mix(in srgb,var(--c) 6%,transparent)}
+.jrow.live .jtxt::before{content:"";position:absolute;inset:0 auto 0 0;width:var(--p);z-index:-1;background:color-mix(in srgb,var(--c) 18%,transparent);transition:width 1.2s ease}
+.jrow.live .jtxt::after{content:"";position:absolute;left:0;bottom:0;height:3px;width:var(--p);background:var(--c);border-radius:0 3px 3px 0}
+@media (prefers-reduced-motion:reduce){.ntfill,.nowtask::after,.jrow.live .jtxt::before{transition:none}}

@@ -11,7 +11,7 @@
     if (safeGet("merge.duoin") && location.hash !== "#duo") { location.hash = "#duo"; return; }
     const h = location.hash.replace("#", ""), arg = h.slice(h.indexOf("-") + 1);
     document.body.classList.add("nav"); closeSheet();
-    drawTabs(/^(progres|calendrier|reglages)$/.test(h) ? h : h === "duo" ? "progres" : h === "journee" || h === "edt" ? "calendrier" : /^exos/.test(h) ? "exos" : h === "corbeille" ? "reglages" : h === "bilan" || h === "minuteur" || h === "recompenses" || h === "boutique" ? "progres" : !h || h === "accueil" || h === "cartes-jour" || h === "melange" || h === "perso" || h === "mixte" ? "accueil" : "matieres");
+    drawTabs(/^(progres|calendrier|reglages)$/.test(h) ? h : h === "duo" ? "progres" : h === "journee" || h === "edt" || h === "mois" ? "calendrier" : /^exos/.test(h) ? "exos" : h === "corbeille" ? "reglages" : h === "bilan" || h === "minuteur" || h === "recompenses" || h === "boutique" ? "progres" : !h || h === "accueil" || h === "cartes-jour" || h === "melange" || h === "perso" || h === "mixte" ? "accueil" : "matieres");
     screenSession.key = null;
     if (busStop) busStop();
     stopSpeak();
@@ -37,6 +37,7 @@
     else if (h === "progres") screenProgress();
     else if (h === "duo") screenDuo();
     else if (h === "journee") jGo("jour");
+    else if (h === "mois") screenCalendar();
     else if (h === "exos") screenExos();
     else if (h.startsWith("exos-")) screenExos(arg);
     else if (h.startsWith("apprendre-")) screenQuestions(arg, "apprendre");

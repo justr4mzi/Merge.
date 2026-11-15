@@ -144,7 +144,7 @@ async function flows(browser) {
   await go(page, "#bus-c1"); await page.click("#bplay"); await page.waitForTimeout(200); ok((await page.locator("#bplay").innerText()).trim() === "Pause", "mains libres : lecture"); await page.click("#bplay");
   await go(page, "#planche-c1"); ok(await page.locator(".a4.planche").count() === 4 && await page.locator(".pc.q").count() === 11, "planche A4 : recto et verso de 8 cartes", String(await page.locator(".a4.planche").count()));
   await go(page, "#erreurs"); await page.click("[data-why] >> nth=0"); await page.waitForTimeout(300); ok((await txt(page)).includes("À retenir"), "carnet d'erreurs : Pourquoi ?");
-  await page.evaluate(() => localStorage.setItem("merge.jview", JSON.stringify({ lvl: "mois" }))); await go(page, "#calendrier"); await page.click(".cal button.day >> nth=-1"); await page.waitForTimeout(500); if (await page.locator("#sheet [data-close]").count()) { await page.click("#sheet [data-close]"); await page.waitForTimeout(150); } await page.click("#jctl"); await page.click('#sheet [data-sub="s2"]'); await page.waitForTimeout(300); ok(await page.evaluate(() => !!window.__fake.DB.subjects.find(s => s.id === "s2").exam_date), "calendrier : contrôle placé en touchant un jour");
+  await page.evaluate(() => localStorage.setItem("merge.jview", JSON.stringify({ lvl: "jour" }))); await go(page, "#mois"); await page.click(".cal button.day >> nth=-1"); await page.waitForTimeout(500); if (await page.locator("#sheet [data-close]").count()) { await page.click("#sheet [data-close]"); await page.waitForTimeout(150); } await page.click("#jctl"); await page.click('#sheet [data-sub="s2"]'); await page.waitForTimeout(300); ok(await page.evaluate(() => !!window.__fake.DB.subjects.find(s => s.id === "s2").exam_date), "calendrier : contrôle placé en touchant un jour");
   ok(!page.errors.length, "modes : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | "));
   await page.context().close();
 
@@ -251,7 +251,7 @@ async function v7(browser) {
   o = await overflow(page); ok(o.sw <= o.iw, "v7 import : pas de débordement", JSON.stringify(o));
   await go(page, "#accueil", 300);
   ok(await page.locator("#jobchip:not([hidden])").count() === 1 && /Import \d+ %/.test(await page.locator("#jobchip").innerText()), "v7 import : pastille de progression sur les autres écrans");
-  ok((await txt(page)).includes("appels IA aujourd'hui"), "v7 accueil : tuile du quota IA");
+  ok(!(await txt(page)).includes("appels IA aujourd'hui") && (await txt(page)).includes("Prochains contrôles"), "v7 accueil : plus de compteur IA, prochains contrôles");
   await page.waitForFunction(() => /Cours prêt/.test((document.getElementById("jobchip") || {}).innerText || ""), null, { timeout: 15000 });
   ok(true, "v7 import : la pastille annonce le cours prêt");
   await page.click("#jobchip"); await page.waitForTimeout(300);
@@ -277,7 +277,7 @@ async function v8(browser) {
   ok((await txt(page)).includes("Ce que tu as demandé") && (await txt(page)).includes("10 questions pièges"), "v8 demande libre : réponse affichée et gardée");
   o = await overflow(page); ok(o.sw <= o.iw, "v8 demande libre : pas de débordement", JSON.stringify(o));
   await go(page, "#cartes-c1", 400); ok(await page.locator(".sside .ring").count() === 1, "v8 cartes : panneau latéral sur grand écran");
-  await go(page, "#calendrier", 300); ok(await page.locator(".calside").count() === 1 && await page.locator(".cal.calx .day").count() >= 28, "v8 calendrier : grille et colonne latérale");
+  await go(page, "#mois", 300); ok(await page.locator(".calside").count() === 1 && await page.locator(".cal.calx .day").count() >= 28, "v8 calendrier : grille et colonne latérale");
   await go(page, "#reglages", 300); ok(await page.locator("#voice").count() === 1 || !(await page.evaluate(() => "speechSynthesis" in window)), "v8 réglages : choix de la voix");
   ok(!page.errors.length, "v8 : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
 
@@ -495,7 +495,7 @@ async function edt(browser) {
   await go(page, "#edt", 300); ok((await txt(page)).includes("Ajoute ton emploi du temps"), "emploi du temps : écran vide");
   await page.setInputFiles("#edtf", path.join(SHOTS, "390-dark-accueil.png")); await page.waitForTimeout(800);
   ok(await page.locator(".edtslot").count() >= 3, "emploi du temps : lu depuis une photo");
-  ok(await page.locator("[data-ab]").count() === 2, "emploi du temps : demande semaine A ou B");
+  ok(await page.locator("[data-ab]").count() === 2 && /du lundi \d+.* au vendredi \d+/.test(await page.locator("#sheet").innerText()), "emploi du temps : demande semaine A ou B, avec les dates");
   await page.click('[data-ab="A"]'); await page.waitForTimeout(200);
   ok((await txt(page)).includes("semaine A") || (await txt(page)).includes("semaine B"), "emploi du temps : semaine affichée");
   ok(await page.evaluate(() => window.__mergeSync.synced("merge.edt") && JSON.parse(localStorage.getItem("merge.edt")).ref.letter === "A"), "emploi du temps : gardé et synchronisé");
@@ -1018,7 +1018,7 @@ async function controleChapitres(browser) {
     await page.click("[data-cdel] >> nth=0"); await page.click("[data-cdel] >> nth=0"); await page.waitForTimeout(300);
     ok(await page.locator(".ctrlrow").count() === 1 && await page.evaluate(d => window.__fake.DB.subjects.find(s => s.id === "s1").exam_date !== d, d0), tag + " : premier contrôle supprimé, la date passe au suivant", await page.evaluate(() => localStorage.getItem("merge.controles") + " / " + window.__fake.DB.subjects.find(s => s.id === "s1").exam_date + " / " + document.querySelectorAll(".ctrlrow").length));
     // Calendrier : plusieurs matières le même jour.
-    await page.evaluate(() => localStorage.setItem("merge.jview", JSON.stringify({ lvl: "mois" }))); await go(page, "#calendrier", 300); await page.click(".cal button.day >> nth=-2"); await page.waitForTimeout(500);
+    await page.evaluate(() => localStorage.setItem("merge.jview", JSON.stringify({ lvl: "jour" }))); await go(page, "#mois", 300); await page.click(".cal button.day >> nth=-2"); await page.waitForTimeout(500);
     if (await page.locator("#sheet [data-close]").count()) { await page.click("#sheet [data-close]"); await page.waitForTimeout(150); }
     await page.click("#jctl"); await page.click('#sheet [data-sub="s1"]'); await page.waitForTimeout(250); await page.click("#ccok"); await page.waitForTimeout(150);
     await page.click("#jctl"); await page.click('#sheet [data-sub="s2"]'); await page.waitForTimeout(250); await page.click("#ccok"); await page.waitForTimeout(150);
@@ -1175,7 +1175,9 @@ async function journee(browser) {
     await page.click("[data-go]"); await page.waitForTimeout(300); ok(/#cartes-c\d|#revision-s1/.test(await page.evaluate(() => location.hash)), tag + " : toucher le bloc lance la révision", await page.evaluate(() => location.hash));
     // Remonter : jour → semaine → mois, et retrouver le niveau après rechargement.
     await go(page, "#calendrier", 400); await page.click("#jup"); await page.waitForTimeout(200); ok(await page.locator(".wkday").count() === 7, tag + " : vue semaine");
-    await page.click("#jup"); await page.waitForTimeout(200); ok(await page.locator(".cal.calx .day").count() >= 28, tag + " : vue mois");
+    await page.click("#jup"); await page.waitForTimeout(200); ok(await page.locator(".cal.calx .day").count() >= 28 && await page.locator('.seg a[href="#mois"][aria-selected="true"]').count() === 1, tag + " : vue mois, sous-onglet Calendrier");
+    await page.click('#tabs a[href="#calendrier"]'); await page.waitForTimeout(300); ok(await page.locator(".wkday").count() === 7 && await page.locator('.seg a[href="#calendrier"][aria-selected="true"]').count() === 1 && (await page.locator('#tabs a[href="#calendrier"]').innerText()).includes("Planning"), tag + " : l'onglet Planning ouvre l'emploi du temps, pas le mois");
+    await page.click('.seg a[href="#mois"]'); await page.waitForTimeout(300);
     await page.click(".cal .day.now"); await page.waitForTimeout(300); ok(await page.locator(".jline").count() === 1, tag + " : toucher un jour ouvre sa frise");
     await page.click("#jhours"); await page.waitForTimeout(200); ok(await page.locator(".hgrid .hrow").count() === 18 && await page.locator(".hgrid .hblk").count() >= 1, tag + " : vue heure par heure");
     await page.evaluate(() => location.reload()); await page.waitForSelector("#app > *"); await go(page, "#calendrier", 500);
@@ -1199,15 +1201,23 @@ async function journee(browser) {
 
 async function exos(browser) {
   for (const [w, h] of [[390, 844], [1280, 800]]) {
-    const page = await open(browser, { w, h, theme: "dark" }), tag = "exercices " + w;
+    const page = await open(browser, { w, h, theme: "dark" }), tag = "prof " + w;
     await go(page, "#accueil", 300);
     ok((await page.locator('#tabs a[href="#exos"]').innerText()).includes("Prof"), tag + " : onglet Prof");
-    await go(page, "#exos", 300); ok(await page.locator("[data-exo]").count() >= 1, tag + " : choix du chapitre");
-    await page.click('[data-exo="c1"]'); await page.waitForTimeout(150);
-    ok(await page.locator(".exquick .chip").count() === 6 && await page.locator("#exq").count() === 1, tag + " : chat du chapitre, raccourcis");
+    // Chat libre : pas besoin de choisir un chapitre.
+    await go(page, "#exos", 300);
+    ok(await page.locator(".pempty").count() === 1 && await page.locator("#pplus").count() === 1 && await page.locator("#exsend").count() === 1 && (await txt(page)).includes("Lier un cours"), tag + " : chat libre ouvert directement, + et envoi");
+    await page.fill("#exq", "Comment bien réviser ?"); await page.click("#exsend"); await page.waitForTimeout(400);
+    ok(await page.evaluate(() => window.__fake.exo.chapter_ids.length === 0 && window.__fake.exo.messages.length === 1) && await page.locator(".exmsg.ai").count() === 1, tag + " : message sans cours lié");
+    ok(await page.evaluate(() => window.__fake.exo.want_title === true) && (await page.locator(".ptitle").innerText()) === "Vitesse moyenne", tag + " : discussion nommée automatiquement");
+    // Nouvelle discussion, puis lier un chapitre.
+    await page.click("#pnew"); await page.waitForTimeout(150); ok(await page.locator(".exmsg").count() === 0, tag + " : nouvelle discussion");
+    await page.click("#pctx"); await page.waitForTimeout(150); ok(await page.locator("#sheet [data-cc]").count() >= 1 && await page.locator("#sheet [data-cs]").count() >= 1, tag + " : choix des chapitres et matières");
+    await page.click('#sheet [data-cc="c1"]'); await page.click("#pctxok"); await page.waitForTimeout(150);
+    ok(await page.locator('[data-unctx="c:c1"]').count() === 1, tag + " : chapitre lié affiché");
     await page.click('[data-q="0"]'); await page.waitForTimeout(400);
     ok(await page.locator(".exmsg.me").count() === 1 && await page.locator(".exmsg.ai .katex").count() >= 1, tag + " : exercice demandé, réponse avec formule");
-    ok(await page.evaluate(() => window.__fake.exo.chapter_id === "c1" && window.__fake.exo.messages.length === 1 && window.__mergeSync.synced("merge.exo.c1")), tag + " : envoyé avec le chapitre, conversation gardée");
+    ok(await page.evaluate(() => JSON.stringify(window.__fake.exo.chapter_ids) === '["c1"]' && window.__fake.exo.messages.length === 1 && window.__mergeSync.synced("merge.prof")), tag + " : envoyé avec le chapitre lié, discussion gardée");
     // Réponse dans la bulle de l'exercice.
     ok((await txt(page)).includes("Comment veux-tu répondre ?") && await page.locator("[data-fmode]").count() === 2 && await page.locator("[data-fv]").count() === 0, tag + " : choix cases ou cahier proposé");
     await page.click('[data-fmode="1"][data-m="cahier"]'); await page.waitForTimeout(150);
@@ -1216,12 +1226,122 @@ async function exos(browser) {
     ok(await page.locator("[data-fv]").count() === 2, tag + " : champs de réponse dans la bulle");
     await page.fill('[data-fv="1-0"]', "5 m/s"); await page.fill('[data-fv="1-1"]', "m/s"); await page.click('[data-fsend="1"]'); await page.waitForTimeout(400);
     ok(await page.evaluate(() => /Mes réponses :[\s\S]*5 m\/s/.test(window.__fake.exo.messages.slice(-1)[0].t)) && await page.locator(".exform.done").count() === 1, tag + " : réponses envoyées pour correction");
-    await page.setInputFiles("#exphoto", path.join(__dirname, "photo-feuille.jpg")); await page.waitForTimeout(400);
-    ok((await page.inputValue("#exq")).includes("Voici ma copie") && (await txt(page)).includes("Photo prête"), tag + " : photo de copie prête");
+    // Le + propose photo (appareil ou galerie) et cours.
+    await page.click("#pplus"); await page.waitForTimeout(150); ok(await page.locator("#pa-cam").count() === 1 && await page.locator("#pa-img").count() === 1 && await page.locator("#pa-ctx").count() === 1, tag + " : le + propose appareil photo, galerie, cours");
+    await page.evaluate(() => { const s = document.getElementById("sheet"); if (s) s.remove(); });
+    await page.setInputFiles("#exfile", path.join(__dirname, "photo-feuille.jpg")); await page.waitForTimeout(400);
+    ok((await page.inputValue("#exq")).includes("Voici ma copie") && await page.locator("#eximg img").count() === 1, tag + " : photo prête avec aperçu");
     await page.click("#exsend"); await page.waitForTimeout(400);
-    ok(await page.evaluate(() => !!(window.__fake.exo.image && window.__fake.exo.image.data.length > 1000)), tag + " : photo envoyée à l'IA");
+    ok(await page.evaluate(() => !!(window.__fake.exo.image && window.__fake.exo.image.data.length > 1000)) && await page.locator("#eximg img").count() === 0, tag + " : photo envoyée à l'IA");
+    // Lier une matière entière.
+    await page.click("#pctx"); await page.waitForTimeout(150); await page.click('#sheet [data-cs="s1"]'); await page.waitForTimeout(50);
+    ok(await page.locator('#sheet [data-sid="s1"]:disabled').count() >= 1, tag + " : toute la matière coche ses chapitres");
+    await page.click("#pctxok"); await page.waitForTimeout(150);
+    await page.fill("#exq", "Résume-moi la matière"); await page.click("#exsend"); await page.waitForTimeout(400);
+    ok(await page.evaluate(() => window.__fake.exo.chapter_ids.includes("c1") && window.__fake.exo.matieres.length === 1), tag + " : matière entière envoyée");
+    // Historique des discussions.
+    ok(await page.evaluate(() => window.__fake.exo.want_title === false), tag + " : nom demandé une seule fois");
+    await page.click("#phist"); await page.waitForTimeout(300); ok(await page.locator("#pdrawer.open [data-conv]").count() === 2 && await page.locator("#pdrawer .pdrow.on").count() === 1 && (await page.locator("#pdrawer").innerText()).includes("Aujourd'hui"), tag + " : menu ☰ avec l'historique", String(await page.locator("#pdrawer [data-conv]").count()));
+    if (w === 390) await page.screenshot({ path: path.join(SHOTS, "prof-menu-390.png") });
+    await page.click("#pdrawer .pdrow:not(.on) [data-conv]"); await page.waitForTimeout(150); ok((await txt(page)).includes("Comment bien réviser ?"), tag + " : reprendre une ancienne discussion");
+    // Depuis un chapitre : le chapitre est lié.
     await go(page, "#chapitre-c1", 400); ok(await page.locator('a[href="#exos-c1"]').count() >= 1, tag + " : depuis le chapitre aussi");
-    if (w === 390) { await go(page, "#exos-c1", 300); await page.screenshot({ path: path.join(SHOTS, "exercices-390.png"), fullPage: true }); }
+    await go(page, "#exos-c1", 300); ok(await page.locator('[data-unctx="c:c1"]').count() === 1 && await page.locator(".exmsg").count() === 0, tag + " : chapitre lié dans une nouvelle discussion");
+    if (w === 390) await page.screenshot({ path: path.join(SHOTS, "prof-390.png"), fullPage: true });
+    const sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px", sm.join(" | "));
+    const o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
+    // Anciennes conversations par chapitre reprises.
+    await page.evaluate(() => { localStorage.removeItem("merge.prof"); localStorage.setItem("merge.exo.c1", JSON.stringify([{ r: "u", t: "Ancienne question" }, { r: "a", t: "Ancienne réponse" }])); });
+    await go(page, "#exos", 300); await page.click("#phist"); await page.waitForTimeout(300);
+    ok((await page.locator("#pdrawer").innerText()).includes("Ancienne question"), tag + " : anciennes conversations reprises");
+    ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+  }
+}
+
+async function planningPlus(browser) {
+  const page = await open(browser, { w: 390, h: 844, theme: "dark" }), tag = "planning+";
+  await page.addInitScript(() => { delete window.webkitSpeechRecognition; delete window.SpeechRecognition; localStorage.setItem("merge.journee", JSON.stringify({ setup: true, blocks: {}, weekly: [], off: {}, done: {} })); });
+  await page.reload(); await page.waitForSelector("#app > *");
+  await go(page, "#calendrier", 500); await page.evaluate(() => { const s = document.getElementById("sheet"); if (s) s.remove(); });
+  // Bloc avec couleur choisie à la main.
+  await page.click("#jadd"); await page.waitForTimeout(150);
+  ok(await page.locator("#sheet [data-bc]").count() === 9, tag + " : choix de couleur (matière + 8)");
+  await page.click('[data-bs="s1"]'); await page.click('#sheet [data-bc="#ec4899"]'); await page.fill("#bstart", "18:00"); await page.click("#bok"); await page.waitForTimeout(200);
+  ok(await page.evaluate(() => { const r = document.querySelector(".jrow:not(.school)"); return r && r.style.getPropertyValue("--c") === "#ec4899" && JSON.parse(localStorage.getItem("merge.journee")).blocks[Object.keys(JSON.parse(localStorage.getItem("merge.journee")).blocks)[0]][0].color === "#ec4899"; }), tag + " : couleur gardée sur le bloc");
+  // Vue heure par heure : on peut cocher.
+  await page.click("#jhours"); await page.waitForTimeout(200);
+  ok(await page.locator(".hblk .hcheck").count() === 1 && await page.locator(".hblk .hedit").count() === 1, tag + " : case à cocher dans la vue heures");
+  await page.click(".hcheck"); await page.waitForTimeout(150); ok(await page.locator(".hblk.done").count() === 1, tag + " : bloc coché dans la vue heures");
+  const sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px", sm.join(" | "));
+  await page.click("#jhours"); await page.waitForTimeout(150);
+  // Dictée sans reconnaissance vocale du téléphone : enregistrement, transcrit par l'IA.
+  await page.click("#jai"); await page.waitForTimeout(150); ok(await page.locator("#aimic").count() === 1, tag + " : micro présent même sans dictée du téléphone");
+  await page.click("#aimic"); await page.waitForTimeout(1500); await page.click("#aimic"); await page.waitForTimeout(800);
+  ok(await page.evaluate(() => !!(window.__fake.transcrire && window.__fake.transcrire.audio.data.length > 100)) && (await page.inputValue("#aiq")).includes("Maths de 18 h à 19 h"), tag + " : voix transcrite dans la demande");
+  ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+}
+
+async function accueilV2(browser) {
+  const page = await open(browser, { w: 390, h: 844, theme: "dark" }), tag = "accueil v2";
+  // Une tâche en cours (commencée il y a 10 min, 30 min) et une suivante.
+  await page.addInitScript(() => { const d = new Date(), k = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"), m = d.getHours() * 60 + d.getMinutes(), hm = x => String(Math.floor(x / 60)).padStart(2, "0") + ":" + String(x % 60).padStart(2, "0");
+    if (m >= 15 && m < 22 * 60) localStorage.setItem("merge.journee", JSON.stringify({ setup: true, blocks: { [k]: [{ id: "b1", start: hm(m - 10), dur: 30, s: "s1", ch: null, act: "cartes", title: "" }, { id: "b2", start: hm(m + 40), dur: 20, s: "s1", ch: null, act: "quiz", title: "Quiz mitose" }] }, weekly: [], off: {}, done: {} })); });
+  await page.reload(); await page.waitForSelector("#app > *"); await go(page, "#accueil", 400);
+  const t = await txt(page), late = await page.evaluate(() => { const m = new Date().getHours() * 60 + new Date().getMinutes(); return m < 15 || m >= 22 * 60; });
+  if (!late) {
+    ok(await page.locator(".nowtask.live").count() === 1 && /il reste (19|20|21) min/.test(t), tag + " : tâche en cours avec le temps restant", t.slice(0, 300));
+    const p = await page.evaluate(() => parseFloat(document.querySelector(".nowtask").style.getPropertyValue("--p")));
+    ok(p > 25 && p < 45, tag + " : remplissage selon l'heure", String(p));
+    ok((await page.locator(".ntnext").innerText()).includes("Quiz mitose"), tag + " : la prochaine tâche et son heure");
+    await page.screenshot({ path: path.join(SHOTS, "accueil-encours-390.png") });
+    await go(page, "#calendrier", 400); await page.evaluate(() => { const s = document.getElementById("sheet"); if (s) s.remove(); });
+    ok(await page.locator(".jrow.live .lrem").count() === 1, tag + " : la frise montre aussi la tâche en cours");
+    await go(page, "#accueil", 400);
+  }
+  ok(!t.includes("appels IA") && await page.locator(".moreways").count() === 1 && await page.locator('.moreways a[href="#melange"]').isHidden(), tag + " : autres façons de réviser repliées, plus de compteur IA");
+  await page.click(".moreways > summary"); await page.waitForTimeout(150); ok(await page.locator('.moreways a[href="#perso"]').isVisible(), tag + " : le menu se déplie");
+  ok(!/\bMatières\b[\s\S]*Ajouter/.test(await page.locator("#app").innerText()) || await page.locator('#app a[href="#nouvelle-matiere"]').count() === 0, tag + " : plus de liste des matières");
+  // Bilan : barres visibles.
+  await go(page, "#bilan", 300); ok(await page.locator(".wbars .wcol").count() === 7 && await page.locator(".wbars .wtrack").count() === 7, tag + " : bilan, graphique des 7 jours");
+  ok(await page.evaluate(() => !!localStorage.getItem("merge.bilanseen")), tag + " : bilan vu, plus proposé cette semaine");
+  // Bloc : chapitre facultatif, durées longues et durée libre.
+  await go(page, "#calendrier", 400); await page.evaluate(() => { const s = document.getElementById("sheet"); if (s) s.remove(); });
+  await page.click("#jadd"); await page.waitForTimeout(150); await page.click('[data-bs="s1"]'); await page.waitForTimeout(50);
+  ok(await page.inputValue("#bch") === "" && (await page.locator("#bch").innerText()).includes("Aucun chapitre"), tag + " : chapitre facultatif, aucun par défaut");
+  ok(await page.locator('[data-bd="120"]').count() === 1 && await page.locator('[data-bd="180"]').count() === 1, tag + " : durées 2 h à 3 h");
+  await page.click('[data-bd="libre"]'); await page.waitForTimeout(50); await page.fill("#bslide", "95"); await page.dispatchEvent("#bslide", "input");
+  ok((await page.locator("#bslv").innerText()).includes("1 h 35"), tag + " : durée libre au curseur");
+  await page.fill("#bstart", "06:00"); await page.click("#bok"); await page.waitForTimeout(200);
+  ok(await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem("merge.journee")).blocks).flat().some(b => b.dur === 95 && b.ch === null && !b.auto)), tag + " : bloc de 1 h 35 sans chapitre");
+  const sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px", sm.join(" | "));
+  ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+}
+
+async function icones(browser) {
+  // Toutes les icônes utilisées existent (sinon « undefined » s'afficherait à l'écran).
+  const src = fs.readFileSync(path.join(__dirname, "..", "js", "app.js"), "utf8"), blk = src.slice(src.indexOf("const I = {"), src.indexOf("\n  };", src.indexOf("const I = {")));
+  const keys = new Set([...blk.matchAll(/(?:^|[\s{,])([a-zA-Z]+): (?:svg\(|')/g)].map(m => m[1]));
+  const used = new Set([...src.matchAll(/\bI\.([a-zA-Z]+)/g)].map(m => m[1]).concat([...src.matchAll(/\["[a-z-]+", "[A-ZÀ-Ü][^"]+", "([a-z]+)"\]/g)].map(m => m[1])).concat([...src.matchAll(/\bi: "([a-z]+)"/g)].map(m => m[1])));
+  const miss = [...used].filter(k => !keys.has(k)); ok(!miss.length, "icônes : toutes celles utilisées existent", miss.join(", "));
+  const page = await open(browser, { w: 390, h: 844, theme: "dark" });
+  for (const h of ["#accueil", "#matieres", "#calendrier", "#mois", "#exos", "#progres", "#reglages", "#chapitre-c1"]) {
+    await go(page, h, 350); await page.evaluate(() => { const s = document.getElementById("sheet"); if (s) s.remove(); });
+    const bad = await page.evaluate(() => (document.body.innerText.match(/undefined|\[object/g) || []).length + [...document.querySelectorAll("#tabs a")].filter(a => !a.querySelector("svg")).length);
+    ok(bad === 0, "icônes : rien de cassé sur " + h);
+  }
+  ok(!page.errors.length, "icônes : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+}
+
+async function progresClean(browser) {
+  for (const [w, h] of [[390, 844], [1280, 800]]) {
+    const page = await open(browser, { w, h, theme: "dark" }), tag = "progrès " + w;
+    await go(page, "#progres", 400);
+    ok(await page.locator('.pshop[href="#boutique"]').count() === 1 && (await page.locator(".pshop").innerText()).includes("Boutique"), tag + " : boutique bien visible");
+    ok(await page.locator('.seg a[href="#duo"]').count() === 1, tag + " : Duo en sous-onglet");
+    for (const r of ["recompenses", "bilan", "erreurs", "minuteur"]) ok(await page.locator(`.ptile[href="#${r}"]`).count() === 1, tag + " : raccourci " + r);
+    await page.click(".pshop"); await page.waitForTimeout(300); ok(await page.evaluate(() => location.hash === "#boutique"), tag + " : ouvre la boutique");
+    await go(page, "#progres", 300);
+    if (w === 390) await page.screenshot({ path: path.join(SHOTS, "progres-390.png"), fullPage: true });
     const sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px", sm.join(" | "));
     const o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
     ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
@@ -1232,11 +1352,11 @@ let BASE;
 (async () => {
   fs.mkdirSync(SHOTS, { recursive: true });
   await new Promise(r => server.listen(0, "127.0.0.1", r)); BASE = "http://127.0.0.1:" + server.address().port;
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] });
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => !only || only.includes(n);
     if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
-    const SUITES = { flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos };
+    const SUITES = { flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones };
     for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();

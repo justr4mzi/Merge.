@@ -174,6 +174,9 @@
   const edtGet = () => { const e = jget("merge.edt", null) || {}; return { slots: Array.isArray(e.slots) ? e.slots : [], ab: !!e.ab, ref: e.ref || null }; };
   const mondayOf = (d) => { const m = new Date(d); m.setHours(0, 0, 0, 0); m.setDate(m.getDate() - ((m.getDay() + 6) % 7)); return m; };
   // Semaine A ou B : l'élève dit une fois laquelle est la semaine en cours, ensuite on alterne chaque lundi.
+  // Le samedi et le dimanche, on parle de la semaine qui arrive (lundi prochain), avec les dates, pour que ce soit clair.
+  function abMonday() { const n = new Date(), m = mondayOf(n); if (n.getDay() === 6 || n.getDay() === 0) m.setDate(m.getDate() + 7); return m; }
+  function abQuestion() { const m = abMonday(), f = new Date(m); f.setDate(f.getDate() + 4); const we = [0, 6].includes(new Date().getDay()); return `${we ? "La semaine qui arrive" : "Cette semaine"}, du lundi ${m.getDate()}${m.getMonth() !== f.getMonth() ? " " + m.toLocaleDateString("fr-FR", { month: "long" }) : ""} au vendredi ${f.getDate()} ${f.toLocaleDateString("fr-FR", { month: "long" })}, c'est une semaine A ou une semaine B ?`; }
   function weekAB(d) { const e = edtGet(); if (!e.ab || !e.ref) return ""; const w = Math.round((mondayOf(d) - new Date(e.ref.monday + "T00:00:00")) / 604800000); return (Math.abs(w) % 2 === 0) === (e.ref.letter === "A") ? "A" : "B"; }
   function slotsOn(d) { const e = edtGet(), wd = (d.getDay() + 6) % 7, ab = weekAB(d); return e.slots.filter(x => +x.day === wd && (!x.week || !ab || x.week === ab)).sort((a, b) => String(a.start).localeCompare(b.start)); }
   const subjOfName = (n) => { const k = norm(n); return state.subjects.find(x => norm(x.name) === k) || state.subjects.find(x => k && (norm(x.name).includes(k) || k.includes(norm(x.name)))); };
@@ -211,7 +214,7 @@
         ${e.slots.length ? `<div class="edtgrid">${days.map(d => { const i = JOURS.indexOf(d), list = e.slots.filter(x => +x.day === i && (!x.week || !ab || x.week === ab)).sort((a, b) => String(a.start).localeCompare(b.start)); return `<div class="edtday${i === today ? " now" : ""}"><h3>${d}</h3>${list.map(cell).join("") || '<p class="small muted">Rien</p>'}</div>`; }).join("")}</div>`
           : `<div class="card pad stack"><h2>Ajoute ton emploi du temps</h2><p class="muted">Envoie une photo ou le PDF de ton emploi du temps (1 appel IA), ou ajoute tes cours un par un. Merge s'en sert pour te proposer quoi réviser le soir.</p></div>`}
         <div class="card pad stack"><h2>Ajouter</h2>
-          <div class="row" style="flex-wrap:wrap"><label class="btn" for="edtf">Photo ou PDF</label><input id="edtf" type="file" accept="image/*,application/pdf" capture="environment" hidden><button class="btn ghost" id="edtadd">Ajouter un cours à la main</button></div>
+          <div class="row" style="flex-wrap:wrap"><label class="btn" for="edtf">Photo ou PDF</label><input id="edtf" type="file" accept="image/*,application/pdf" hidden><button class="btn ghost" id="edtadd">Ajouter un cours à la main</button></div>
           <p class="note" id="edtmsg" role="status"></p><div id="edtform"></div>
           <button class="switch" id="absw" role="switch" aria-checked="${e.ab}"><i></i>Mon emploi du temps change une semaine sur deux (A et B)</button>
           ${e.slots.length ? '<button class="linkbtn" id="edtclear">Tout effacer</button>' : ""}</div>`;
@@ -223,7 +226,7 @@
       $("edtf").onchange = ev => { const f = ev.target.files[0]; if (f) fromFile(f); };
     }
     function askAB() {
-      sheet(`<h1>Semaine A ou B ?</h1><p class="muted">Pour savoir quels cours tu as, dis-moi quelle semaine c'est en ce moment.</p><div class="row"><button class="btn grow" data-ab="A">Semaine A</button><button class="btn grow" data-ab="B">Semaine B</button></div>`, el => el.querySelectorAll("[data-ab]").forEach(b => b.onclick = () => { e.ab = true; e.ref = { monday: localDay(mondayOf(new Date())), letter: b.dataset.ab }; save(); closeSheet(); draw(); }));
+      sheet(`<h1>Semaine A ou B ?</h1><p class="muted">${abQuestion()}</p><div class="row"><button class="btn grow" data-ab="A">Semaine A</button><button class="btn grow" data-ab="B">Semaine B</button></div>`, el => el.querySelectorAll("[data-ab]").forEach(b => b.onclick = () => { e.ab = true; e.ref = { monday: localDay(abMonday()), letter: b.dataset.ab }; save(); closeSheet(); draw(); }));
     }
     function form(k) {
       const x = k != null ? e.slots[k] : { day: Math.min(4, (new Date().getDay() + 6) % 7), start: "08:00", end: "09:00", subject: (state.subjects[0] || {}).name || "", week: "", room: "" };
