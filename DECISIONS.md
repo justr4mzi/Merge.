@@ -532,3 +532,7 @@ Liste retenue (sur 20 proposées) : plan de révision automatique, rappel la vei
 - L'écran Prof était une colonne de 860 px au milieu. Sur PC il prend maintenant toute la place à droite du menu. La conversation et la barre de message s'étendent jusqu'à 1180 px (au-delà, les lignes deviennent trop longues à lire).
 - À partir de 1200 px de large, l'historique des discussions est affiché en permanence dans une colonne à gauche (nouvelle discussion, ouvrir, supprimer avec confirmation), comme dans les applis de chat sur ordinateur ; les boutons ☰ et crayon du haut sont alors masqués. Entre 900 et 1199 px, l'historique reste dans le panneau qui s'ouvre avec ☰. Le téléphone ne change pas.
 - Suite de tests `profPc` (1440 et 1920 px) ; la suite `exos` teste le panneau à 1100 px.
+
+## Graphique « Ta semaine » et prix de la boutique (15 nov., soir)
+- Graphique de la semaine : la hauteur des colonnes suit l'objectif (minutes si l'objectif est en minutes), mais le nombre affiché au-dessus était le nombre de cartes. Résultat trompeur : 229 cartes aujourd'hui avec une colonne plus basse que les 213 de la veille (moins de minutes). Le nombre au-dessus est maintenant celui qui fixe la hauteur (minutes si objectif en minutes, sinon cartes) ; le détail cartes + minutes reste au survol.
+- Boutique : tous les prix (articles et cadeaux en vrai) augmentés d'un tiers, arrondis à 10 pièces, appliqués en une ligne après chaque liste pour pouvoir revenir en arrière facilement. Ce qui est déjà acheté reste acquis.

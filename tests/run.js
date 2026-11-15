@@ -909,7 +909,7 @@ async function semaine(browser) {
       const a = act[0], t = a && a.querySelector(".wtrack").getBoundingClientRect(), i = a && a.querySelector(".wtrack i").getBoundingClientRect();
       return { n: cols.length, act: act.length, ratio: a ? i.height / t.height : 0, label: a ? a.querySelector(".wv").textContent.trim() : "", trackW: t ? t.width : 0, empties: cols.filter(c => c.querySelector(".wtrack b")).length, today: !!document.querySelector(".wcol.now .wd") && document.querySelector(".wcol.now .wd").textContent, msg: (document.querySelector(".wmsg") || {}).textContent || "" }; });
     ok(r.n === 7 && r.act === 1 && r.empties === 6, tag + " : 7 jours, 1 actif, les autres marqués d'un point", JSON.stringify(r));
-    ok(r.ratio >= 0.25 && r.label === "6" && r.trackW >= 20, tag + " : un petit jour reste bien visible (au moins un quart de la hauteur) avec son nombre de cartes", JSON.stringify(r));
+    ok(r.ratio >= 0.25 && r.label === "4 min" && r.trackW >= 20, tag + " : un petit jour reste bien visible (au moins un quart de la hauteur) avec ses minutes (objectif en minutes)", JSON.stringify(r));
     ok(r.today === "Auj." && /bon début/.test(r.msg), tag + " : aujourd'hui repéré et message d'encouragement", JSON.stringify(r));
     const o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
     await page.locator(".week").screenshot({ path: path.join(SHOTS, "semaine-" + w + ".png") });
@@ -979,7 +979,7 @@ async function boutique(browser) {
     let o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
     if (w === 390) await page.screenshot({ path: path.join(SHOTS, "boutique-390.png"), fullPage: true });
     await page.click('[data-st="fond"]'); await page.click('[data-buy="f-neige"]'); await page.waitForTimeout(200);
-    ok(await page.evaluate(() => document.body.dataset.bg) === "neige" && await page.evaluate(() => parseInt(document.querySelector(".coinhero b.big").textContent, 10)) === bal0 - 270, tag + " : fond acheté (270 pièces) et équipé");
+    ok(await page.evaluate(() => document.body.dataset.bg) === "neige" && await page.evaluate(() => parseInt(document.querySelector(".coinhero b.big").textContent, 10)) === bal0 - 360, tag + " : fond acheté (360 pièces, prix +1/3) et équipé");
     await page.click('[data-st="mascotte"]'); await page.click('[data-buy="m-casque"]'); await page.waitForTimeout(150);
     await page.click('[data-st="carte"]'); await page.click('[data-buy="d-neon"]'); await page.waitForTimeout(150);
     await page.click('[data-st="flamme"]'); await page.click('[data-buy="l-arc"]'); await page.waitForTimeout(150);

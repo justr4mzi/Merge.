@@ -159,7 +159,8 @@
 
   // ---------- progrès ----------
   // « Ta semaine » sur l'accueil : une colonne par jour sur un fond toujours visible, hauteur rapportée à l'objectif du jour
-  // (au moins 26 % dès qu'on a révisé, pour qu'un petit jour reste bien visible), nombre de cartes au-dessus, coche si objectif atteint.
+  // (au moins 26 % dès qu'on a révisé, pour qu'un petit jour reste bien visible), coche si objectif atteint. Le nombre au-dessus
+  // est celui qui fixe la hauteur : minutes si l'objectif est en minutes, sinon cartes (le détail complet s'affiche au survol).
   function weekHtml(week, p) {
     const byMin = p.daily_goal_kind === "minutes", goal = Math.max(1, +p.daily_goal_value || (byMin ? 15 : 20));
     const val = x => byMin ? x.seconds / 60 : x.cards_reviewed, today = localDay();
@@ -170,7 +171,7 @@
       const v = val(x), on = !!(x.seconds || x.cards_reviewed), hit = v >= goal, isT = x.day === today, d = new Date(x.day + "T00:00:00");
       const h = on ? Math.max(26, Math.round(v / peak * 100)) : 0;
       return `<div class="wcol${isT ? " now" : ""}${hit ? " hit" : ""}" title="${esc(d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }))} : ${plural(x.cards_reviewed, "carte", "cartes")}, ${Math.round(x.seconds / 60)} min">
-        <span class="wv">${on ? (hit ? I.check : "") + (x.cards_reviewed ? x.cards_reviewed : Math.round(x.seconds / 60) + " min") : ""}</span>
+        <span class="wv">${on ? (hit ? I.check : "") + (byMin || !x.cards_reviewed ? Math.round(x.seconds / 60) + " min" : x.cards_reviewed) : ""}</span>
         <div class="wtrack"><i style="height:${h}%"></i>${on ? "" : "<b></b>"}</div><span class="wd">${isT ? "Auj." : "DLMMJVS"[d.getDay()]}</span></div>`;
     }).join("");
     return `<div class="card pad week"><div class="row between"><h2>Ta semaine</h2><span class="small muted">${plural(active, "jour actif", "jours actifs")} · ${plural(cards, "carte", "cartes")} · ${mins} min</span></div>

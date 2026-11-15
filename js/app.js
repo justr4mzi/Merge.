@@ -833,6 +833,8 @@
     { id: "t-perso", type: "titre", n: "Titre personnalisé", price: 800, need: 5, perso: "titre" }, { id: "c-perso", type: "couleur", n: "Couleur sur mesure", price: 1000, need: 6, perso: "couleur" },
     { id: "p-phrase", type: "phrase", n: "Ta phrase d'accueil", price: 530, need: 4, perso: "phrase" },
   ];
+  // Tous les prix de la boutique augmentés d'un tiers (15 nov.), arrondis à 10 pièces. Ce qui est déjà acheté reste acquis.
+  SHOP.forEach(x => { if (x.price > 0) x.price = Math.round(x.price * 4 / 3 / 10) * 10; });
   // Exclusivités de niveau : impossibles à acheter, offertes en atteignant le niveau (objectifs à long terme).
   const LEVEL_ITEMS = [
     { id: "t-affute", type: "titre", n: "Cerveau affûté", lv: 5 }, { id: "c-saphirroyal", type: "couleur", n: "Saphir royal", v: "#2337b8", lv: 8 },
@@ -866,6 +868,8 @@
     { id: "surprise", n: "La surprise", d: "Le plus gros palier. On ne dit rien : c'est une surprise.", price: 3350 },
     { id: "balade", n: "Une balade en voiture", d: "(Quand j'aurai le permis.) Je t'emmène où tu veux.", price: 9999999 },
   ];
+  // Prix des cadeaux en vrai augmentés d'un tiers (15 nov.), arrondis à 10 pièces.
+  GIFTS.forEach(x => { if (x.price > 0) x.price = Math.round(x.price * 4 / 3 / 10) * 10; });
   const GIFT_SHELVES = [["Petits plaisirs", 0, 649], ["Cadeaux", 650, 1349], ["Gros cadeaux", 1350, Infinity]];
   // Bon à envoyer en capture d'écran : nom du cadeau, prénom, date, numéro du bon.
   function voucherHtml(c, g) {
@@ -2713,7 +2717,8 @@
 
   // ---------- progrès ----------
   // « Ta semaine » sur l'accueil : une colonne par jour sur un fond toujours visible, hauteur rapportée à l'objectif du jour
-  // (au moins 26 % dès qu'on a révisé, pour qu'un petit jour reste bien visible), nombre de cartes au-dessus, coche si objectif atteint.
+  // (au moins 26 % dès qu'on a révisé, pour qu'un petit jour reste bien visible), coche si objectif atteint. Le nombre au-dessus
+  // est celui qui fixe la hauteur : minutes si l'objectif est en minutes, sinon cartes (le détail complet s'affiche au survol).
   function weekHtml(week, p) {
     const byMin = p.daily_goal_kind === "minutes", goal = Math.max(1, +p.daily_goal_value || (byMin ? 15 : 20));
     const val = x => byMin ? x.seconds / 60 : x.cards_reviewed, today = localDay();
@@ -2724,7 +2729,7 @@
       const v = val(x), on = !!(x.seconds || x.cards_reviewed), hit = v >= goal, isT = x.day === today, d = new Date(x.day + "T00:00:00");
       const h = on ? Math.max(26, Math.round(v / peak * 100)) : 0;
       return `<div class="wcol${isT ? " now" : ""}${hit ? " hit" : ""}" title="${esc(d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }))} : ${plural(x.cards_reviewed, "carte", "cartes")}, ${Math.round(x.seconds / 60)} min">
-        <span class="wv">${on ? (hit ? I.check : "") + (x.cards_reviewed ? x.cards_reviewed : Math.round(x.seconds / 60) + " min") : ""}</span>
+        <span class="wv">${on ? (hit ? I.check : "") + (byMin || !x.cards_reviewed ? Math.round(x.seconds / 60) + " min" : x.cards_reviewed) : ""}</span>
         <div class="wtrack"><i style="height:${h}%"></i>${on ? "" : "<b></b>"}</div><span class="wd">${isT ? "Auj." : "DLMMJVS"[d.getDay()]}</span></div>`;
     }).join("");
     return `<div class="card pad week"><div class="row between"><h2>Ta semaine</h2><span class="small muted">${plural(active, "jour actif", "jours actifs")} · ${plural(cards, "carte", "cartes")} · ${mins} min</span></div>
