@@ -1227,8 +1227,30 @@ async function journee(browser) {
   }
 }
 
+// Prof sur PC : le chat occupe toute la place à droite du menu (pas une colonne étroite au milieu).
+async function profPc(browser) {
+  for (const [w, h] of [[1440, 900], [1920, 1080]]) {
+    const page = await open(browser, { w, h, theme: "dark" }), tag = "prof PC " + w;
+    await go(page, "#exos", 300);
+    await page.fill("#exq", "Comment bien réviser ?"); await page.click("#exsend"); await page.waitForTimeout(400);
+    await page.click('[data-q="0"]').catch(() => {}); await page.waitForTimeout(400);
+    const m = await page.evaluate(() => { const r = s => document.querySelector(s).getBoundingClientRect(), tabs = r("#tabs"), app = r("#app"), side = r(".pside"), main = r(".pmain"), cp = r(".pcomp"), ai = r(".exmsg.ai"); return { free: innerWidth - tabs.right, app: app.width, side: side.width, main: main.width, cp: cp.width, ai: ai.width, H: innerHeight, cpBottom: cp.bottom, hist: getComputedStyle(document.getElementById("phist")).visibility }; });
+    ok(m.app >= m.free - 2, tag + " : l'écran Prof prend toute la largeur libre", JSON.stringify(m));
+    ok(m.side >= 240 && m.hist === "hidden" && await page.locator(".pside [data-conv]").count() >= 1, tag + " : historique affiché en colonne à gauche", JSON.stringify(m));
+    ok(m.main >= m.free - m.side - 90 && m.ai >= Math.min(m.main, 1180) - 12, tag + " : la conversation prend le reste de la largeur", JSON.stringify(m));
+    ok(m.cp >= Math.min(m.main, 1180) - 4 && m.cpBottom > m.H - 60, tag + " : la barre de message est large et en bas", JSON.stringify(m));
+    await page.click("#psnew"); await page.waitForTimeout(150); ok(await page.locator(".exmsg").count() === 0, tag + " : nouvelle discussion depuis la colonne");
+    await page.click(".pside [data-conv]"); await page.waitForTimeout(150); ok(await page.locator(".exmsg").count() >= 1, tag + " : rouvrir une discussion depuis la colonne");
+    await page.click(".pside [data-cdel]"); await page.waitForTimeout(150); ok(await page.locator("#confirm").count() === 1, tag + " : suppression demande confirmation");
+    await page.click('#confirm [data-c="0"]').catch(() => page.keyboard.press("Escape")); await page.waitForTimeout(200);
+    await page.click(".pside [data-conv]"); await page.waitForTimeout(200);
+    await page.screenshot({ path: path.join(SHOTS, "prof-pc-" + w + ".png") });
+    ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+  }
+}
 async function exos(browser) {
-  for (const [w, h] of [[390, 844], [1280, 800]]) {
+  // 1100 px : PC moyen, l'historique s'ouvre avec ☰ (au-delà de 1200 px il est en colonne fixe, voir profPc).
+  for (const [w, h] of [[390, 844], [1100, 800]]) {
     const page = await open(browser, { w, h, theme: "dark" }), tag = "prof " + w;
     await go(page, "#accueil", 300);
     ok((await page.locator('#tabs a[href="#exos"]').innerText()).includes("Prof"), tag + " : onglet Prof");
@@ -1426,7 +1448,7 @@ async function audit(browser) {
       if (res.length || process.env.SHOTALL) { if (res.length) probs.push("#" + r + " → " + res.join(" | ")); await page.screenshot({ path: path.join(SHOTS, "audit-" + w + "-" + r + ".png") }); }
     }
     // Fenêtres.
-    const sheets = [["#calendrier", "#jadd"], ["#calendrier", "#jai"], ["#calendrier", "#jctl"], ["#exos", "#pplus"], ["#exos", "#pctx"], ["#exos", "#phist"], ["#edt", null], ["#reglages", null], ["#boutique", null], ["#recompenses", null]];
+    const sheets = [["#calendrier", "#jadd"], ["#calendrier", "#jai"], ["#calendrier", "#jctl"], ["#exos", "#pplus"], ["#exos", "#pctx"], ...(w < 1200 ? [["#exos", "#phist"]] : []), ["#edt", null], ["#reglages", null], ["#boutique", null], ["#recompenses", null]];
     for (const [hsh, sel] of sheets) {
       await go(page, hsh, 450); await page.evaluate(() => { const s = document.getElementById("sheet"); if (s) s.remove(); });
       if (sel) { try { await page.click(sel, { timeout: 3000 }); } catch (e) { probs.push(hsh + " " + sel + " → introuvable"); continue; } await page.waitForTimeout(350); }
@@ -1488,7 +1510,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => only ? only.includes(n) : n !== "chasse";
     if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
-    const SUITES = { majSw, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
+    const SUITES = { majSw, profPc, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
     for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();

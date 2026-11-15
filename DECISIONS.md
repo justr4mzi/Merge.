@@ -527,3 +527,8 @@ Liste retenue (sur 20 proposées) : plan de révision automatique, rappel la vei
 
 ## Mises à jour qui arrivent vraiment (15 nov., soir)
 - Sur iPhone, l'ancienne version restait affichée (vue semaine, onglets du haut) après une mise à jour. Le service worker redemande maintenant chaque fichier au serveur sans passer par le cache du navigateur (`cache: "no-cache"`, installation en `cache: "reload"`), le fichier `sw.js` lui-même n'est jamais pris en cache (`updateViaCache: "none"`), l'appli vérifie s'il y a une mise à jour à chaque retour au premier plan, et se recharge une seule fois quand une nouvelle version vient de s'installer. Hors ligne, rien ne change : la copie gardée sert toujours. Suite de tests `majSw`.
+
+## Prof sur PC : toute la largeur (15 nov., soir)
+- L'écran Prof était une colonne de 860 px au milieu. Sur PC il prend maintenant toute la place à droite du menu. La conversation et la barre de message s'étendent jusqu'à 1180 px (au-delà, les lignes deviennent trop longues à lire).
+- À partir de 1200 px de large, l'historique des discussions est affiché en permanence dans une colonne à gauche (nouvelle discussion, ouvrir, supprimer avec confirmation), comme dans les applis de chat sur ordinateur ; les boutons ☰ et crayon du haut sont alors masqués. Entre 900 et 1199 px, l'historique reste dans le panneau qui s'ouvre avec ☰. Le téléphone ne change pas.
+- Suite de tests `profPc` (1440 et 1920 px) ; la suite `exos` teste le panneau à 1100 px.

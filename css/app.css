@@ -1232,7 +1232,22 @@ html,body{touch-action:manipulation}
 html:has(.app.profmode),body:has(.app.profmode){overflow:hidden;overscroll-behavior:none}
 .app.profmode .exthread{flex:1;min-height:0}
 .app.profmode .profhead h1{font-size:1.15rem}
-@media (min-width:900px){.app.profmode{padding-block:20px 20px;max-width:860px}}
+.pmain{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;min-width:0}
+.pside{display:none}
+/* PC : l'écran Prof prend toute la place à droite du menu. Conversation et barre de message sur toute la largeur
+   (texte limité à une largeur confortable à lire sur très grand écran). */
+@media (min-width:900px){
+  .app.profmode{padding:20px 28px;max-width:none;width:100%;margin:0}
+  .app.profmode .pmain>*{width:100%;max-width:1180px;margin-inline:auto}
+  .app.profmode .exthread{padding-inline:4px}
+}
+/* Grand écran : historique des discussions toujours affiché dans une colonne à gauche (le bouton ☰ devient inutile). */
+@media (min-width:1200px){
+  .app.profmode{flex-direction:row;gap:24px;padding-left:20px}
+  .pside{display:flex;flex-direction:column;gap:12px;flex:none;width:260px;min-height:0;overflow-y:auto;padding-right:16px;border-right:1px solid var(--line)}
+  .pside .btn{flex:none}
+  .app.profmode #phist,.app.profmode #pnew{visibility:hidden}
+}
 .pctx{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;flex:none}
 .pctx::-webkit-scrollbar{display:none}
 .pctx .pchip{flex:none;white-space:nowrap}

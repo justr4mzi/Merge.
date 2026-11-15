@@ -3235,17 +3235,20 @@
     }
     const conv = curConv(p), msgs = conv.m, linked = conv.ctx.ch.length + conv.ctx.s.length;
     app.classList.add("profmode");
-    app.innerHTML = `<div class="row profhead"><button class="iconbtn flat" id="phist" aria-label="Mes discussions" title="Mes discussions">${I.menu}</button><h1 class="grow ptitle">${esc(conv.t || "Prof")}</h1><button class="iconbtn flat" id="pnew" aria-label="Nouvelle discussion" title="Nouvelle discussion">${I.edit}</button></div>
+    // Sur grand écran (PC) : historique toujours visible à gauche, conversation sur tout le reste.
+    app.innerHTML = `<aside class="pside" aria-label="Mes discussions"><button class="btn" id="psnew">${I.plus}Nouvelle discussion</button><div class="pdlist">${histRows(p)}</div></aside><div class="pmain"><div class="row profhead"><button class="iconbtn flat" id="phist" aria-label="Mes discussions" title="Mes discussions">${I.menu}</button><h1 class="grow ptitle">${esc(conv.t || "Prof")}</h1><button class="iconbtn flat" id="pnew" aria-label="Nouvelle discussion" title="Nouvelle discussion">${I.edit}</button></div>
       <div class="pctx">${ctxChips(conv.ctx)}<button class="pchip add" id="pctx">${I.book}${linked ? "Modifier" : "Lier un cours"}</button></div>
       <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") : md(m.t) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.prof}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur les cours liés en haut. " : "Pour que je m'appuie sur ton cours, touche « Lier un cours » : un ou plusieurs chapitres, ou des matières entières. "}Demande un exercice, une explication, ou envoie la photo de ta copie avec le bouton +.</p><div class="chips exquick">${EXO_QUICK.map((q, i) => `<button class="chip" data-q="${i}">${q[0]}</button>`).join("")}</div><p class="small muted">${linked ? "Le prof s'appuie sur les cours liés" : "Sans cours lié, le prof répond avec ses connaissances de lycée"} ; il peut se tromper sur un calcul. 1 message = 1 appel IA.</p></div>`}</div>
       <div class="pcomp"><div id="eximg" class="pimg" hidden></div><div class="pbar"><button class="iconbtn flat" id="pplus" aria-label="Ajouter une photo, un cours ou une demande rapide">${I.plus}</button><textarea id="exq" rows="1" maxlength="2000" placeholder="Écris ton message…"></textarea>${canDictate() ? `<button class="iconbtn flat" id="exmic" aria-label="Dicter">${I.mic}</button>` : ""}<button class="iconbtn psend" id="exsend" aria-label="Envoyer">${I.send}</button></div>
-      <input id="exphoto" type="file" accept="image/*" capture="environment" hidden><input id="exfile" type="file" accept="image/*" hidden></div>`;
+      <input id="exphoto" type="file" accept="image/*" capture="environment" hidden><input id="exfile" type="file" accept="image/*" hidden></div></div>`;
     const save = () => { conv.at = Date.now(); profSave(p); };
     // Cours liés.
     app.querySelectorAll("[data-unctx]").forEach(b => b.onclick = () => { const [k, id] = b.dataset.unctx.split(":"); conv.ctx[k === "s" ? "s" : "ch"] = conv.ctx[k === "s" ? "s" : "ch"].filter(x => x !== id); save(); screenExos(); });
     $("pctx").onclick = () => ctxSheet(conv, () => { save(); screenExos(); });
     $("pnew").onclick = () => { if (!msgs.length && !linked) return toast("Tu es déjà dans une nouvelle discussion."); const c = newConv(); p.convs.unshift(c); p.cur = c.id; profSave(p); screenExos(); };
     $("phist").onclick = () => histDrawer(p);
+    $("psnew").onclick = () => $("pnew").click();
+    histBind(app.querySelector(".pside"), p, what => { if (what === "del") screenExos(); });
     // Réponses dans la bulle : l'IA donne un exercice avec des champs à remplir.
     app.querySelectorAll("[data-fsend]").forEach(b => b.onclick = () => {
       const i = +b.dataset.fsend, m = msgs[i]; if (!m || !m.f) return;
@@ -3331,28 +3334,38 @@
       if (!pd && dx > 70 && app.classList.contains("profmode") && !document.getElementById("sheet")) histDrawer(profGet());
     }, { passive: true });
   })();
-  function histDrawer(p) {
+  // Liste des discussions (panneau du téléphone et colonne fixe du PC).
+  function histRows(p) {
     const list = p.convs.filter(c => c.m.length).sort((a, b) => b.at - a.at), today = localDay();
     const when = c => { const d = localDay(new Date(c.at)); if (d === today) return "Aujourd'hui"; const y = new Date(); y.setDate(y.getDate() - 1); if (d === localDay(y)) return "Hier"; return Date.now() - c.at < 7 * 864e5 ? "7 derniers jours" : "Plus ancien"; };
     const label = c => { const n = c.ctx.ch.length + c.ctx.s.length; return n ? plural(n, "cours lié", "cours liés") : "Discussion libre"; };
     let last = "", rows = "";
     list.forEach(c => { const g = when(c); if (g !== last) { rows += `<p class="label pdgrp">${g}</p>`; last = g; } rows += `<div class="pdrow${c.id === p.cur ? " on" : ""}"><button class="pdconv" data-conv="${c.id}"><b>${esc(c.t || "Discussion")}</b><span class="small muted">${label(c)}</span></button><button class="iconbtn flat" data-cdel="${c.id}" aria-label="Supprimer la discussion">${I.x}</button></div>`; });
-    const old = document.getElementById("pdrawer"); if (old) old.remove();
-    const el = document.createElement("div"); el.id = "pdrawer"; el.className = "pdwrap";
-    el.innerHTML = `<div class="pdshade" data-pdclose></div><aside class="pdpanel" role="dialog" aria-label="Mes discussions"><div class="row"><h2 class="grow" style="margin:0">Discussions</h2><button class="iconbtn flat" data-pdclose aria-label="Fermer">${I.x}</button></div><button class="btn" id="pdnew">${I.plus}Nouvelle discussion</button><div class="pdlist">${rows || '<p class="muted">Aucune discussion pour l\'instant.</p>'}</div></aside>`;
-    document.body.appendChild(el); requestAnimationFrame(() => el.classList.add("open"));
-    const close = () => { el.classList.remove("open"); setTimeout(() => el.remove(), 200); };
-    el.querySelectorAll("[data-pdclose]").forEach(b => b.onclick = close);
-    el.querySelector("#pdnew").onclick = () => { el.remove(); $("pnew").click(); };
-    el.querySelectorAll("[data-conv]").forEach(b => b.onclick = () => { p.cur = b.dataset.conv; profSave(p); el.remove(); screenExos(); });
-    // Supprimer : on demande confirmation, puis on reste dans l'historique (la discussion ouverte ne change que si c'est elle qu'on supprime).
+    return rows || '<p class="muted small">Aucune discussion pour l\'instant.</p>';
+  }
+  // Ouvrir / supprimer une discussion. Supprimer : on demande confirmation, puis on reste dans l'historique
+  // (la discussion ouverte ne change que si c'est elle qu'on supprime).
+  function histBind(el, p, after) {
+    el.querySelectorAll("[data-conv]").forEach(b => b.onclick = () => { p.cur = b.dataset.conv; profSave(p); after("open"); screenExos(); });
     el.querySelectorAll("[data-cdel]").forEach(b => b.onclick = async () => {
       const c = p.convs.find(x => x.id === b.dataset.cdel); if (!c) return;
       if (!(await askConfirm("Supprimer cette discussion ?", "« " + (c.t || "Discussion") + " » sera effacée. Tu ne pourras pas la récupérer."))) return;
       const wasCur = p.cur === c.id; p.convs = p.convs.filter(x => x.id !== c.id); if (wasCur) p.cur = null; profSave(p);
+      after("del", wasCur); toast("Discussion supprimée.");
+    });
+  }
+  function histDrawer(p) {
+    const old = document.getElementById("pdrawer"); if (old) old.remove();
+    const el = document.createElement("div"); el.id = "pdrawer"; el.className = "pdwrap";
+    el.innerHTML = `<div class="pdshade" data-pdclose></div><aside class="pdpanel" role="dialog" aria-label="Mes discussions"><div class="row"><h2 class="grow" style="margin:0">Discussions</h2><button class="iconbtn flat" data-pdclose aria-label="Fermer">${I.x}</button></div><button class="btn" id="pdnew">${I.plus}Nouvelle discussion</button><div class="pdlist">${histRows(p)}</div></aside>`;
+    document.body.appendChild(el); requestAnimationFrame(() => el.classList.add("open"));
+    const close = () => { el.classList.remove("open"); setTimeout(() => el.remove(), 200); };
+    el.querySelectorAll("[data-pdclose]").forEach(b => b.onclick = close);
+    el.querySelector("#pdnew").onclick = () => { el.remove(); $("pnew").click(); };
+    histBind(el, p, (what, wasCur) => {
+      if (what === "open") { el.remove(); return; }
       if (wasCur) screenExos();
       el.remove(); histDrawer(profGet()); const nd = document.getElementById("pdrawer"); if (nd) nd.classList.add("open");
-      toast("Discussion supprimée.");
     });
   }
   // Champs de réponse d'un message de l'IA : choix de la façon de répondre, cases à remplir, ou réponses déjà envoyées.
