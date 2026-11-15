@@ -1,4 +1,4 @@
-// Merge. : appli de révision. Tout le code est ici, dans une seule IIFE : un écran = une fonction screenXxx, la navigation se fait par le hash (route()).
+// Merge. : appli de révision. FICHIER GÉNÉRÉ : on modifie les morceaux de js/src/ puis « node tools/build-app.js ». Tout le code est dans une seule IIFE : un écran = une fonction screenXxx, la navigation se fait par le hash (route()).
 (function () {
   "use strict";
   const C = window.CONFIG;
@@ -328,7 +328,7 @@
   // Pas de zoom (pincement ou double appui) : l'appli est faite pour l'écran du téléphone. Safari iOS ignore user-scalable=no, d'où ces gestes bloqués.
   ["gesturestart", "gesturechange"].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
   document.addEventListener("touchmove", e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
-  let lastTap = 0; document.addEventListener("touchend", e => { const t = Date.now(); if (t - lastTap < 300 && !e.target.closest("input,textarea,select,.mindmap")) e.preventDefault(); lastTap = t; }, { passive: false });
+  // Double appui : bloqué par touch-action: manipulation (css), sans gêner deux appuis rapides sur deux boutons différents.
   // Hors ligne complet : résumés et contenus déjà générés (quiz, fiche, carte mentale…) copiés sur l'appareil, au plus toutes les 30 min.
   function offlineKeep(k, v) { const t = JSON.stringify(v); try { if (localStorage.getItem(k) !== t) localStorage.setItem(k, t); return true; } catch (e) { return false; } }
   let prefetchAt = 0;
@@ -1627,14 +1627,11 @@
           <button class="switch" id="redsw" role="switch" aria-checked="${safeGet("merge.redresse") !== "0"}" type="button"><i></i>Redresser et recadrer les photos de feuilles</button>
           <input id="pick" type="file" multiple accept=".pdf,.pptx,.ppsx,.ppt,.pps,.odp,.docx,.odt,.rtf,.txt,.md,.csv,image/*" hidden><input id="cam" type="file" accept="image/*" capture="environment" hidden></div>
           <div class="filelist">${d.files.map((f, i) => `<div><span>${esc(f.name)}</span><button class="mini" data-rm="${i}" aria-label="Retirer ${esc(f.name)}">Retirer</button></div>`).join("")}</div>`
-          : d.tab === "link" ? `<div class="field"><label for="lnk">Lien du Genially</label><input id="lnk" type="text" inputmode="url" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="https://view.genially.com/…" value="${esc(d.link || "")}"></div>
-            <button class="btn sm ghost" id="lget" style="align-self:flex-start">Récupérer le texte du Genially</button><p class="small muted">Colle le lien d'un Genially public (présentation, cours interactif). Merge récupère tous ses textes ; tu peux les relire avant de créer les cartes.</p>${shotsHtml()}`
           : `<div class="field"><label for="txt">Texte du cours</label><textarea id="txt" placeholder="Colle ton cours ici">${esc(d.text)}</textarea></div>${shotsHtml()}`}
         <div class="field"><label for="n">${cardsOf(id).length ? "Combien de nouvelles flashcards ajouter ?" : "Combien de flashcards ?"} <b id="nv">${d.n}</b></label>${cardsOf(id).length ? `<p class="small muted">Tu as déjà ${plural(cardsOf(id).length, "carte", "cartes")} dans ce chapitre : les nouvelles s'ajoutent à elles, sans refaire celles que tu as déjà.</p>` : ""}<input id="n" type="range" min="10" max="${C.CARTES_MAX}" step="5" value="${d.n}"></div>
         <button class="btn" id="go">Créer le résumé et les cartes</button>
         <div id="status" class="note" role="status">Les cartes viennent uniquement de ton cours. Chaque carte garde la phrase du cours qui la justifie.</div>`;
       app.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { keep(); d.tab = b.dataset.tab; draw(); });
-      if ($("lget")) $("lget").onclick = async () => { keep(); $("lget").disabled = true; if (await fetchLink(d.link)) { draw(); toast("Texte du Genially récupéré. Relis-le, puis crée tes cartes."); } else if ($("lget")) $("lget").disabled = false; };
       app.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { d.files.splice(+b.dataset.rm, 1); draw(); });
       app.querySelectorAll("[data-rms]").forEach(b => b.onclick = () => { keep(); d.shots.splice(+b.dataset.rms, 1); draw(); });
       if ($("shotpick")) $("shotpick").onchange = e => { keep(); d.shots.push(...e.target.files); draw(); };
@@ -1651,23 +1648,14 @@
       }
       chipUpdate();
     }
-    // Schémas et images : un Genially (ou un texte collé) ne donne que du texte. On y ajoute des captures d'écran,
+    // Schémas et images : un texte collé ne donne que du texte. On y ajoute des captures d'écran,
     // lues par l'IA comme les photos (elle décrit chaque schéma), dans le même import.
     function shotsHtml() {
-      return `<div class="card pad stack shots"><b>Schémas, images, tableaux</b><p class="small muted">${d.tab === "link" || d.link ? "Le texte du Genially est récupéré, mais pas ses images." : "Ton texte a des schémas à côté ?"} Ajoute des captures d'écran : l'IA les lit et décrit chaque schéma, comme pour une photo de cours.</p>
+      return `<div class="card pad stack shots"><b>Schémas, images, tableaux</b><p class="small muted">Ton texte a des schémas à côté ? Ajoute des captures d'écran : l'IA les lit et décrit chaque schéma, comme pour une photo de cours.</p>
         ${d.shots.length ? `<div class="filelist">${d.shots.map((f, i) => `<div><span>${esc(f.name)}</span><button class="mini" data-rms="${i}" aria-label="Retirer ${esc(f.name)}">Retirer</button></div>`).join("")}</div>` : ""}
         <label class="btn sm ghost" for="shotpick" style="align-self:flex-start">Ajouter des captures</label><input id="shotpick" type="file" multiple accept="image/*,.pdf" hidden></div>`;
     }
-    function keep() { if ($("txt")) d.text = $("txt").value; if ($("lnk")) d.link = $("lnk").value.trim(); }
-    // Lien Genially → texte du cours (fonction studio, action « lien » : aucune IA, juste la transcription publique du Genially).
-    const isGenially = v => /^https?:\/\/(view\.)?(genially\.com|genial\.ly)\/[0-9a-f]{24}\S*$/i.test(String(v || "").trim());
-    async function fetchLink(url) {
-      if (!isGenially(url)) { toast("Colle un lien Genially, par exemple https://view.genially.com/…"); return false; }
-      if (state.offline) { toast("Il faut être connecté à Internet pour lire un Genially."); return false; }
-      const st = $("status"); if (st) st.textContent = "Je lis le Genially…";
-      try { const r = await ai({ action: "lien", url: url.trim() }, "studio"); d.link = url.trim(); d.text = (r.title ? r.title + "\n\n" : "") + r.text; d.tab = "text"; return true; }
-      catch (e) { if (st) showErr(st, e); else toast(e.message); return false; }
-    }
+    function keep() { if ($("txt")) d.text = $("txt").value; }
     const say = (m) => { d.msg = m; impPaint(d); };
 
     async function imageToJpeg(file, scan) {

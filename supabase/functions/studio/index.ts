@@ -4,7 +4,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 import { autoTitle } from "./titre.mjs";
-import { geniallyUrl, geniallyText } from "./lien.mjs";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -293,21 +292,6 @@ Deno.serve(async (req) => {
     if (uerr || !u?.user) return json({ error: "non_connecte" }, 401);
     const uid = u.user.id;
 
-    // Lien Genially : on récupère la transcription publique (aucun appel d'IA, rien n'est compté dans le quota).
-    if (body.action === "lien") {
-      const url = geniallyUrl(body.url);
-      if (!url) return json({ error: "requete", detail: "Ce lien n'est pas un lien Genially." }, 400);
-      let html = "";
-      try {
-        const r = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(15000), headers: { "User-Agent": "Mozilla/5.0 (compatible; MergeRevision/1.0)", "Accept-Language": "fr-FR,fr;q=0.9" } });
-        if (r.status === 404) return json({ error: "requete", detail: "Ce Genially n'existe pas ou n'est pas public." }, 400);
-        if (!r.ok) return json({ error: "requete", detail: "Genially ne répond pas, réessaie dans un moment." }, 400);
-        html = (await r.text()).slice(0, 6_000_000);
-      } catch (_e) { return json({ error: "requete", detail: "Genially ne répond pas, réessaie dans un moment." }, 400); }
-      const out = geniallyText(html);
-      if (out.text.length < 40) return json({ error: "requete", detail: "Ce Genially ne contient presque pas de texte (sûrement des images). Fais des captures d'écran et importe-les comme photos." }, 400);
-      return json({ ok: true, url, title: out.title, text: out.text });
-    }
     if (body.action === "import_start") {
       const { data: ch } = await admin.from("chapters").select("id").eq("id", String(body.chapter_id)).eq("user_id", uid).maybeSingle();
       if (!ch) return json({ error: "requete", detail: "Chapitre introuvable." }, 400);

@@ -15,7 +15,7 @@ The interface is in French. It works on phones (installable as a PWA) and on des
 - **Modes without AI**: boss fight, 60-second flash round, hands-free audio, match, true or false (with lookalike traps), learn, mock exam, printable card sheets. Printing works in the installed iPhone app too (the sheet is turned into a PDF and shared).
 - **Reminders**: daily reminder only if the student has not studied yet that day, a "your streak ends tonight" reminder at 9 pm, exam reminders (one week, three days, the day before, the morning of the exam). Synced settings: reminders on or off, quiet weekends, quiet school holidays (French zones A, B, C).
 - **Motivation**: levels, points, badges, daily streak with one freeze per week, a weekly chart that stays readable on light days, and a **shop**: coins earned by studying (1 per right answer, 10 per mastered chapter, a bonus per level) buy themes, animated backgrounds, mascot outfits, flashcard styles, streak flame colours, titles and surprise chests. Each new level gives coins, a free item and a chest every five levels.
-- **Real gifts (optional)**: a list of real-life rewards (in `GIFTS`, `js/app.js`) shown only to accounts enabled in the admin page. Claiming one shows a voucher to screenshot and send, and the request appears in the admin page until it is marked as given.
+- **Real gifts (optional)**: a list of real-life rewards (in `GIFTS`, `js/src/04-niveaux-boutique.js`) shown only to accounts enabled in the admin page. Claiming one shows a voucher to screenshot and send, and the request appears in the admin page until it is marked as given.
 - **Study comfort**: quick search, adjustable Pomodoro or free timer, background music with artwork, read-aloud, highlights, personal notes, statistics, image occlusion.
 - **Duo**: two students share their study statistics with an invitation code, a copy button or a share link that opens the app with the code filled in. Lessons and cards stay private.
 - **Admin page** (`/admin`, password protected): students, screen time, AI usage, and real gift access and requests.
@@ -36,7 +36,7 @@ Browser (static site, installable PWA)
         └─ admin     data for the admin page
 ```
 
-- **Code layout**: all application code is one IIFE in `js/app.js`. Each screen is a `screenXxx` function and `route()` picks the screen from the URL hash.
+- **Code layout**: the app is split into numbered pieces in `js/src/` (base, tools, data, login, levels and shop, home and chapters, import, card sessions, settings, subjects and calendar, study modes, navigation). `node tools/build-app.js` joins them into `js/app.js`, the single file the browser loads (one IIFE, no build tools needed). Edit `js/src/`, never `js/app.js` directly; the tests check that `js/app.js` is up to date. Each screen is a `screenXxx` function and `route()` picks the screen from the URL hash.
 - **The `ai` Edge Function** (`supabase/functions/ai/index.ts`) is the only place that knows the Google credentials. It checks the signed-in user, applies a daily quota of 40 calls per user, calls Gemini, and logs token usage in `ai_usage`. All prompts live in the function; the browser only sends the lesson text and an action name. Every prompt restricts the model to the imported lesson. Actions: `quota`, `transcribe`, `generate`, `verify`, `summary`, `study` (kinds `quiz`, `controle`, `pieges`, `faceaface`, `exercices`, `mindmap`, `cloze`, `fiche`), `prof`/`ask`, `concret`, `blurting`, `feynman`, `khole`, `pourquoi`, `mnemo`.
 - **Caching**: generated content is stored in memory, in `localStorage` and in the `ai_cache` table (one row per chapter and kind), so reopening a tool never costs a second call. When the quota is reached the app shows a fixed message with a contact link, and every non-AI mode keeps working.
 - **Scheduling** uses FSRS through `ts-fsrs`. Chapter mastery is the share of cards whose last answer was right (`cards.mastered`).
@@ -50,7 +50,8 @@ admin/index.html            admin page (password checked by the admin Edge Funct
 privacy.html                privacy page
 css/app.css                 design tokens (light and dark), components, print styles
 js/config.js                app name, Supabase URL and publishable key, VAPID public key, music list, contact link
-js/app.js                   the whole app: screens, routing, import, study modes, shop
+js/src/                     the app's source, in numbered pieces (edit these)
+js/app.js                   generated from js/src/ by tools/build-app.js (the file the browser loads)
 vendor/                     third-party libraries, bundled (no CDN needed)
 icons/, images/, audio/     app icons, music artwork, background music
 manifest.webmanifest        PWA manifest

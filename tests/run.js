@@ -857,10 +857,10 @@ async function leurres(browser) {
 
 async function iphoneAppli(browser) {
   const page = await open(browser, { w: 390, h: 844, theme: "dark" });
-  // Double appui : plus de zoom sur les boutons et les cartes (le zoom à deux doigts reste possible).
+  // Double appui : plus de zoom sur les boutons et les cartes (et plus de zoom à deux doigts non plus, demandé le 15 nov.).
   await go(page, "#cartes-c1", 400);
   ok(await page.evaluate(() => ["html", "body", "#yes", "#flip", ".tabs a"].every(sel => { const e = document.querySelector(sel); return !e || getComputedStyle(e).touchAction === "manipulation"; })), "iPhone : pas de zoom au double appui");
-  ok(!(await page.evaluate(() => document.querySelector('meta[name="viewport"]').content.includes("user-scalable=no"))), "iPhone : zoom à deux doigts toujours possible");
+  ok(await page.evaluate(() => document.querySelector('meta[name="viewport"]').content.includes("user-scalable=no") && getComputedStyle(document.documentElement).touchAction === "manipulation"), "iPhone : zoom bloqué (pincement et double appui), demandé par Ramzi le 15 nov.");
   ok(await page.evaluate(() => [...document.querySelectorAll("input:not([type=range]):not([type=checkbox]),select,textarea")].every(e => parseFloat(getComputedStyle(e).fontSize) >= 16)), "iPhone : champs en 16 px au moins (pas de zoom automatique en écrivant)");
   // Imprimer : dans l'appli installée sur iPhone, un PDF au lieu de window.print().
   await page.evaluate(() => { window.__mergeForcePdf = true; window.__printed = 0; window.print = () => { window.__printed++; }; });
@@ -1071,14 +1071,6 @@ async function boutiqueV2(browser) {
 }
 
 async function genially(browser) {
-  // 1. Extraction (supabase/functions/studio/lien.mjs) sur une vraie structure de page Genially (bloc JSON-LD « text »).
-  const L = await import(require("url").pathToFileURL(path.join(ROOT, "supabase/functions/studio/lien.mjs")).href);
-  ok(L.geniallyUrl("https://view.genial.ly/5e6205c475ef8e0fc16756e9/presentation-la-reaction-inflammatoire?fbclid=x") === "https://view.genially.com/5e6205c475ef8e0fc16756e9" && L.geniallyUrl("https://view.genially.com/67f160a5e1196f27a7d26748/interactive-content") === "https://view.genially.com/67f160a5e1196f27a7d26748", "genially : anciens et nouveaux liens reconnus");
-  ok(L.geniallyUrl("https://exemple.com/5e6205c475ef8e0fc16756e9") === null && L.geniallyUrl("javascript:alert(1)") === null && L.geniallyUrl("https://view.genially.com/../admin") === null, "genially : autres sites refusés");
-  const html = '<html><head><script data-react-helmet="true" type="application/ld+json">' + JSON.stringify({ "@context": "https://schema.org", "@type": "CreativeWork", name: "la procréation humaine", text: "la procréation humaine RAPPEL I. le fonctionnement de l\'appareil génital masculin An awesome subtitle here Title here Magic Design Interactivity Le cycle ovarien dure 28 jours." }) + '</script></head><body><div id="root"></div></body></html>';
-  const g = L.geniallyText(html);
-  ok(g.title === "la procréation humaine" && g.text.includes("Le cycle ovarien dure 28 jours.") && !/awesome|Magic Design|Title here/.test(g.text), "genially : texte du cours extrait, textes du modèle retirés", JSON.stringify(g));
-  ok(L.geniallyText("<html><body>rien</body></html>").text === "", "genially : page sans transcription, texte vide");
   // 2. Écran d'import : plus d'onglet Genially (récupération du texte retirée le 14 nov.), on conseille des captures d'écran.
   for (const [w, h] of [[390, 844], [1280, 800]]) {
     const page = await open(browser, { w, h, theme: "dark" }), tag = "genially " + w;
@@ -1131,6 +1123,8 @@ async function saison(browser) {
   ok(!page.errors.length, "saison : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
 }
 
+// js/app.js doit être reconstruit à partir de js/src/ (node tools/build-app.js).
+{ const r = require("child_process").spawnSync(process.execPath, [path.join(ROOT, "tools/build-app.js"), "--check"]); ok(r.status === 0, "js/app.js à jour avec les morceaux de js/src/", String(r.stderr)); }
 let BASE;
 (async () => {
   fs.mkdirSync(SHOTS, { recursive: true });
