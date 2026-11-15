@@ -749,6 +749,25 @@ async function rappels(browser) {
   }
 }
 
+// Mises à jour : le service worker demande toujours la dernière version au serveur (cache: "no-cache") et l'appli marche hors ligne.
+async function majSw(browser) {
+  const ctx = await browser.newContext({ viewport: { width: 393, height: 852 } }), page = await ctx.newPage(); page.errors = [];
+  page.on("pageerror", e => page.errors.push(String(e)));
+  await page.route("**/vendor/supabase.js", r => r.fulfill({ path: path.join(__dirname, "fake-supabase.js"), contentType: "text/javascript" }));
+  await page.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+  const LOC = BASE.replace("127.0.0.1", "localhost");
+  await page.goto(LOC + "/"); await page.waitForSelector("#app > *");
+  const active = await page.evaluate(() => navigator.serviceWorker.ready.then(r => !!r.active));
+  ok(active, "maj : le service worker s'installe");
+  await page.reload(); await page.waitForSelector("#app > *");
+  const ctl = await page.evaluate(() => !!navigator.serviceWorker.controller);
+  ok(ctl, "maj : la page est servie par le service worker");
+  const disk = fs.readFileSync(path.join(ROOT, "js/app.js"), "utf8"), sent = await page.evaluate(() => fetch("js/app.js").then(r => r.text()));
+  ok(sent === disk, "maj : app.js servi = la dernière version du serveur");
+  await ctx.setOffline(true); await page.reload(); await page.waitForSelector("#app > *", { timeout: 8000 }).catch(() => {});
+  ok(await page.$("#app > *"), "maj : l'appli s'ouvre hors ligne");
+  ok(!page.errors.length, "maj : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await ctx.close();
+}
 async function matieresTactile(browser) {
   // Bug iPhone du 14 nov. : après un appui, le survol restait « collé » sous le doigt et une puce décochée gardait l'air cochée
   // (ou une autre, comme Allemand, semblait se cocher toute seule). Les effets de survol sont réservés aux souris.
@@ -1469,7 +1488,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => only ? only.includes(n) : n !== "chasse";
     if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
-    const SUITES = { flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
+    const SUITES = { majSw, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
     for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();

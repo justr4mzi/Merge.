@@ -99,6 +99,8 @@
   applyLook(null);
   addEventListener("hashchange", route);
   sb.auth.onAuthStateChange((evt) => { if (evt === "SIGNED_OUT") { state.user = null; state.profile = null; screenLogin(); } });
-  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(reg => { document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reg.update().catch(() => {}); }); }).catch(() => {});
+  // Nouvelle version installée pendant que l'appli est ouverte : on recharge une fois pour l'afficher tout de suite.
+  if ("serviceWorker" in navigator && navigator.serviceWorker.controller) { let reloaded = false; navigator.serviceWorker.addEventListener("controllerchange", () => { if (!reloaded) { reloaded = true; location.reload(); } }); }
   start();
 })();
