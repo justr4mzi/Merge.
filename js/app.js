@@ -143,7 +143,7 @@
   function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   // Ces clés sont gardées sur l'appareil ET dans le compte (table user_kv) : on retrouve la même chose sur téléphone et sur PC.
   // Restent sur l'appareil seulement : kvts (horodatages), file (révisions en attente d'envoi), cache.* et gen.* (copies de la base), erreurs.* (copie de secours de la table mistakes). Le thème est dans le profil.
-  const SYNC = /^merge\.(fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|controles|vus|boostj|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
+  const SYNC = /^merge\.(fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|controles|boostnext|boostj|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
   let kvTs = {}, kvQueue = {}, kvTimer = null, kvOff = false, kvAt = 0;
   try { kvTs = JSON.parse(localStorage.getItem("merge.kvts") || "{}") || {}; } catch (e) { kvTs = {}; }
   const kvSaveTs = () => { try { localStorage.setItem("merge.kvts", JSON.stringify(kvTs)); } catch (e) { /* rien */ } };
@@ -263,15 +263,25 @@
   // Une de ces cartes « en plus » réussie ne touche pas à son calendrier FSRS (elle est juste notée vue aujourd'hui) ;
   // ratée, elle repasse par FSRS comme n'importe quelle carte oubliée.
   const boostDays = () => { const n = +jget("merge.boostj", 7); return [0, 3, 7, 14].includes(n) ? n : 7; };
+  // Chapitres concernés → date du contrôle le plus proche qui les contient.
   function boostChapters() {
-    const n = boostDays(); if (!n || !state.chapters) return null; const ids = new Set();
-    upCtrls().forEach(({ c, s }) => { if (daysUntil(c.d) > n) return; (c.ch && c.ch.length ? c.ch : state.chapters.filter(x => x.subject_id === s.id).map(x => x.id)).forEach(i => ids.add(i)); });
+    const n = boostDays(); if (!n || !state.chapters) return null; const ids = new Map();
+    upCtrls().forEach(({ c, s }) => { if (daysUntil(c.d) > n) return; (c.ch && c.ch.length ? c.ch : state.chapters.filter(x => x.subject_id === s.id).map(x => x.id)).forEach(i => { if (!ids.has(i) || c.d < ids.get(i)) ids.set(i, c.d); }); });
     return ids.size ? ids : null;
   }
-  const seenToday = () => { const v = jget("merge.vus", null); return new Set(v && v.d === localDay() && Array.isArray(v.ids) ? v.ids : []); };
-  function markSeen(id, on = true) { const v = jget("merge.vus", null), d = localDay(), l = new Set(v && v.d === d && Array.isArray(v.ids) ? v.ids : []); on ? l.add(id) : l.delete(id); jset("merge.vus", { d, ids: [...l].slice(-3000) }); }
+  // Prochain passage de chaque carte en révision de contrôle (merge.boostnext, synchronisé) : « Trop facile » → après le contrôle,
+  // « Juste » → dans 2 jours, « Juste, mais à revoir » → demain, « Faux » → aujourd'hui même.
+  const boostNext = () => { const v = jget("merge.boostnext", null); return v && typeof v === "object" ? v : {}; };
+  function setBoostNext(id, rating, prev) {
+    const b = boostChapters(), row = state.cards.find(c => c.id === id); if (!b || !row || !b.has(row.chapter_id)) return;
+    const m = boostNext(), t = new Date(localDay() + "T12:00:00"), plus = n => localDay(new Date(t.getTime() + n * 86400000));
+    if (prev !== undefined) { if (prev === null) delete m[id]; else m[id] = prev; }
+    else m[id] = rating === F.Rating.Easy ? plus(daysUntil(b.get(row.chapter_id)) + 1) : rating === F.Rating.Good ? plus(2) : rating === F.Rating.Hard ? plus(1) : localDay();
+    const old = localDay(new Date(Date.now() - 30 * 86400000)); Object.keys(m).forEach(k => { if (m[k] < old) delete m[k]; });
+    jset("merge.boostnext", m);
+  }
   const fsrsDue = c => new Date(c.due_at).getTime() <= Date.now();
-  function dueCards(list) { const b = boostChapters(), seen = b ? seenToday() : null; return list.filter(c => fsrsDue(c) || (b && b.has(c.chapter_id) && !seen.has(c.id))); }
+  function dueCards(list) { const b = boostChapters(), m = b ? boostNext() : null, today = localDay(); return list.filter(c => fsrsDue(c) || (b && b.has(c.chapter_id) && (!m[c.id] || m[c.id] <= today))); }
   const VACANCES_ZONES = {
     A: [["Toussaint", "2026-10-17", "2026-11-01"], ["Noël", "2026-12-19", "2027-01-03"], ["Hiver", "2027-02-13", "2027-02-28"], ["Printemps", "2027-04-10", "2027-04-25"], ["Été", "2027-07-03", "2027-08-31"]],
     B: [["Toussaint", "2026-10-17", "2026-11-01"], ["Noël", "2026-12-19", "2027-01-03"], ["Hiver", "2027-02-20", "2027-03-07"], ["Printemps", "2027-04-17", "2027-05-02"], ["Été", "2027-07-03", "2027-08-31"]],
@@ -1908,7 +1918,7 @@
         const patch = Object.assign({}, u.prev); if (state.legacy) delete patch.mastered;
         sb.from("cards").update(patch).eq("id", u.cid).then(res => { if (res.error) queueReview(u.cid, patch); }, () => queueReview(u.cid, patch));
       }
-      markSeen(u.cid, false);
+      if (u.boost !== undefined) setBoostNext(u.cid, null, u.boost);
       S.queue = u.queue; S.known = u.known; S.reviews = Math.max(0, S.reviews - 1); if (!u.again) S.again.delete(u.cid);
       S.flipped = true; S.mine = "";
       if (u.mistake) Promise.resolve(u.mistake).then(() => unlogMistake(u.chapter, u.front));
@@ -1918,7 +1928,8 @@
     async function answer(ok, rating) {
       { const r0 = state.cards.find(c => c.id === S.queue[0]); if (r0) { S.undo.push({ cid: r0.id, chapter: r0.chapter_id, front: r0.front, prev: Object.fromEntries(UNDO_KEYS.map(k => [k, r0[k] === undefined ? null : r0[k]])), queue: S.queue.slice(), known: S.known, again: S.again.has(r0.id), mistake: null }); if (S.undo.length > 20) S.undo.shift(); } }
       const cid = S.queue.shift(), row = state.cards.find(c => c.id === cid); if (!row) return render();
-      const now = new Date(), bonus = ok && !fsrsDue(row) && row.last_review; markSeen(cid);
+      const now = new Date(), bonus = ok && !fsrsDue(row) && row.last_review, bn = boostNext()[cid];
+      setBoostNext(cid, ok ? (rating || F.Rating.Good) : F.Rating.Again); if (S.undo.length) S.undo[S.undo.length - 1].boost = bn === undefined ? null : bn;
       const r = bonus ? null : fsrs.next(toFsrs(row), now, ok ? (rating || F.Rating.Good) : F.Rating.Again).card;
       const patch = bonus ? { right_count: (row.right_count || 0) + 1 } : { due_at: r.due.toISOString(), stability: r.stability, difficulty: r.difficulty, elapsed_days: r.elapsed_days, scheduled_days: r.scheduled_days, reps: r.reps, lapses: r.lapses, state: r.state, last_review: now.toISOString(), right_count: (row.right_count || 0) + (ok ? 1 : 0), wrong_count: (row.wrong_count || 0) + (ok ? 0 : 1) };
       if (!state.legacy) patch.mastered = ok;

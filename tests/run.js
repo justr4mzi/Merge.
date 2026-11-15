@@ -1136,7 +1136,7 @@ async function revisionControle(browser) {
   ok(await page.evaluate(() => localStorage.getItem("merge.boostj") === "14" && window.__mergeSync.synced("merge.boostj")), "contrôle proche : réglage enregistré et synchronisé");
   // Toutes les cartes du jour faites (calendrier FSRS repoussé), puis un nouveau jour : seules les cartes du contrôle reviennent.
   await page.evaluate(() => localStorage.setItem("merge.boostj", "0")); await go(page, "#cartes-jour", 500); { let g = 0; while (g++ < 80 && await page.locator("#yes").count()) { await page.click("#yes"); await page.waitForTimeout(20); } }
-  await page.evaluate(() => { localStorage.setItem("merge.boostj", "14"); localStorage.removeItem("merge.vus"); });
+  await page.evaluate(() => { localStorage.setItem("merge.boostj", "14"); localStorage.removeItem("merge.boostnext"); });
   await go(page, "#accueil", 400); const more = await dueTxt();
   ok(more > 0 && (await txt(page)).includes("dont " + more + " pour ton prochain contrôle"), "contrôle proche : cartes du contrôle ajoutées aux cartes du jour", base + " → " + more);
   const before = await page.evaluate(() => Object.fromEntries(window.__fake.DB.cards.map(c => [c.id, c.due_at])));
@@ -1144,7 +1144,14 @@ async function revisionControle(browser) {
   const after = await page.evaluate(() => window.__fake.DB.cards.map(c => ({ id: c.id, due: c.due_at, ch: c.chapter_id })));
   ok(after.filter(c => new Date(before[c.id]).getTime() > Date.now() && c.ch === "c1").every(c => c.due === before[c.id]), "contrôle proche : une carte en plus réussie garde son calendrier de répétition espacée");
   await go(page, "#accueil", 400); ok(await dueTxt() === 0, "contrôle proche : une fois revues, elles ne reviennent pas le même jour");
-  ok(await page.evaluate(() => JSON.parse(localStorage.getItem("merge.vus")).ids.length > 0 && window.__mergeSync.synced("merge.vus")), "contrôle proche : cartes vues aujourd'hui gardées et synchronisées");
+  ok(await page.evaluate(() => { const m = JSON.parse(localStorage.getItem("merge.boostnext")), v = Object.values(m), d = new Date(Date.now() + 2 * 86400000), j2 = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); return v.length > 0 && v.every(x => x === j2) && window.__mergeSync.synced("merge.boostnext"); }), "contrôle proche : « Juste » revient dans 2 jours (synchronisé)");
+  // « Trop facile » : plus avant le contrôle ; « Juste, mais à revoir » : demain ; « Faux » : aujourd'hui.
+  await page.evaluate(() => localStorage.removeItem("merge.boostnext")); await go(page, "#cartes-jour", 500);
+  const pick = async sel => { await page.click(".face"); await page.waitForTimeout(60); await page.click(sel); await page.waitForTimeout(60); };
+  await pick("#easy"); await pick("#hard"); await pick("#no");
+  const m2 = await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem("merge.boostnext") || "{}")).sort());
+  const dd = n => { const d = new Date(Date.now() + n * 86400000); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+  ok(m2.length === 3 && m2[0] === dd(0) && m2[1] === dd(1) && m2[2] === dd(10), "contrôle proche : Trop facile après le contrôle, à revoir demain, faux aujourd'hui", JSON.stringify(m2));
   ok(!page.errors.length, "contrôle proche : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
 }
 
