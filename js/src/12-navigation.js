@@ -11,7 +11,7 @@
     if (safeGet("merge.duoin") && location.hash !== "#duo") { location.hash = "#duo"; return; }
     const h = location.hash.replace("#", ""), arg = h.slice(h.indexOf("-") + 1);
     document.body.classList.add("nav"); closeSheet();
-    drawTabs(/^(calendrier|progres|duo|reglages)$/.test(h) ? h : h === "edt" ? "calendrier" : h === "corbeille" ? "reglages" : h === "bilan" || h === "minuteur" || h === "recompenses" || h === "boutique" ? "progres" : !h || h === "accueil" || h === "cartes-jour" || h === "melange" || h === "perso" || h === "mixte" ? "accueil" : "matieres");
+    drawTabs(/^(progres|calendrier|reglages)$/.test(h) ? h : h === "duo" ? "progres" : h === "journee" || h === "edt" ? "calendrier" : /^exos/.test(h) ? "exos" : h === "corbeille" ? "reglages" : h === "bilan" || h === "minuteur" || h === "recompenses" || h === "boutique" ? "progres" : !h || h === "accueil" || h === "cartes-jour" || h === "melange" || h === "perso" || h === "mixte" ? "accueil" : "matieres");
     screenSession.key = null;
     if (busStop) busStop();
     stopSpeak();
@@ -33,9 +33,12 @@
     else if (h.startsWith("interro-")) screenInterro(arg);
     else if (h.startsWith("synthese-")) screenSynth(arg);
     else if (h.startsWith("planche-")) screenPrintCards(arg);
-    else if (h === "calendrier") screenCalendar();
+    else if (h === "calendrier") screenPlanning();
     else if (h === "progres") screenProgress();
     else if (h === "duo") screenDuo();
+    else if (h === "journee") jGo("jour");
+    else if (h === "exos") screenExos();
+    else if (h.startsWith("exos-")) screenExos(arg);
     else if (h.startsWith("apprendre-")) screenQuestions(arg, "apprendre");
     else if (h.startsWith("quiz-")) screenQuestions(arg, "quiz");
     else if (h.startsWith("controle-")) screenQuestions(arg, "controle");

@@ -123,9 +123,10 @@
   // Le calendrier affiche la zone A ; la zone choisie dans Réglages sert aux rappels.
   const VACANCES = VACANCES_ZONES.A;
   const vacOf = key => VACANCES.find(v => key >= v[1] && key <= v[2]);
+  // Calendrier, vue du mois (le niveau le plus « dézoomé ») : toucher un jour ouvre sa journée en frise.
   function screenCalendar() {
     drawTabs("calendrier");
-    const ref = new Date(); ref.setDate(1); let picked = null;
+    const ref = jView().day ? dayOf(jView().day) : new Date(); ref.setDate(1); let picked = null;
     function draw() {
       const y = ref.getFullYear(), m = ref.getMonth(), first = (new Date(y, m, 1).getDay() + 6) % 7, n = new Date(y, m + 1, 0).getDate(), today = localDay();
       const did = {}; state.sessions.forEach(x => { if (x.seconds > 0 || x.cards_reviewed > 0) did[x.day] = x; });
@@ -135,33 +136,24 @@
         const key = y + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0"), ex = ctrls().filter(c => c.d === key).map(c => state.subjects.find(x => x.id === c.s)).filter(x => x && !isFree(x));
         if (did[key]) { daysDone++; secs += did[key].seconds || 0; }
         const vac = vacOf(key);
-        cells.push(`<button type="button" class="day${key === today ? " now" : ""}${ex.length ? " has" : ""}${did[key] ? " did" : ""}${vac ? " hol" : ""}"${vac ? ` title="Vacances : ${vac[0]}"` : ""} data-day="${key}" aria-pressed="${picked === key}"${key < today ? " disabled" : ""} aria-label="${d}${ex.length ? ", contrôle : " + esc(ex.map(x => x.name).join(", ")) : ""}${did[key] ? ", jour révisé" : ""}"><span class="dn">${d}</span><i>${ex.map(x => `<b style="background:${esc(x.color)}"></b>`).join("")}</i>${ex.slice(0, 2).map(x => `<em style="--c:${esc(x.color)}">${esc(x.name)}</em>`).join("")}</button>`);
+        cells.push(`<button type="button" class="day${key === today ? " now" : ""}${ex.length ? " has" : ""}${did[key] ? " did" : ""}${vac ? " hol" : ""}"${vac ? ` title="Vacances : ${vac[0]}"` : ""} data-day="${key}" aria-pressed="${picked === key}" aria-label="${d}${ex.length ? ", contrôle : " + esc(ex.map(x => x.name).join(", ")) : ""}${did[key] ? ", jour révisé" : ""}"><span class="dn">${d}</span><i>${ex.map(x => `<b style="background:${esc(x.color)}"></b>`).join("")}</i>${ex.slice(0, 2).map(x => `<em style="--c:${esc(x.color)}">${esc(x.name)}</em>`).join("")}</button>`);
       }
       const up = upCtrls(), free = state.subjects.filter(isFree), onDay = picked ? ctrls().filter(c => c.d === picked) : [];
-      app.innerHTML = `<div class="row between" style="flex-wrap:wrap"><h1>Calendrier</h1><div class="row" style="flex-wrap:wrap"><a class="btn sm" href="#edt">Emploi du temps</a><button class="btn sm ghost" id="todayb">Aujourd'hui</button></div></div>
+      app.innerHTML = `<div class="row between" style="flex-wrap:wrap"><h1>Calendrier</h1><div class="row" style="flex-wrap:wrap"><a class="btn sm ghost" href="#edt">Emploi du temps</a><button class="btn sm" id="todayb">Aujourd'hui</button></div></div>
         <div class="calwrap"><div class="card pad stack calcard"><div class="row between"><button class="iconbtn flat" id="prev" aria-label="Mois précédent">${I.back}</button><h2 class="calmonth">${ref.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}</h2><button class="iconbtn flat" id="nextm" aria-label="Mois suivant" style="transform:scaleX(-1)">${I.back}</button></div>
           <div class="cal calx">${["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map(x => `<span class="wd">${x}</span>`).join("")}${cells.join("")}</div>
           <div class="callegend"><span><i class="lg now"></i>Aujourd'hui</span><span><i class="lg did"></i>Jour révisé</span><span><i class="lg ex"></i>Contrôle</span><span><i class="lg hol"></i>Vacances (zone A)</span></div></div>
         <div class="stack calside">
-          ${picked ? `<div class="card pad stack" id="dayPanel"><h2>${fmtDate(picked)}</h2><p class="label">Contrôles ce jour-là : touche une ou plusieurs matières</p><div class="chips">${state.subjects.map(x => `<button class="chip" data-sub="${x.id}" aria-pressed="${onDay.some(c => c.s === x.id)}" style="--c:${esc(x.color)}"><span class="dot"></span>&nbsp;${esc(x.name)}</button>`).join("") || '<span class="muted">Ajoute d\'abord une matière.</span>'}</div>${onDay.length ? onDay.map(c => { const x = state.subjects.find(y => y.id === c.s); return x ? `<button class="row between ctrlpick" data-cch="${c.id}"><span><b>${esc(x.name)}</b><span class="small muted"> · ${c.ch ? plural(c.ch.length, "chapitre", "chapitres") : "tous les chapitres"}</span></span><span class="linkbtn">Chapitres</span></button>` : ""; }).join("") : ""}</div>` : `<div class="card pad stack calhint"><span class="mico big">${I.cal}</span><div><h2>Place tes contrôles</h2><p class="note">Touche un jour pour y placer un contrôle.</p></div></div>`}
           <div class="stack"><h2>Prochains contrôles</h2>${up.length ? up.map(({ c, s: x }) => `<a class="card exam" href="#matiere-${x.id}" style="--c:${esc(x.color)}"><span class="jx">${jx(c.d)}</span><span class="grow"><b>${esc(x.name)}</b><span class="small muted">${esc(fmtDate(c.d))} · ${daysUntil(c.d) === 0 ? "Aujourd'hui" : "Dans " + plural(daysUntil(c.d), "jour", "jours")}${c.ch ? " · " + plural(c.ch.length, "chapitre", "chapitres") : ""}</span></span></a>`).join("") : '<p class="muted">Aucune date pour l\'instant.</p>'}</div>
           ${(() => { const cur = vacOf(today), nx = VACANCES.find(v => v[1] > today); const fd = d => new Date(d + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" }); return cur ? `<div class="card pad stack vaccard"><h2>Vacances de ${cur[0]}</h2><p class="small muted">Jusqu'au ${fd(cur[2])}. Le bon moment pour revoir les chapitres les plus fragiles.</p></div>` : nx ? `<div class="card pad stack vaccard"><h2>Prochaines vacances : ${nx[0]}</h2><p class="small muted">Du ${fd(nx[1])} au ${fd(nx[2])}, dans ${plural(daysUntil(nx[1]), "jour", "jours")}. Zone A.</p></div>` : ""; })()}
           ${(() => { const s0 = up[0] && up[0].s, pl = s0 ? planFor(s0) : []; return pl.length ? `<div class="card pad stack"><h2>Plan de révision : ${esc(s0.name)}</h2>${pl.filter(x => x.items.length || x.last).slice(0, 8).map(x => `<div class="srow"><span>${esc(new Date(x.day + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }))}</span><b>${esc(x.items.map(y => y.c.name).concat(x.last ? ["Révision générale"] : []).join(", "))}</b></div>`).join("")}<p class="note">Les chapitres les moins maîtrisés passent en premier. Le plan se recalcule chaque jour.</p></div>` : ""; })()}
           ${free.length ? `<div class="stack"><h2>En révision libre</h2><p class="small muted">En révision libre : ${free.map(x => esc(x.name)).join(", ")}.</p></div>` : ""}
           <div class="card stats two"><div class="stat s1"><span class="sico">${I.check}</span><div><b>${daysDone}</b><span>${daysDone > 1 ? "jours révisés ce mois" : "jour révisé ce mois"}</span></div></div><div class="stat s2"><span class="sico">${I.bolt}</span><div><b>${Math.round(secs / 60)} min</b><span>de révision ce mois</span></div></div></div>
         </div></div>`;
-      $("todayb").onclick = () => { const t = new Date(); ref.setFullYear(t.getFullYear(), t.getMonth(), 1); draw(); };
+      $("todayb").onclick = () => { jGo("jour", localDay()); };
       $("prev").onclick = () => { ref.setMonth(ref.getMonth() - 1); draw(); };
       $("nextm").onclick = () => { ref.setMonth(ref.getMonth() + 1); draw(); };
-      app.querySelectorAll("[data-day]").forEach(b => b.onclick = () => { picked = picked === b.dataset.day ? null : b.dataset.day; draw(); });
-      // Plusieurs contrôles possibles le même jour, la même semaine, et plusieurs par matière.
-      app.querySelectorAll("[data-sub]").forEach(b => b.onclick = async () => {
-        const sub = state.subjects.find(x => x.id === b.dataset.sub), have = ctrls().find(c => c.s === sub.id && c.d === picked);
-        if (have) { await ctrlDel(have.id); toast("Contrôle de " + sub.name + " retiré."); return draw(); }
-        if (isFree(sub)) { const err = await saveExam(sub.id, { date: null, free: false }); if (err) return fail(err, "Date non enregistrée"); }
-        const c = await ctrlAdd(sub.id, picked); draw(); if (c) ctrlChSheet(c.id, draw);
-      });
-      app.querySelectorAll("[data-cch]").forEach(b => b.onclick = () => ctrlChSheet(b.dataset.cch, draw));
+      app.querySelectorAll("[data-day]").forEach(b => b.onclick = () => jGo("jour", b.dataset.day));
     }
     draw();
   }
@@ -187,11 +179,13 @@
       <p class="small muted wmsg">${msg} <span class="wgoal">Objectif : ${goal} ${byMin ? "min" : "cartes"} par jour.</span></p></div>`;
   }
   function lastDays(n, sessions) { const out = []; for (let i = n - 1; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); const k = localDay(d); out.push(Object.assign({ day: k, label: d.getDate(), seconds: 0, cards_reviewed: 0 }, sessions.find(s => s.day === k) || {})); } return out; }
+  // Progrès et Duo : deux sous-onglets du même onglet (Duo a laissé sa place dans la barre du bas à Journée).
+  const progSeg = cur => `<div class="seg" role="tablist" aria-label="Progrès"><a role="tab" href="#progres" aria-selected="${cur === "progres"}">Mes progrès</a><a role="tab" href="#duo" aria-selected="${cur === "duo"}">Duo</a></div>`;
   function screenProgress() {
     drawTabs("progres");
     const d14 = lastDays(14, state.sessions), d7 = d14.slice(7), max = Math.max(1, ...d14.map(d => d.cards_reviewed));
     const mins = Math.round(d7.reduce((s, d) => s + d.seconds, 0) / 60), cards7 = d7.reduce((s, d) => s + d.cards_reviewed, 0);
-    app.innerHTML = `<div class="row between" style="flex-wrap:wrap"><h1>Progrès</h1><div class="row" style="flex-wrap:wrap"><a class="btn sm" href="#recompenses">Récompenses</a><a class="btn sm ghost" href="#bilan">Bilan de la semaine</a><a class="btn sm ghost" href="#erreurs">Carnet d'erreurs</a><a class="btn sm ghost" href="#minuteur">Minuteur</a></div></div>
+    app.innerHTML = `${progSeg("progres")}<div class="row between" style="flex-wrap:wrap"><h1>Progrès</h1><div class="row" style="flex-wrap:wrap"><a class="btn sm" href="#recompenses">Récompenses</a><a class="btn sm ghost" href="#bilan">Bilan de la semaine</a><a class="btn sm ghost" href="#erreurs">Carnet d'erreurs</a><a class="btn sm ghost" href="#minuteur">Minuteur</a></div></div>
       <div class="card pad stack"><div class="level"><span class="lvl">Niveau ${xpInfo().level}</span><div class="bar grow"><i style="width:${xpInfo().pct}%"></i></div><span class="small muted">${xpInfo().xp} points · encore ${xpInfo().left}</span></div><p class="note">10 points par bonne réponse, 2 par erreur, 100 par chapitre maîtrisé à 100 %. ${streakInfo().left ? "Gel de série disponible : un jour raté cette semaine ne cassera pas ta série." : "Ton gel de série a déjà servi cette semaine."}</p></div>
       <div class="tiles"><div class="card tile"><b>${streak()}</b><span>jours d'affilée</span></div><div class="card tile"><b>${cards7}</b><span>cartes en 7 jours</span></div><div class="card tile"><b>${mins}</b><span>minutes en 7 jours</span></div><div class="card tile"><b>${mastery(state.cards)} %</b><span>maîtrise moyenne</span></div></div>
       <div class="card pad stack"><h2>Cartes révisées, 14 derniers jours</h2><div class="bars" role="img" aria-label="Cartes révisées par jour sur 14 jours">${d14.map(d => `<div><i style="height:${Math.max(3, d.cards_reviewed / max * 100)}%" class="${d.cards_reviewed ? "" : "zero"}" title="${d.cards_reviewed}"></i><span>${d.label}</span></div>`).join("")}</div></div>
@@ -215,14 +209,14 @@
   const duoLink = code => location.origin + location.pathname + "#duo-" + encodeURIComponent(code);
   // ---------- duo (partage de statistiques à deux) ----------
   async function screenDuo() {
-    drawTabs("duo"); app.innerHTML = `<h1>Duo</h1><p class="muted">Chargement…</p>`;
+    drawTabs("progres"); app.innerHTML = `${progSeg("duo")}<h1>Duo</h1><p class="muted">Chargement…</p>`;
     const { data: partners, error } = await sb.rpc("share_partners");
     if (error) return fail(error, "Partage non chargé");
     const p = (partners || [])[0];
     if (p && safeGet("merge.duoin")) { safeSet("merge.duoin", ""); toast("Tu es déjà en duo : arrête ce partage pour en rejoindre un autre."); }
     if (!p) {
       const pending = safeGet("merge.duoin") || "";
-      app.innerHTML = `<h1>Duo</h1>
+      app.innerHTML = `${progSeg("duo")}<h1>Duo</h1>
         ${pending ? `<div class="card pad stack duoin"><h2>Invitation reçue</h2><p class="muted">Quelqu'un t'invite à réviser en duo. Rejoins-le pour voir vos statistiques côte à côte.</p><button class="btn" id="acceptLink">Rejoindre le duo</button><button class="btn ghost" id="dropLink">Pas maintenant</button></div>` : ""}
         <div class="card pad stack"><h2>Révisez à deux</h2><p class="muted">Invite une personne : vous verrez chacun les statistiques de l'autre (temps de révision, cartes révisées, série de jours, maîtrise, moyenne des quiz). Vos cours, résumés et cartes restent privés. Chacun peut arrêter le partage quand il veut.</p>
           <button class="btn" id="invite">Créer une invitation</button><p class="note" id="code" role="status"></p></div>
@@ -252,7 +246,7 @@
     const [ps, myq] = await Promise.all([sb.rpc("partner_stats", { partner: p.partner_id }), sb.from("quiz_results").select("score").eq("user_id", state.user.id)]);
     const theirsX = (ps.data && ps.data[0]) || { mastery: 0, quiz_avg: null }, mq = (myq.data || []).map(x => +x.score), myAvg = mq.length ? Math.round(mq.reduce((a, b) => a + b, 0) / mq.length * 10) / 10 : 0;
     const line = (label, a, b, unit) => `<tr><th scope="row">${label}</th><td class="${a >= b ? "win" : ""}">${a} ${unit}</td><td class="${b >= a ? "win" : ""}">${b} ${unit}</td></tr>`;
-    app.innerHTML = `<h1>Duo</h1>
+    app.innerHTML = `${progSeg("duo")}<h1>Duo</h1>
       <div class="card pad stack"><h2>Cette semaine</h2><table class="duo"><thead><tr><td></td><th scope="col">Toi</th><th scope="col">${esc(name)}</th></tr></thead><tbody>${line("Temps", me.min, them.min, "min")}${line("Cartes", me.cards, them.cards, "")}${line("Série", me.streak, them.streak, "j")}${line("Maîtrise", mastery(state.cards), theirsX.mastery || 0, "%")}${line("Moyenne des quiz", myAvg, +(theirsX.quiz_avg || 0), "/ 20")}</tbody></table></div>
       <div class="card pad stack"><h2>Ce qui est partagé</h2><p class="muted">${esc(name)} voit ton temps de révision, ton nombre de cartes révisées, ta série de jours, ta maîtrise et ta moyenne de quiz, et tu vois les siens. Vos cours, résumés et cartes restent privés.</p><button class="btn ghost" id="stop">Arrêter le partage</button></div>`;
     $("stop").onclick = async () => { const r = await sb.rpc("revoke_share", { link: p.link_id }); if (r.error) return fail(r.error, "Arrêt impossible"); toast("Partage arrêté."); screenDuo(); };

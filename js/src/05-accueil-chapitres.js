@@ -184,6 +184,7 @@
     feynman: { i: "bulb", n: "Méthode Feynman", s: "Explique comme à un enfant", ia: 2, a: "Tu expliques une notion comme à un enfant de 10 ans. L'IA te dit si tu as vraiment compris ou seulement récité, et ce qui manque." },
     pieges: { i: "trap", n: "Chasse aux pièges", s: "Deviens le correcteur", ia: 1, a: "Une copie d'élève contient des erreurs classiques. À toi de les repérer. Tu apprends en corrigeant." },
     faceaface: { i: "vs", n: "Face-à-face", s: "Les notions qu'on confond", ia: 1, a: "Les notions qui se ressemblent, comparées côte à côte, puis un mini quiz pour ne plus les mélanger." },
+    exos: { i: "ask", n: "Exercices et questions", s: "Chat avec ton cours", ia: 2, a: "Pose tes questions sur le chapitre, demande un exercice, ou envoie la photo de ta copie : l'IA te dit ce qui est juste et où ça coince. Aussi dans l'onglet Exercices." },
     exercices: { i: "steps", n: "Exercices guidés", s: "Indices pas à pas", ia: 1, a: "Trois exercices de difficulté croissante. Deux indices si tu bloques, puis la solution rédigée comme sur une copie." },
     difficiles: { i: "bolt", n: "Cartes difficiles", s: "Seulement celles que tu rates", ia: 0, a: "Une séance avec uniquement les cartes que tu rates le plus souvent ou que tu ne maîtrises pas encore." },
     blanc: { i: "clock", n: "Examen blanc", s: "Chronométré, comme le jour J", ia: 0, a: "Des questions de tes cartes à rédiger, avec une minute par question. Tu vois ta note à la fin, comme à un vrai contrôle." },
@@ -203,7 +204,7 @@
     stats: { i: "chart", n: "Statistiques", s: "Ta progression sur ce chapitre", ia: 0, a: "Ta maîtrise dans le temps, les cartes que tu rates le plus et le temps passé sur ce chapitre." },
     erreurs: { i: "book", n: "Carnet d'erreurs", s: "Tes erreurs, expliquées", ia: 0, a: "Toutes les questions que tu as ratées dans ce chapitre. Le bouton « Pourquoi ? » t'explique chaque erreur (1 appel IA)." },
   };
-  const MODE_CATS = [["Réviser", ["cartes", "resume", "apprendre", "interro", "quiz", "controle", "blanc", "difficiles", "ecouter"]], ["Comprendre", ["questions", "libre", "blurting", "feynman", "pieges", "faceaface", "exercices", "trous", "carte", "schema"]], ["Jouer", ["boss", "flash", "associer", "vraifaux"]], ["Oral et audio", ["khole", "bus"]], ["Fiches", ["synthese", "planche", "erreurs", "stats"]]];
+  const MODE_CATS = [["Réviser", ["cartes", "resume", "apprendre", "interro", "quiz", "controle", "blanc", "difficiles", "ecouter"]], ["Comprendre", ["exos", "questions", "libre", "blurting", "feynman", "pieges", "faceaface", "exercices", "trous", "carte", "schema"]], ["Jouer", ["boss", "flash", "associer", "vraifaux"]], ["Oral et audio", ["khole", "bus"]], ["Fiches", ["synthese", "planche", "erreurs", "stats"]]];
   const IA_NOTE = ["Sans IA : gratuit et illimité.", "1 appel IA la première fois, puis c'est gardé : tu le rouvres autant que tu veux.", "1 appel IA à chaque utilisation."];
   const favs = () => { try { const f = JSON.parse(safeGet("merge.fav") || "[]"); return Array.isArray(f) ? f.filter(k => MODES[k]) : []; } catch (e) { return []; } };
 

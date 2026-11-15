@@ -109,6 +109,8 @@
     chart: svg('<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 16v-3M12 16V8M15.5 16v-5"/>'),
     copy: svg('<rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/>'), share: svg('<path d="M12 15V4M8 8l4-4 4 4"/><path d="M6 12v6a2 2 0 002 2h8a2 2 0 002-2v-6"/>'),
     coin: svg('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="5"/><path d="M12 9.5v5"/>'), gift: svg('<rect x="3.5" y="9" width="17" height="11" rx="2"/><path d="M12 9v11M3.5 13h17M12 9c-2.5 0-5-1-5-3s3-2 5 3c2-5 5-5 5-3s-2.5 3-5 3"/>'), shop: svg('<path d="M4 9l1.5-5h13L20 9"/><path d="M4 9h16v2a2.7 2.7 0 01-5.3 0 2.7 2.7 0 01-5.4 0A2.7 2.7 0 014 11z"/><path d="M5.5 13.5V20h13v-6.5"/>'),
+    cup: svg('<path d="M5 9h11v4.5a5.5 5.5 0 01-5.5 5.5h0A5.5 5.5 0 015 13.5V9zM16 10.5h1.5a2.5 2.5 0 010 5H16M8.5 3.5v2.5M12 3v3"/>'),
+    day: svg('<circle cx="6.5" cy="6" r="2.6"/><circle cx="6.5" cy="18" r="2.6"/><path d="M6.5 8.6v6.8M11.5 6h8.5M11.5 18h8.5"/>'),
     duo: svg('<circle cx="9" cy="8" r="3.6"/><circle cx="16.5" cy="8.6" r="2.9"/><path d="M3.5 20a5.5 5.5 0 0111 0M14.5 15.3A4.6 4.6 0 0120.5 20"/>'),
     ask: svg('<path d="M5 5h14v10H10l-5 4z"/><path d="M10 8.500a2 2 0 113 1.700c-.6.4-1 .8-1 1.300M12 13.200v.1"/>'),
     subj: svg('<rect x="3.2" y="5.5" width="3.8" height="14.5" rx="1.1"/><rect x="9.2" y="4" width="3.8" height="16" rx="1.1"/><rect x="15.2" y="7.3" width="3.4" height="13" rx="1.1" transform="rotate(-12 15.2 7.3)"/><path d="M3.2 9.5H7M9.2 8H13"/>'),

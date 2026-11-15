@@ -186,6 +186,16 @@
     subs.sort((a, b) => (a.exam_date ? daysUntil(a.exam_date) : 999) - (b.exam_date ? daysUntil(b.exam_date) : 999));
     return { tomorrow: tm, subs: subs.slice(0, 3) };
   }
+  // Lit une photo ou un PDF d'emploi du temps avec l'IA (1 appel) : renvoie la liste des cours. Utilisé par l'emploi du temps et l'onglet Journée.
+  async function edtRead(f, say = () => {}) {
+    let cv = document.createElement("canvas");
+    if (/pdf/i.test(f.type) || /\.pdf$/i.test(f.name)) { await needPdf(); const lib = window.pdfjsLib; lib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js"; const doc = await lib.getDocument({ data: await f.arrayBuffer() }).promise, pg = await doc.getPage(1), vp = pg.getViewport({ scale: 2 }); cv.width = vp.width; cv.height = vp.height; await pg.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise; }
+    else { let bmp; try { bmp = await createImageBitmap(f); } catch (er) { if (!window.heic2any) await new Promise((ok, ko) => { const sc = document.createElement("script"); sc.src = "vendor/heic2any.min.js"; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); }); const o = await window.heic2any({ blob: f, toType: "image/jpeg", quality: 0.85 }); bmp = await createImageBitmap(Array.isArray(o) ? o[0] : o); } const kk = Math.min(1, 1800 / Math.max(bmp.width, bmp.height)); cv.width = Math.round(bmp.width * kk); cv.height = Math.round(bmp.height * kk); cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height); }
+    say("L'IA lit ton emploi du temps…");
+    const r = await ai({ action: "edt", images: [{ mime: "image/jpeg", data: cv.toDataURL("image/jpeg", 0.85).split(",")[1] }], matieres: state.subjects.map(x => x.name) });
+    const got = ((r && r.content && r.content.slots) || []).filter(x => x && x.subject && x.day >= 0 && x.day <= 5).map(x => ({ day: +x.day, start: String(x.start || "08:00").slice(0, 5), end: String(x.end || "09:00").slice(0, 5), subject: String(x.subject).slice(0, 60), room: String(x.room || "").slice(0, 30), week: x.week === "A" || x.week === "B" ? x.week : "" }));
+    return got;
+  }
   function screenEdt() {
     drawTabs("calendrier"); let e = edtGet(), view = "semaine", editing = null;
     const save = () => { jset("merge.edt", e); };
@@ -228,12 +238,7 @@
     async function fromFile(f) {
       const msg = $("edtmsg"); msg.className = "note"; msg.textContent = "Lecture de ton emploi du temps…";
       try {
-        let cv = document.createElement("canvas");
-        if (/pdf/i.test(f.type) || /\.pdf$/i.test(f.name)) { await needPdf(); const lib = window.pdfjsLib; lib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js"; const doc = await lib.getDocument({ data: await f.arrayBuffer() }).promise, pg = await doc.getPage(1), vp = pg.getViewport({ scale: 2 }); cv.width = vp.width; cv.height = vp.height; await pg.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise; }
-        else { let bmp; try { bmp = await createImageBitmap(f); } catch (er) { if (!window.heic2any) await new Promise((ok, ko) => { const sc = document.createElement("script"); sc.src = "vendor/heic2any.min.js"; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); }); const o = await window.heic2any({ blob: f, toType: "image/jpeg", quality: 0.85 }); bmp = await createImageBitmap(Array.isArray(o) ? o[0] : o); } const kk = Math.min(1, 1800 / Math.max(bmp.width, bmp.height)); cv.width = Math.round(bmp.width * kk); cv.height = Math.round(bmp.height * kk); cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height); }
-        msg.textContent = "L'IA lit ton emploi du temps…";
-        const r = await ai({ action: "edt", images: [{ mime: "image/jpeg", data: cv.toDataURL("image/jpeg", 0.85).split(",")[1] }], matieres: state.subjects.map(x => x.name) });
-        const got = ((r && r.content && r.content.slots) || []).filter(x => x && x.subject && x.day >= 0 && x.day <= 5).map(x => ({ day: +x.day, start: String(x.start || "08:00").slice(0, 5), end: String(x.end || "09:00").slice(0, 5), subject: String(x.subject).slice(0, 60), room: String(x.room || "").slice(0, 30), week: x.week === "A" || x.week === "B" ? x.week : "" }));
+        const got = await edtRead(f, t => { msg.textContent = t; });
         if (!got.length) throw new Error("Je n'ai trouvé aucun cours sur cette image. Essaie une photo plus nette, ou ajoute tes cours à la main.");
         e.slots = got; if (got.some(x => x.week)) e.ab = true; save(); draw(); toast(plural(got.length, "cours ajouté", "cours ajoutés") + ". Vérifie et corrige si besoin.");
         if (e.ab && !e.ref) askAB();

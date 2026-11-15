@@ -1032,3 +1032,93 @@ body[data-flame="cosmique"] .streak,[data-flameprev="cosmique"]{background:linea
 .ctrlpick{min-height:44px;width:100%;background:none;border:0;border-top:1px solid var(--line);padding:6px 0;color:inherit;text-align:left;font:inherit}
 #sheet .chip.big{align-self:flex-start;font-size:1.02em}
 html,body{touch-action:manipulation}
+/* Progrès / Duo en sous-onglets */
+.seg a{display:flex;align-items:center;min-height:44px;padding:0 2px;font-weight:700;color:var(--muted);text-decoration:none;border-bottom:3px solid transparent}
+.seg a[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+/* Journée : frise façon Structured */
+.jhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.jtitle{background:none;border:0;color:var(--fg);font:inherit;font-size:1.9rem;font-weight:900;letter-spacing:-.02em;padding:0;min-height:44px;text-align:left}
+.jtitle span{color:var(--accent)}
+.jweek{display:grid;grid-template-columns:36px repeat(7,1fr) 36px;align-items:start;gap:2px;margin:-4px -6px 0}
+.jweek .iconbtn{width:36px;min-width:36px;height:44px;margin-top:8px}
+.jd{display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:0;color:var(--muted);font:inherit;padding:6px 0;min-height:76px;border-radius:14px}
+.jd>span:first-child{font-size:.78rem;text-transform:capitalize}
+.jd b{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;color:var(--fg);font-size:1.05rem}
+.jd.now b{color:var(--accent)}
+.jd.on b{background:var(--accent);color:#fff}
+.jdots{display:flex;min-height:12px}
+.jdots i{width:12px;height:12px;border-radius:50%;margin-left:-4px;border:2px solid var(--bg)}
+.jdots i:first-child{margin-left:0}
+.jall{display:flex;gap:14px;overflow-x:auto;padding:6px 2px 2px;scrollbar-width:none}
+.jall::-webkit-scrollbar{display:none}
+.jround{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:0;color:var(--fg);font:inherit;font-size:.8rem;font-weight:700;min-width:72px;max-width:96px;text-align:center;text-decoration:none;padding:0}
+.jround>span{display:grid;place-items:center;width:58px;height:58px;border-radius:50%;background:var(--card);border:1px solid var(--line);color:var(--muted)}
+.jround>span svg{width:24px;height:24px}
+.jround.on>span{background:var(--c,var(--accent));border-color:transparent;color:#fff}
+.jline{display:flex;flex-direction:column;position:relative;padding-bottom:90px}
+.jrow{display:grid;grid-template-columns:64px 1fr 44px;align-items:center;gap:12px;position:relative;padding:4px 0}
+.jrow::before{content:"";position:absolute;left:31px;top:-6px;bottom:-6px;width:3px;background:color-mix(in srgb,var(--c,#475569) 45%,transparent);z-index:0}
+.jrow:first-child::before{top:50%}.jrow:last-child::before{bottom:50%}
+.jpill{position:relative;z-index:1;display:grid;place-items:center;width:58px;height:var(--h,58px);margin:0 auto;border-radius:29px;background:var(--c,#475569);color:#fff;border:0;padding:0;box-shadow:0 6px 16px color-mix(in srgb,var(--c,#000) 35%,transparent)}
+.jpill svg{width:26px;height:26px}
+.jpill.sm{width:44px;height:44px;border-radius:22px;background:var(--c)}
+.jrow.school .jpill{opacity:.55;box-shadow:none}
+.jtxt{display:flex;flex-direction:column;gap:2px;background:none;border:0;color:var(--fg);font:inherit;text-align:left;padding:6px 0;min-height:44px;justify-content:center}
+.jtxt b{font-size:1.12rem;font-weight:800;line-height:1.2}
+.jcheck{width:44px;height:44px;border:0;background:none;color:#fff;display:grid;place-items:center;padding:0;justify-self:center}
+.jcheck span{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;border:2.5px solid var(--c)}
+.jcheck svg{width:18px;height:18px}
+.jrow.done .jcheck span{background:var(--c)}
+.jrow.done .jtxt b{text-decoration:line-through;opacity:.6}
+.jrow.done .jpill{opacity:.6}
+.jgap{display:flex;align-items:center;gap:8px;margin-left:76px;background:none;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font:inherit;font-size:.85rem;min-height:44px;padding:0 12px;width:fit-content}
+.jgap svg{width:16px;height:16px}
+.jfab{position:fixed;right:20px;bottom:calc(92px + env(safe-area-inset-bottom));z-index:20;width:62px;height:62px;border-radius:50%;border:0;background:var(--accent);color:#fff;display:grid;place-items:center;box-shadow:0 10px 26px color-mix(in srgb,var(--accent) 55%,transparent)}
+.jfab svg{width:28px;height:28px}
+@media (min-width:900px){.jfab{bottom:32px;right:32px}}
+.jprev{display:flex;flex-direction:column;gap:10px;margin-bottom:6px}
+#aimic.on{background:var(--accent);color:#fff}
+.sheet{max-height:calc(100dvh - 32px - env(safe-area-inset-bottom,0px));overflow-y:auto;overscroll-behavior:contain}
+/* Exercices : chat relié au chapitre */
+.exthread{display:flex;flex-direction:column;gap:10px;max-height:calc(100dvh - 380px);min-height:180px;overflow-y:auto;padding:4px 2px}
+.exmsg{max-width:88%;padding:12px 14px;border-radius:18px;line-height:1.45;overflow-wrap:anywhere}
+.exmsg.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:6px}
+.exmsg.ai{align-self:flex-start;background:var(--card);border:1px solid var(--line);border-bottom-left-radius:6px}
+.exmsg.ai h2{font-size:1.05rem;margin:.4em 0 .2em}.exmsg.ai p{margin:.3em 0}
+.exmsg.wait{display:flex;align-items:center;gap:10px;color:var(--muted)}
+.exquick{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}.exquick::-webkit-scrollbar{display:none}.exquick .chip{flex:none}
+.excompose{padding:10px;display:flex;flex-direction:column;gap:8px}
+.excompose textarea{border:0;background:transparent;resize:none;min-height:48px}
+#exmic.on{background:var(--accent);color:#fff}
+#exch{justify-content:flex-start;text-align:left;padding:0}
+.exmsg.me .muted{color:rgba(255,255,255,.8)}
+.exform{display:flex;flex-direction:column;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.exf{display:flex;flex-direction:column;gap:4px}
+.exf textarea{min-height:44px;resize:vertical;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--fg);font:inherit}
+.exform.done .exf b{font-weight:700}
+#exch{min-height:44px}
+/* Calendrier : navigation mois → semaine → jour, vue heure par heure */
+.jnav{display:flex;align-items:center;gap:8px}
+.jnav .linkbtn{display:flex;align-items:center;gap:4px;min-height:44px;font-weight:800}
+.jnav .linkbtn svg{width:20px;height:20px}
+#jhours[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:transparent}
+.wklist{display:flex;flex-direction:column;gap:10px}
+.wkday{display:grid;grid-template-columns:52px 1fr;gap:12px;align-items:start;text-align:left;color:var(--fg);font:inherit;min-height:64px;padding:12px}
+.wkday.now{border-color:var(--accent)}
+.wkd{display:flex;flex-direction:column;align-items:center;color:var(--muted);font-size:.8rem;text-transform:capitalize}
+.wkd b{font-size:1.4rem;color:var(--fg)}
+.wkday.now .wkd b{color:var(--accent)}
+.wkbody{display:flex;flex-direction:column;gap:6px;min-width:0}
+.wkpills{display:flex;flex-wrap:wrap;gap:6px}
+.wkpills i{font-style:normal;font-size:.78rem;font-weight:700;color:#fff;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.wkexam{font-size:.82rem;font-weight:800;color:var(--c)}
+.hgrid{position:relative;margin-left:2px}
+.hrow{position:absolute;left:0;right:0;height:78px;border:0;border-top:1px solid var(--line);background:none;text-align:left;color:var(--muted);font:inherit;font-size:.75rem;padding:2px 0 0;display:block}
+.hrow span{display:inline-block;width:48px}
+.hblk{position:absolute;left:56px;right:4px;min-height:44px;border-radius:12px;background:var(--c,#475569);color:#fff;border:0;text-align:left;padding:4px 10px;overflow:hidden;display:flex;flex-direction:column;font:inherit;font-size:.82rem;z-index:1}
+.hblk b{font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hblk.school{background:color-mix(in srgb,#475569 55%,transparent);z-index:0}
+.hblk.done{opacity:.55}
+.hnow{position:absolute;left:48px;right:0;height:2px;background:#ef4444;z-index:2}
+.hnow::before{content:"";position:absolute;left:-5px;top:-4px;width:10px;height:10px;border-radius:50%;background:#ef4444}
+@media (max-width:359px){.jweek{grid-template-columns:repeat(7,1fr)}.jweek .iconbtn{display:none}}

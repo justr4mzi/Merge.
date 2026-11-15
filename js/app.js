@@ -109,6 +109,8 @@
     chart: svg('<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 16v-3M12 16V8M15.5 16v-5"/>'),
     copy: svg('<rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/>'), share: svg('<path d="M12 15V4M8 8l4-4 4 4"/><path d="M6 12v6a2 2 0 002 2h8a2 2 0 002-2v-6"/>'),
     coin: svg('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="5"/><path d="M12 9.5v5"/>'), gift: svg('<rect x="3.5" y="9" width="17" height="11" rx="2"/><path d="M12 9v11M3.5 13h17M12 9c-2.5 0-5-1-5-3s3-2 5 3c2-5 5-5 5-3s-2.5 3-5 3"/>'), shop: svg('<path d="M4 9l1.5-5h13L20 9"/><path d="M4 9h16v2a2.7 2.7 0 01-5.3 0 2.7 2.7 0 01-5.4 0A2.7 2.7 0 014 11z"/><path d="M5.5 13.5V20h13v-6.5"/>'),
+    cup: svg('<path d="M5 9h11v4.5a5.5 5.5 0 01-5.5 5.5h0A5.5 5.5 0 015 13.5V9zM16 10.5h1.5a2.5 2.5 0 010 5H16M8.5 3.5v2.5M12 3v3"/>'),
+    day: svg('<circle cx="6.5" cy="6" r="2.6"/><circle cx="6.5" cy="18" r="2.6"/><path d="M6.5 8.6v6.8M11.5 6h8.5M11.5 18h8.5"/>'),
     duo: svg('<circle cx="9" cy="8" r="3.6"/><circle cx="16.5" cy="8.6" r="2.9"/><path d="M3.5 20a5.5 5.5 0 0111 0M14.5 15.3A4.6 4.6 0 0120.5 20"/>'),
     ask: svg('<path d="M5 5h14v10H10l-5 4z"/><path d="M10 8.500a2 2 0 113 1.700c-.6.4-1 .8-1 1.300M12 13.200v.1"/>'),
     subj: svg('<rect x="3.2" y="5.5" width="3.8" height="14.5" rx="1.1"/><rect x="9.2" y="4" width="3.8" height="16" rx="1.1"/><rect x="15.2" y="7.3" width="3.4" height="13" rx="1.1" transform="rotate(-12 15.2 7.3)"/><path d="M3.2 9.5H7M9.2 8H13"/>'),
@@ -143,7 +145,7 @@
   function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   // Ces clés sont gardées sur l'appareil ET dans le compte (table user_kv) : on retrouve la même chose sur téléphone et sur PC.
   // Restent sur l'appareil seulement : kvts (horodatages), file (révisions en attente d'envoi), cache.* et gen.* (copies de la base), erreurs.* (copie de secours de la table mistakes). Le thème est dans le profil.
-  const SYNC = /^merge\.(fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|controles|boostnext|boostj|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
+  const SYNC = /^merge\.(fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|controles|boostnext|boostj|journee|exo\..+|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
   let kvTs = {}, kvQueue = {}, kvTimer = null, kvOff = false, kvAt = 0;
   try { kvTs = JSON.parse(localStorage.getItem("merge.kvts") || "{}") || {}; } catch (e) { kvTs = {}; }
   const kvSaveTs = () => { try { localStorage.setItem("merge.kvts", JSON.stringify(kvTs)); } catch (e) { /* rien */ } };
@@ -647,7 +649,7 @@
     draw();
   }
 
-  const TABS = [["accueil", "Accueil", "home"], ["matieres", "Matières", "subj"], ["calendrier", "Calendrier", "cal"], ["progres", "Progrès", "chart"], ["duo", "Duo", "duo"], ["reglages", "Réglages", "gear"]];
+  const TABS = [["accueil", "Accueil", "home"], ["matieres", "Matières", "subj"], ["calendrier", "Calendrier", "cal"], ["exos", "Prof", "ask"], ["progres", "Progrès", "chart"], ["reglages", "Réglages", "gear"]];
   function drawTabs(current) {
     tabs.hidden = false;
     const due = state.cards ? dueCards(state.cards).length : 0, st = state.sessions ? streak() : 0;
@@ -1378,6 +1380,7 @@
     feynman: { i: "bulb", n: "Méthode Feynman", s: "Explique comme à un enfant", ia: 2, a: "Tu expliques une notion comme à un enfant de 10 ans. L'IA te dit si tu as vraiment compris ou seulement récité, et ce qui manque." },
     pieges: { i: "trap", n: "Chasse aux pièges", s: "Deviens le correcteur", ia: 1, a: "Une copie d'élève contient des erreurs classiques. À toi de les repérer. Tu apprends en corrigeant." },
     faceaface: { i: "vs", n: "Face-à-face", s: "Les notions qu'on confond", ia: 1, a: "Les notions qui se ressemblent, comparées côte à côte, puis un mini quiz pour ne plus les mélanger." },
+    exos: { i: "ask", n: "Exercices et questions", s: "Chat avec ton cours", ia: 2, a: "Pose tes questions sur le chapitre, demande un exercice, ou envoie la photo de ta copie : l'IA te dit ce qui est juste et où ça coince. Aussi dans l'onglet Exercices." },
     exercices: { i: "steps", n: "Exercices guidés", s: "Indices pas à pas", ia: 1, a: "Trois exercices de difficulté croissante. Deux indices si tu bloques, puis la solution rédigée comme sur une copie." },
     difficiles: { i: "bolt", n: "Cartes difficiles", s: "Seulement celles que tu rates", ia: 0, a: "Une séance avec uniquement les cartes que tu rates le plus souvent ou que tu ne maîtrises pas encore." },
     blanc: { i: "clock", n: "Examen blanc", s: "Chronométré, comme le jour J", ia: 0, a: "Des questions de tes cartes à rédiger, avec une minute par question. Tu vois ta note à la fin, comme à un vrai contrôle." },
@@ -1397,7 +1400,7 @@
     stats: { i: "chart", n: "Statistiques", s: "Ta progression sur ce chapitre", ia: 0, a: "Ta maîtrise dans le temps, les cartes que tu rates le plus et le temps passé sur ce chapitre." },
     erreurs: { i: "book", n: "Carnet d'erreurs", s: "Tes erreurs, expliquées", ia: 0, a: "Toutes les questions que tu as ratées dans ce chapitre. Le bouton « Pourquoi ? » t'explique chaque erreur (1 appel IA)." },
   };
-  const MODE_CATS = [["Réviser", ["cartes", "resume", "apprendre", "interro", "quiz", "controle", "blanc", "difficiles", "ecouter"]], ["Comprendre", ["questions", "libre", "blurting", "feynman", "pieges", "faceaface", "exercices", "trous", "carte", "schema"]], ["Jouer", ["boss", "flash", "associer", "vraifaux"]], ["Oral et audio", ["khole", "bus"]], ["Fiches", ["synthese", "planche", "erreurs", "stats"]]];
+  const MODE_CATS = [["Réviser", ["cartes", "resume", "apprendre", "interro", "quiz", "controle", "blanc", "difficiles", "ecouter"]], ["Comprendre", ["exos", "questions", "libre", "blurting", "feynman", "pieges", "faceaface", "exercices", "trous", "carte", "schema"]], ["Jouer", ["boss", "flash", "associer", "vraifaux"]], ["Oral et audio", ["khole", "bus"]], ["Fiches", ["synthese", "planche", "erreurs", "stats"]]];
   const IA_NOTE = ["Sans IA : gratuit et illimité.", "1 appel IA la première fois, puis c'est gardé : tu le rouvres autant que tu veux.", "1 appel IA à chaque utilisation."];
   const favs = () => { try { const f = JSON.parse(safeGet("merge.fav") || "[]"); return Array.isArray(f) ? f.filter(k => MODES[k]) : []; } catch (e) { return []; } };
 
@@ -2216,6 +2219,16 @@
     subs.sort((a, b) => (a.exam_date ? daysUntil(a.exam_date) : 999) - (b.exam_date ? daysUntil(b.exam_date) : 999));
     return { tomorrow: tm, subs: subs.slice(0, 3) };
   }
+  // Lit une photo ou un PDF d'emploi du temps avec l'IA (1 appel) : renvoie la liste des cours. Utilisé par l'emploi du temps et l'onglet Journée.
+  async function edtRead(f, say = () => {}) {
+    let cv = document.createElement("canvas");
+    if (/pdf/i.test(f.type) || /\.pdf$/i.test(f.name)) { await needPdf(); const lib = window.pdfjsLib; lib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js"; const doc = await lib.getDocument({ data: await f.arrayBuffer() }).promise, pg = await doc.getPage(1), vp = pg.getViewport({ scale: 2 }); cv.width = vp.width; cv.height = vp.height; await pg.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise; }
+    else { let bmp; try { bmp = await createImageBitmap(f); } catch (er) { if (!window.heic2any) await new Promise((ok, ko) => { const sc = document.createElement("script"); sc.src = "vendor/heic2any.min.js"; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); }); const o = await window.heic2any({ blob: f, toType: "image/jpeg", quality: 0.85 }); bmp = await createImageBitmap(Array.isArray(o) ? o[0] : o); } const kk = Math.min(1, 1800 / Math.max(bmp.width, bmp.height)); cv.width = Math.round(bmp.width * kk); cv.height = Math.round(bmp.height * kk); cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height); }
+    say("L'IA lit ton emploi du temps…");
+    const r = await ai({ action: "edt", images: [{ mime: "image/jpeg", data: cv.toDataURL("image/jpeg", 0.85).split(",")[1] }], matieres: state.subjects.map(x => x.name) });
+    const got = ((r && r.content && r.content.slots) || []).filter(x => x && x.subject && x.day >= 0 && x.day <= 5).map(x => ({ day: +x.day, start: String(x.start || "08:00").slice(0, 5), end: String(x.end || "09:00").slice(0, 5), subject: String(x.subject).slice(0, 60), room: String(x.room || "").slice(0, 30), week: x.week === "A" || x.week === "B" ? x.week : "" }));
+    return got;
+  }
   function screenEdt() {
     drawTabs("calendrier"); let e = edtGet(), view = "semaine", editing = null;
     const save = () => { jset("merge.edt", e); };
@@ -2258,12 +2271,7 @@
     async function fromFile(f) {
       const msg = $("edtmsg"); msg.className = "note"; msg.textContent = "Lecture de ton emploi du temps…";
       try {
-        let cv = document.createElement("canvas");
-        if (/pdf/i.test(f.type) || /\.pdf$/i.test(f.name)) { await needPdf(); const lib = window.pdfjsLib; lib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js"; const doc = await lib.getDocument({ data: await f.arrayBuffer() }).promise, pg = await doc.getPage(1), vp = pg.getViewport({ scale: 2 }); cv.width = vp.width; cv.height = vp.height; await pg.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise; }
-        else { let bmp; try { bmp = await createImageBitmap(f); } catch (er) { if (!window.heic2any) await new Promise((ok, ko) => { const sc = document.createElement("script"); sc.src = "vendor/heic2any.min.js"; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); }); const o = await window.heic2any({ blob: f, toType: "image/jpeg", quality: 0.85 }); bmp = await createImageBitmap(Array.isArray(o) ? o[0] : o); } const kk = Math.min(1, 1800 / Math.max(bmp.width, bmp.height)); cv.width = Math.round(bmp.width * kk); cv.height = Math.round(bmp.height * kk); cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height); }
-        msg.textContent = "L'IA lit ton emploi du temps…";
-        const r = await ai({ action: "edt", images: [{ mime: "image/jpeg", data: cv.toDataURL("image/jpeg", 0.85).split(",")[1] }], matieres: state.subjects.map(x => x.name) });
-        const got = ((r && r.content && r.content.slots) || []).filter(x => x && x.subject && x.day >= 0 && x.day <= 5).map(x => ({ day: +x.day, start: String(x.start || "08:00").slice(0, 5), end: String(x.end || "09:00").slice(0, 5), subject: String(x.subject).slice(0, 60), room: String(x.room || "").slice(0, 30), week: x.week === "A" || x.week === "B" ? x.week : "" }));
+        const got = await edtRead(f, t => { msg.textContent = t; });
         if (!got.length) throw new Error("Je n'ai trouvé aucun cours sur cette image. Essaie une photo plus nette, ou ajoute tes cours à la main.");
         e.slots = got; if (got.some(x => x.week)) e.ab = true; save(); draw(); toast(plural(got.length, "cours ajouté", "cours ajoutés") + ". Vérifie et corrige si besoin.");
         if (e.ab && !e.ref) askAB();
@@ -2586,9 +2594,10 @@
   // Le calendrier affiche la zone A ; la zone choisie dans Réglages sert aux rappels.
   const VACANCES = VACANCES_ZONES.A;
   const vacOf = key => VACANCES.find(v => key >= v[1] && key <= v[2]);
+  // Calendrier, vue du mois (le niveau le plus « dézoomé ») : toucher un jour ouvre sa journée en frise.
   function screenCalendar() {
     drawTabs("calendrier");
-    const ref = new Date(); ref.setDate(1); let picked = null;
+    const ref = jView().day ? dayOf(jView().day) : new Date(); ref.setDate(1); let picked = null;
     function draw() {
       const y = ref.getFullYear(), m = ref.getMonth(), first = (new Date(y, m, 1).getDay() + 6) % 7, n = new Date(y, m + 1, 0).getDate(), today = localDay();
       const did = {}; state.sessions.forEach(x => { if (x.seconds > 0 || x.cards_reviewed > 0) did[x.day] = x; });
@@ -2598,33 +2607,24 @@
         const key = y + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0"), ex = ctrls().filter(c => c.d === key).map(c => state.subjects.find(x => x.id === c.s)).filter(x => x && !isFree(x));
         if (did[key]) { daysDone++; secs += did[key].seconds || 0; }
         const vac = vacOf(key);
-        cells.push(`<button type="button" class="day${key === today ? " now" : ""}${ex.length ? " has" : ""}${did[key] ? " did" : ""}${vac ? " hol" : ""}"${vac ? ` title="Vacances : ${vac[0]}"` : ""} data-day="${key}" aria-pressed="${picked === key}"${key < today ? " disabled" : ""} aria-label="${d}${ex.length ? ", contrôle : " + esc(ex.map(x => x.name).join(", ")) : ""}${did[key] ? ", jour révisé" : ""}"><span class="dn">${d}</span><i>${ex.map(x => `<b style="background:${esc(x.color)}"></b>`).join("")}</i>${ex.slice(0, 2).map(x => `<em style="--c:${esc(x.color)}">${esc(x.name)}</em>`).join("")}</button>`);
+        cells.push(`<button type="button" class="day${key === today ? " now" : ""}${ex.length ? " has" : ""}${did[key] ? " did" : ""}${vac ? " hol" : ""}"${vac ? ` title="Vacances : ${vac[0]}"` : ""} data-day="${key}" aria-pressed="${picked === key}" aria-label="${d}${ex.length ? ", contrôle : " + esc(ex.map(x => x.name).join(", ")) : ""}${did[key] ? ", jour révisé" : ""}"><span class="dn">${d}</span><i>${ex.map(x => `<b style="background:${esc(x.color)}"></b>`).join("")}</i>${ex.slice(0, 2).map(x => `<em style="--c:${esc(x.color)}">${esc(x.name)}</em>`).join("")}</button>`);
       }
       const up = upCtrls(), free = state.subjects.filter(isFree), onDay = picked ? ctrls().filter(c => c.d === picked) : [];
-      app.innerHTML = `<div class="row between" style="flex-wrap:wrap"><h1>Calendrier</h1><div class="row" style="flex-wrap:wrap"><a class="btn sm" href="#edt">Emploi du temps</a><button class="btn sm ghost" id="todayb">Aujourd'hui</button></div></div>
+      app.innerHTML = `<div class="row between" style="flex-wrap:wrap"><h1>Calendrier</h1><div class="row" style="flex-wrap:wrap"><a class="btn sm ghost" href="#edt">Emploi du temps</a><button class="btn sm" id="todayb">Aujourd'hui</button></div></div>
         <div class="calwrap"><div class="card pad stack calcard"><div class="row between"><button class="iconbtn flat" id="prev" aria-label="Mois précédent">${I.back}</button><h2 class="calmonth">${ref.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}</h2><button class="iconbtn flat" id="nextm" aria-label="Mois suivant" style="transform:scaleX(-1)">${I.back}</button></div>
           <div class="cal calx">${["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map(x => `<span class="wd">${x}</span>`).join("")}${cells.join("")}</div>
           <div class="callegend"><span><i class="lg now"></i>Aujourd'hui</span><span><i class="lg did"></i>Jour révisé</span><span><i class="lg ex"></i>Contrôle</span><span><i class="lg hol"></i>Vacances (zone A)</span></div></div>
         <div class="stack calside">
-          ${picked ? `<div class="card pad stack" id="dayPanel"><h2>${fmtDate(picked)}</h2><p class="label">Contrôles ce jour-là : touche une ou plusieurs matières</p><div class="chips">${state.subjects.map(x => `<button class="chip" data-sub="${x.id}" aria-pressed="${onDay.some(c => c.s === x.id)}" style="--c:${esc(x.color)}"><span class="dot"></span>&nbsp;${esc(x.name)}</button>`).join("") || '<span class="muted">Ajoute d\'abord une matière.</span>'}</div>${onDay.length ? onDay.map(c => { const x = state.subjects.find(y => y.id === c.s); return x ? `<button class="row between ctrlpick" data-cch="${c.id}"><span><b>${esc(x.name)}</b><span class="small muted"> · ${c.ch ? plural(c.ch.length, "chapitre", "chapitres") : "tous les chapitres"}</span></span><span class="linkbtn">Chapitres</span></button>` : ""; }).join("") : ""}</div>` : `<div class="card pad stack calhint"><span class="mico big">${I.cal}</span><div><h2>Place tes contrôles</h2><p class="note">Touche un jour pour y placer un contrôle.</p></div></div>`}
           <div class="stack"><h2>Prochains contrôles</h2>${up.length ? up.map(({ c, s: x }) => `<a class="card exam" href="#matiere-${x.id}" style="--c:${esc(x.color)}"><span class="jx">${jx(c.d)}</span><span class="grow"><b>${esc(x.name)}</b><span class="small muted">${esc(fmtDate(c.d))} · ${daysUntil(c.d) === 0 ? "Aujourd'hui" : "Dans " + plural(daysUntil(c.d), "jour", "jours")}${c.ch ? " · " + plural(c.ch.length, "chapitre", "chapitres") : ""}</span></span></a>`).join("") : '<p class="muted">Aucune date pour l\'instant.</p>'}</div>
           ${(() => { const cur = vacOf(today), nx = VACANCES.find(v => v[1] > today); const fd = d => new Date(d + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" }); return cur ? `<div class="card pad stack vaccard"><h2>Vacances de ${cur[0]}</h2><p class="small muted">Jusqu'au ${fd(cur[2])}. Le bon moment pour revoir les chapitres les plus fragiles.</p></div>` : nx ? `<div class="card pad stack vaccard"><h2>Prochaines vacances : ${nx[0]}</h2><p class="small muted">Du ${fd(nx[1])} au ${fd(nx[2])}, dans ${plural(daysUntil(nx[1]), "jour", "jours")}. Zone A.</p></div>` : ""; })()}
           ${(() => { const s0 = up[0] && up[0].s, pl = s0 ? planFor(s0) : []; return pl.length ? `<div class="card pad stack"><h2>Plan de révision : ${esc(s0.name)}</h2>${pl.filter(x => x.items.length || x.last).slice(0, 8).map(x => `<div class="srow"><span>${esc(new Date(x.day + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }))}</span><b>${esc(x.items.map(y => y.c.name).concat(x.last ? ["Révision générale"] : []).join(", "))}</b></div>`).join("")}<p class="note">Les chapitres les moins maîtrisés passent en premier. Le plan se recalcule chaque jour.</p></div>` : ""; })()}
           ${free.length ? `<div class="stack"><h2>En révision libre</h2><p class="small muted">En révision libre : ${free.map(x => esc(x.name)).join(", ")}.</p></div>` : ""}
           <div class="card stats two"><div class="stat s1"><span class="sico">${I.check}</span><div><b>${daysDone}</b><span>${daysDone > 1 ? "jours révisés ce mois" : "jour révisé ce mois"}</span></div></div><div class="stat s2"><span class="sico">${I.bolt}</span><div><b>${Math.round(secs / 60)} min</b><span>de révision ce mois</span></div></div></div>
         </div></div>`;
-      $("todayb").onclick = () => { const t = new Date(); ref.setFullYear(t.getFullYear(), t.getMonth(), 1); draw(); };
+      $("todayb").onclick = () => { jGo("jour", localDay()); };
       $("prev").onclick = () => { ref.setMonth(ref.getMonth() - 1); draw(); };
       $("nextm").onclick = () => { ref.setMonth(ref.getMonth() + 1); draw(); };
-      app.querySelectorAll("[data-day]").forEach(b => b.onclick = () => { picked = picked === b.dataset.day ? null : b.dataset.day; draw(); });
-      // Plusieurs contrôles possibles le même jour, la même semaine, et plusieurs par matière.
-      app.querySelectorAll("[data-sub]").forEach(b => b.onclick = async () => {
-        const sub = state.subjects.find(x => x.id === b.dataset.sub), have = ctrls().find(c => c.s === sub.id && c.d === picked);
-        if (have) { await ctrlDel(have.id); toast("Contrôle de " + sub.name + " retiré."); return draw(); }
-        if (isFree(sub)) { const err = await saveExam(sub.id, { date: null, free: false }); if (err) return fail(err, "Date non enregistrée"); }
-        const c = await ctrlAdd(sub.id, picked); draw(); if (c) ctrlChSheet(c.id, draw);
-      });
-      app.querySelectorAll("[data-cch]").forEach(b => b.onclick = () => ctrlChSheet(b.dataset.cch, draw));
+      app.querySelectorAll("[data-day]").forEach(b => b.onclick = () => jGo("jour", b.dataset.day));
     }
     draw();
   }
@@ -2650,11 +2650,13 @@
       <p class="small muted wmsg">${msg} <span class="wgoal">Objectif : ${goal} ${byMin ? "min" : "cartes"} par jour.</span></p></div>`;
   }
   function lastDays(n, sessions) { const out = []; for (let i = n - 1; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); const k = localDay(d); out.push(Object.assign({ day: k, label: d.getDate(), seconds: 0, cards_reviewed: 0 }, sessions.find(s => s.day === k) || {})); } return out; }
+  // Progrès et Duo : deux sous-onglets du même onglet (Duo a laissé sa place dans la barre du bas à Journée).
+  const progSeg = cur => `<div class="seg" role="tablist" aria-label="Progrès"><a role="tab" href="#progres" aria-selected="${cur === "progres"}">Mes progrès</a><a role="tab" href="#duo" aria-selected="${cur === "duo"}">Duo</a></div>`;
   function screenProgress() {
     drawTabs("progres");
     const d14 = lastDays(14, state.sessions), d7 = d14.slice(7), max = Math.max(1, ...d14.map(d => d.cards_reviewed));
     const mins = Math.round(d7.reduce((s, d) => s + d.seconds, 0) / 60), cards7 = d7.reduce((s, d) => s + d.cards_reviewed, 0);
-    app.innerHTML = `<div class="row between" style="flex-wrap:wrap"><h1>Progrès</h1><div class="row" style="flex-wrap:wrap"><a class="btn sm" href="#recompenses">Récompenses</a><a class="btn sm ghost" href="#bilan">Bilan de la semaine</a><a class="btn sm ghost" href="#erreurs">Carnet d'erreurs</a><a class="btn sm ghost" href="#minuteur">Minuteur</a></div></div>
+    app.innerHTML = `${progSeg("progres")}<div class="row between" style="flex-wrap:wrap"><h1>Progrès</h1><div class="row" style="flex-wrap:wrap"><a class="btn sm" href="#recompenses">Récompenses</a><a class="btn sm ghost" href="#bilan">Bilan de la semaine</a><a class="btn sm ghost" href="#erreurs">Carnet d'erreurs</a><a class="btn sm ghost" href="#minuteur">Minuteur</a></div></div>
       <div class="card pad stack"><div class="level"><span class="lvl">Niveau ${xpInfo().level}</span><div class="bar grow"><i style="width:${xpInfo().pct}%"></i></div><span class="small muted">${xpInfo().xp} points · encore ${xpInfo().left}</span></div><p class="note">10 points par bonne réponse, 2 par erreur, 100 par chapitre maîtrisé à 100 %. ${streakInfo().left ? "Gel de série disponible : un jour raté cette semaine ne cassera pas ta série." : "Ton gel de série a déjà servi cette semaine."}</p></div>
       <div class="tiles"><div class="card tile"><b>${streak()}</b><span>jours d'affilée</span></div><div class="card tile"><b>${cards7}</b><span>cartes en 7 jours</span></div><div class="card tile"><b>${mins}</b><span>minutes en 7 jours</span></div><div class="card tile"><b>${mastery(state.cards)} %</b><span>maîtrise moyenne</span></div></div>
       <div class="card pad stack"><h2>Cartes révisées, 14 derniers jours</h2><div class="bars" role="img" aria-label="Cartes révisées par jour sur 14 jours">${d14.map(d => `<div><i style="height:${Math.max(3, d.cards_reviewed / max * 100)}%" class="${d.cards_reviewed ? "" : "zero"}" title="${d.cards_reviewed}"></i><span>${d.label}</span></div>`).join("")}</div></div>
@@ -2678,14 +2680,14 @@
   const duoLink = code => location.origin + location.pathname + "#duo-" + encodeURIComponent(code);
   // ---------- duo (partage de statistiques à deux) ----------
   async function screenDuo() {
-    drawTabs("duo"); app.innerHTML = `<h1>Duo</h1><p class="muted">Chargement…</p>`;
+    drawTabs("progres"); app.innerHTML = `${progSeg("duo")}<h1>Duo</h1><p class="muted">Chargement…</p>`;
     const { data: partners, error } = await sb.rpc("share_partners");
     if (error) return fail(error, "Partage non chargé");
     const p = (partners || [])[0];
     if (p && safeGet("merge.duoin")) { safeSet("merge.duoin", ""); toast("Tu es déjà en duo : arrête ce partage pour en rejoindre un autre."); }
     if (!p) {
       const pending = safeGet("merge.duoin") || "";
-      app.innerHTML = `<h1>Duo</h1>
+      app.innerHTML = `${progSeg("duo")}<h1>Duo</h1>
         ${pending ? `<div class="card pad stack duoin"><h2>Invitation reçue</h2><p class="muted">Quelqu'un t'invite à réviser en duo. Rejoins-le pour voir vos statistiques côte à côte.</p><button class="btn" id="acceptLink">Rejoindre le duo</button><button class="btn ghost" id="dropLink">Pas maintenant</button></div>` : ""}
         <div class="card pad stack"><h2>Révisez à deux</h2><p class="muted">Invite une personne : vous verrez chacun les statistiques de l'autre (temps de révision, cartes révisées, série de jours, maîtrise, moyenne des quiz). Vos cours, résumés et cartes restent privés. Chacun peut arrêter le partage quand il veut.</p>
           <button class="btn" id="invite">Créer une invitation</button><p class="note" id="code" role="status"></p></div>
@@ -2715,10 +2717,347 @@
     const [ps, myq] = await Promise.all([sb.rpc("partner_stats", { partner: p.partner_id }), sb.from("quiz_results").select("score").eq("user_id", state.user.id)]);
     const theirsX = (ps.data && ps.data[0]) || { mastery: 0, quiz_avg: null }, mq = (myq.data || []).map(x => +x.score), myAvg = mq.length ? Math.round(mq.reduce((a, b) => a + b, 0) / mq.length * 10) / 10 : 0;
     const line = (label, a, b, unit) => `<tr><th scope="row">${label}</th><td class="${a >= b ? "win" : ""}">${a} ${unit}</td><td class="${b >= a ? "win" : ""}">${b} ${unit}</td></tr>`;
-    app.innerHTML = `<h1>Duo</h1>
+    app.innerHTML = `${progSeg("duo")}<h1>Duo</h1>
       <div class="card pad stack"><h2>Cette semaine</h2><table class="duo"><thead><tr><td></td><th scope="col">Toi</th><th scope="col">${esc(name)}</th></tr></thead><tbody>${line("Temps", me.min, them.min, "min")}${line("Cartes", me.cards, them.cards, "")}${line("Série", me.streak, them.streak, "j")}${line("Maîtrise", mastery(state.cards), theirsX.mastery || 0, "%")}${line("Moyenne des quiz", myAvg, +(theirsX.quiz_avg || 0), "/ 20")}</tbody></table></div>
       <div class="card pad stack"><h2>Ce qui est partagé</h2><p class="muted">${esc(name)} voit ton temps de révision, ton nombre de cartes révisées, ta série de jours, ta maîtrise et ta moyenne de quiz, et tu vois les siens. Vos cours, résumés et cartes restent privés.</p><button class="btn ghost" id="stop">Arrêter le partage</button></div>`;
     $("stop").onclick = async () => { const r = await sb.rpc("revoke_share", { link: p.link_id }); if (r.error) return fail(r.error, "Arrêt impossible"); toast("Partage arrêté."); screenDuo(); };
+  }
+
+  // ---------- Journée : planning de révision en frise, façon « Structured » (onglet de la barre du bas) ----------
+  // merge.journee (synchronisé) = { setup, blocks: { "AAAA-MM-JJ": [bloc] }, weekly: [bloc avec wd 0-6 = lundi-dimanche], off: { jour: true }, done: { "jour|id": true } }
+  // bloc = { id, start "HH:MM", dur (min), s (matière), ch (chapitre ou null = choisi par Merge), act, title }
+  const ACTS = [["cartes", "Flashcards", "cards"], ["quiz", "Quiz", "quiz"], ["resume", "Résumé", "book"], ["exos", "Exercices", "steps"], ["controle", "Contrôle blanc", "check"], ["pause", "Pause", "cup"], ["libre", "Autre", "spark"]];
+  const actOf = k => ACTS.find(a => a[0] === k) || ACTS[6];
+  const jGet = () => { const j = jget("merge.journee", null) || {}; return { setup: !!j.setup, blocks: j.blocks && typeof j.blocks === "object" ? j.blocks : {}, weekly: Array.isArray(j.weekly) ? j.weekly : [], off: j.off || {}, done: j.done || {} }; };
+  function jSave(j) { const old = localDay(new Date(Date.now() - 60 * 86400000)); Object.keys(j.blocks).forEach(k => { if (k < old) delete j.blocks[k]; }); Object.keys(j.off).forEach(k => { if (k < old) delete j.off[k]; }); Object.keys(j.done).forEach(k => { if (k.slice(0, 10) < old) delete j.done[k]; }); jset("merge.journee", j); }
+  const hm = m => String(Math.floor(m / 60) % 24).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+  const mins = t => { const [h, m] = String(t || "0:0").split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+  const durTxt = d => d >= 60 ? Math.floor(d / 60) + " h" + (d % 60 ? " " + String(d % 60).padStart(2, "0") : "") : d + " min";
+  const jid = () => "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const dayOf = k => new Date(k + "T12:00:00");
+  // Blocs d'un jour : ceux du jour + les blocs répétés chaque semaine, triés par heure.
+  function blocksOn(j, k) { const wd = (dayOf(k).getDay() + 6) % 7; return (j.blocks[k] || []).concat(j.weekly.filter(b => b.wd === wd).map(b => Object.assign({}, b, { weekly: true }))).sort((a, b) => mins(a.start) - mins(b.start)); }
+  const isDone = (j, k, b) => !!j.done[k + "|" + b.id];
+  // Cours du lycée ce jour-là (emploi du temps), sauf si « Pas cours ».
+  const schoolOn = (j, k) => j.off[k] ? [] : slotsOn(dayOf(k));
+  // Chapitre conseillé pour une matière : celui du contrôle le plus proche, sinon le plus de cartes à revoir, sinon le moins maîtrisé.
+  function bestChapter(sid) {
+    const chs = state.chapters.filter(c => c.subject_id === sid && cardsOf(c.id).length); if (!chs.length) return null;
+    const s = state.subjects.find(x => x.id === sid), only = s ? examChs(s) : null, pool = only ? chs.filter(c => only.includes(c.id)) : chs;
+    return (pool.length ? pool : chs).map(c => ({ c, due: dueCards(cardsOf(c.id)).length, m: mastery(cardsOf(c.id)) })).sort((a, b) => b.due - a.due || a.m - b.m)[0].c;
+  }
+  function blockTarget(b) {
+    const ch = b.ch && state.chapters.some(c => c.id === b.ch) ? b.ch : b.s ? (bestChapter(b.s) || {}).id : null;
+    if (b.act === "cartes") return ch ? "#cartes-" + ch : b.s ? "#revision-" + b.s : "#cartes-jour";
+    if (b.act === "quiz") return ch ? "#quiz-" + ch : null;
+    if (b.act === "resume") return ch ? "#resume-" + ch : null;
+    if (b.act === "exos") return ch ? "#exos-" + ch : "#exos";
+    if (b.act === "controle") return ch ? "#controle-" + ch : null;
+    return b.s ? "#matiere-" + b.s : null;
+  }
+  // Créneaux libres d'un jour, entre start et 22 h, hors cours et blocs déjà prévus.
+  function freeSlots(j, k, from) {
+    const busy = schoolOn(j, k).map(x => [mins(x.start), mins(x.end)]).concat(blocksOn(j, k).map(b => [mins(b.start), mins(b.start) + b.dur])).sort((a, b) => a[0] - b[0]);
+    const out = []; let t = from;
+    busy.forEach(([a, z]) => { if (a > t) out.push([t, a]); t = Math.max(t, z); });
+    if (t < 22 * 60) out.push([t, 22 * 60]); return out.filter(([a, z]) => z - a >= 15);
+  }
+  // « Remplir ma journée » sans IA : 25 min de révision + 5 min de pause, matières du contrôle le plus proche puis cartes à revoir.
+  function autoPlan(j, k) {
+    const now = new Date(), isToday = k === localDay(), school = schoolOn(j, k);
+    let from = isToday ? Math.ceil((now.getHours() * 60 + now.getMinutes() + 10) / 15) * 15 : (school.length ? Math.max(17 * 60, ...school.map(x => mins(x.end))) : 9 * 60);
+    if (!isToday && school.length) from = Math.max(from, ...school.map(x => mins(x.end)) ) ;
+    const subs = state.subjects.filter(s => state.chapters.some(c => c.subject_id === s.id && cardsOf(c.id).length));
+    const score = s => { const c = nextCtrl(s), d = c ? daysUntil(c.d) : 99; return (d <= 14 ? 100 - d * 5 : 0) + dueCards(state.cards.filter(x => state.chapters.some(c2 => c2.id === x.chapter_id && c2.subject_id === s.id))).length; };
+    const order = subs.sort((a, b) => score(b) - score(a)); if (!order.length) return [];
+    const out = [], acts = ["cartes", "quiz", "cartes", "resume"]; let n = 0, budget = j.off[k] ? 240 : 90;
+    for (const [a, z] of freeSlots(j, k, from)) {
+      let t = a;
+      while (budget >= 25 && t + 25 <= z && out.length < 12) {
+        const s = order[n % order.length]; out.push({ id: jid(), start: hm(t), dur: 25, s: s.id, ch: null, act: acts[Math.floor(n / order.length) % acts.length], title: "" }); t += 25; budget -= 25; n++;
+        if (budget >= 25 && t + 30 <= z) { out.push({ id: jid(), start: hm(t), dur: 5, s: null, ch: null, act: "pause", title: "Pause" }); t += 5; }
+      }
+      if (budget < 25) break;
+    }
+    return out;
+  }
+
+  // Onglet Calendrier, comme le calendrier de l'iPhone : mois → semaine → jour (frise), « ‹ » pour remonter d'un niveau.
+  // Le niveau et le jour affichés sont gardés (merge.jview), même si on quitte l'appli. hours = vue heure par heure du jour.
+  const jView = () => { const v = jget("merge.jview", null) || {}; return { lvl: ["mois", "semaine", "jour"].includes(v.lvl) ? v.lvl : "mois", day: /^\d{4}-\d{2}-\d{2}$/.test(v.day || "") ? v.day : localDay(), hours: !!v.hours }; };
+  function jGo(lvl, day, hours) { const v = jView(); jset("merge.jview", { lvl, day: day || v.day, hours: hours === undefined ? v.hours : hours }); if (location.hash !== "#calendrier") location.hash = "#calendrier"; else screenPlanning(); }
+  function screenPlanning() { const v = jView(); jDay = v.day; if (v.lvl === "jour") screenJournee(); else if (v.lvl === "semaine") screenSemaine(); else screenCalendar(); }
+  // Vue semaine : chaque jour en une ligne, avec ses contrôles, ses cours et ses révisions prévues.
+  function screenSemaine() {
+    drawTabs("calendrier"); const j = jGet(), mon = mondayOf(dayOf(jDay)), today = localDay();
+    const days = [...Array(7)].map((_, i) => { const d = new Date(mon); d.setDate(d.getDate() + i); return localDay(d); });
+    const subj = id => state.subjects.find(x => x.id === id), colorOf = b => b.act === "pause" ? "#6b7280" : (subj(b.s) || {}).color || "#9483ff";
+    const end = dayOf(days[6]);
+    app.innerHTML = `<div class="jnav"><button class="linkbtn" id="jup">${I.back}${esc(dayOf(jDay).toLocaleDateString("fr-FR", { month: "long" }).replace(/^./, c => c.toUpperCase()))}</button><span class="grow"></span><button class="btn sm ghost" id="wtoday">Aujourd'hui</button></div>
+      <div class="row between"><button class="iconbtn flat" id="wprev" aria-label="Semaine précédente">${I.back}</button><h1 style="margin:0;text-align:center">Semaine du ${mon.getDate()}${mon.getMonth() !== end.getMonth() ? " " + mon.toLocaleDateString("fr-FR", { month: "short" }) : ""} au ${end.getDate()} ${end.toLocaleDateString("fr-FR", { month: "short" })}</h1><button class="iconbtn flat" id="wnext" aria-label="Semaine suivante" style="transform:scaleX(-1)">${I.back}</button></div>
+      ${edtGet().ab && weekAB(mon) ? `<p class="small muted" style="text-align:center;margin:0">Semaine ${weekAB(mon)}</p>` : ""}
+      <div class="wklist">${days.map(k => { const d = dayOf(k), bs = blocksOn(j, k), sc = schoolOn(j, k), cs = ctrls().filter(c => c.d === k).map(c => subj(c.s)).filter(Boolean), mins_ = bs.filter(b => b.act !== "pause").reduce((a, b) => a + b.dur, 0);
+        return `<button class="wkday card${k === today ? " now" : ""}" data-wd="${k}"><span class="wkd"><span>${d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "")}</span><b>${d.getDate()}</b></span><span class="wkbody">${cs.map(x => `<span class="wkexam" style="--c:${esc(x.color)}">Contrôle de ${esc(x.name)}</span>`).join("")}<span class="wkpills">${bs.filter(b => b.act !== "pause").slice(0, 6).map(b => `<i style="background:${esc(colorOf(b))}">${esc(b.start)} ${esc((subj(b.s) || {}).name || actOf(b.act)[1])}</i>`).join("") || `<span class="small muted">${j.off[k] ? "Pas cours · " : sc.length ? plural(sc.length, "cours", "cours") + " · " : ""}rien de prévu</span>`}</span>${mins_ ? `<span class="small muted">${durTxt(mins_)} de révision${isDoneAll(j, k, bs) ? " · fait" : ""}</span>` : ""}</span></button>`; }).join("")}</div>`;
+    $("jup").onclick = () => jGo("mois");
+    $("wtoday").onclick = () => jGo("jour", today);
+    $("wprev").onclick = () => { const d = dayOf(jDay); d.setDate(d.getDate() - 7); jGo("semaine", localDay(d)); };
+    $("wnext").onclick = () => { const d = dayOf(jDay); d.setDate(d.getDate() + 7); jGo("semaine", localDay(d)); };
+    app.querySelectorAll("[data-wd]").forEach(b => b.onclick = () => jGo("jour", b.dataset.wd));
+  }
+  const isDoneAll = (j, k, bs) => { const w = bs.filter(b => b.act !== "pause"); return w.length > 0 && w.every(b => isDone(j, k, b)); };
+  let jDay = null;
+  function screenJournee() {
+    drawTabs("calendrier");
+    const j = jGet(); jDay = jView().day; const hours = jView().hours;
+    // Première ouverture : on demande l'emploi du temps (PDF ou photo), puis la semaine A ou B.
+    if (!j.setup && !edtGet().slots.length) { j.setup = true; jSave(j); setTimeout(() => edtSetupSheet(), 300); }
+    const sel = dayOf(jDay), mon = mondayOf(sel), week = [...Array(7)].map((_, i) => { const d = new Date(mon); d.setDate(d.getDate() + i); return localDay(d); });
+    const today = localDay(), list = blocksOn(j, jDay), school = schoolOn(j, jDay), ab = weekAB(sel);
+    const subj = id => state.subjects.find(x => x.id === id), colorOf = b => b.act === "pause" ? "#6b7280" : (subj(b.s) || {}).color || "#9483ff";
+    const ctrlToday = upCtrls().filter(x => x.c.d === jDay);
+    const month = sel.toLocaleDateString("fr-FR", { month: "long" });
+    // Frise : cours du lycée (gris) et blocs (couleur de la matière), avec les trous libres.
+    const items = school.map(x => ({ school: true, start: x.start, dur: mins(x.end) - mins(x.start), x })).concat(list.map(b => ({ b, start: b.start, dur: b.dur }))).sort((a, b) => mins(a.start) - mins(b.start));
+    let prevEnd = null; const rows = [];
+    items.forEach(it => {
+      const st = mins(it.start);
+      if (prevEnd != null && st - prevEnd >= 30) rows.push(`<button class="jgap" data-gap="${hm(prevEnd)}"><span>${durTxt(st - prevEnd)} de libre</span>${I.plus}</button>`);
+      if (it.school) { const sj = subjOfName(it.x.subject); rows.push(`<div class="jrow school"><span class="jpill" style="--c:#475569;--h:${Math.min(96, Math.max(48, it.dur * .9))}px">${I.subj}</span><div class="jtxt"><span class="small muted">${esc(it.x.start)}–${esc(it.x.end)} (${durTxt(it.dur)})</span><b>Cours${sj ? " de " + esc(sj.name) : " : " + esc(it.x.subject)}</b>${it.x.room ? `<span class="small muted">Salle ${esc(it.x.room)}</span>` : ""}</div></div>`); }
+      else { const b = it.b, done = isDone(j, jDay, b), s = subj(b.s), a = actOf(b.act), ch = b.ch && state.chapters.find(c => c.id === b.ch), auto = !b.ch && b.s && bestChapter(b.s);
+        rows.push(`<div class="jrow${done ? " done" : ""}" style="--c:${esc(colorOf(b))}"><button class="jpill" data-go="${b.id}" style="--h:${Math.min(120, Math.max(48, b.dur * 1.1))}px" aria-label="Lancer : ${esc(b.title || a[1])}">${I[a[2]]}</button>
+          <button class="jtxt" data-edit="${b.id}"><span class="small muted">${b.start}–${hm(mins(b.start) + b.dur)} (${durTxt(b.dur)})${b.weekly ? " · chaque semaine" : ""}</span><b>${esc(b.title || (b.act === "pause" ? "Pause" : a[1] + (s ? " · " + s.name : "")))}</b>${ch || auto ? `<span class="small muted">${esc((ch || auto).name)}</span>` : ""}</button>
+          <button class="jcheck" data-done="${b.id}" role="checkbox" aria-checked="${done}" aria-label="Fait"><span>${done ? I.check : ""}</span></button></div>`); }
+      prevEnd = Math.max(prevEnd || 0, st + it.dur);
+    });
+    const dots = k => { const bs = blocksOn(j, k).filter(b => b.act !== "pause").slice(0, 4); return bs.map(b => `<i style="background:${esc(colorOf(b))}"></i>`).join(""); };
+    app.innerHTML = `<div class="jnav"><button class="linkbtn" id="jup">${I.back}Semaine</button><span class="grow"></span><button class="btn sm ghost" id="jhours" aria-pressed="${hours}">${hours ? "Vue frise" : "Heure par heure"}</button></div><div class="jhead"><button class="jtitle" id="jtoday"><b>${sel.getDate()}. ${esc(month.charAt(0).toUpperCase() + month.slice(1))}</b> <span>${sel.getFullYear()}</span>${jDay !== today ? " ›" : ""}</button>${edtGet().ab && ab ? `<span class="pill">Semaine ${ab}</span>` : ""}</div>
+      <div class="jweek"><button class="iconbtn flat" id="jprev" aria-label="Semaine précédente">${I.back}</button>${week.map(k => { const d = dayOf(k); return `<button class="jd${k === jDay ? " on" : ""}${k === today ? " now" : ""}" data-day="${k}"><span>${d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "")}</span><b>${d.getDate()}</b><span class="jdots">${dots(k)}</span></button>`; }).join("")}<button class="iconbtn flat" id="jnext" aria-label="Semaine suivante" style="transform:scaleX(-1)">${I.back}</button></div>
+      <div class="jall"><button class="jround${j.off[jDay] ? " on" : ""}" id="joff" aria-pressed="${!!j.off[jDay]}"><span>${I.home}</span>Pas cours</button>${ctrlToday.map(x => `<a class="jround on" href="#matiere-${x.s.id}" style="--c:${esc(x.s.color)}"><span>${I.check}</span>Contrôle ${esc(x.s.name)}</a>`).join("")}<button class="jround" id="jctl"><span>${I.check}</span>Ajouter un contrôle</button><button class="jround" id="jauto"><span>${I.bolt}</span>Remplir ma journée</button><button class="jround" id="jai"><span>${I.spark}</span>IA</button></div>
+      ${hours ? hoursHtml(j, jDay, school, list, colorOf) : ""}<div class="jline"${hours ? " hidden" : ""}>${rows.join("") || `<div class="card pad stack jempty"><b>Rien de prévu ${jDay === today ? "aujourd'hui" : "ce jour-là"}.</b><p class="small muted">Touche + pour ajouter une révision (par exemple « Maths, 30 min »), « Remplir ma journée » pour un plan tout fait, ou « IA » pour le demander avec tes mots.</p></div>`}</div>
+      ${edtGet().slots.length ? "" : `<button class="linkbtn" id="jedt">${I.cal}Ajouter mon emploi du temps</button>`}
+      <button class="jfab" id="jadd" aria-label="Ajouter une révision">${I.plus}</button>`;
+    const re = () => screenJournee();
+    $("jup").onclick = () => jGo("semaine");
+    $("jhours").onclick = () => jGo("jour", jDay, !hours);
+    app.querySelectorAll(".jweek [data-day]").forEach(b => b.onclick = () => jGo("jour", b.dataset.day));
+    if ($("jprev")) $("jprev").onclick = () => { const d = dayOf(jDay); d.setDate(d.getDate() - 7); jGo("jour", localDay(d)); };
+    if ($("jnext")) $("jnext").onclick = () => { const d = dayOf(jDay); d.setDate(d.getDate() + 7); jGo("jour", localDay(d)); };
+    $("jtoday").onclick = () => jGo("jour", today);
+    $("jctl").onclick = () => ctrlDaySheet(jDay, re);
+    app.querySelectorAll("[data-hour]").forEach(b => b.onclick = () => blockSheet(null, b.dataset.hour));
+    $("joff").onclick = () => { const x = jGet(); if (x.off[jDay]) delete x.off[jDay]; else x.off[jDay] = true; jSave(x); toast(x.off[jDay] ? "Pas cours ce jour-là : toute la journée est libre." : "Cours remis."); re(); };
+    $("jadd").onclick = () => blockSheet(null);
+    if ($("jedt")) $("jedt").onclick = () => edtSetupSheet();
+    app.querySelectorAll("[data-gap]").forEach(b => b.onclick = () => blockSheet(null, b.dataset.gap));
+    app.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => blockSheet(list.find(x => x.id === b.dataset.edit)));
+    app.querySelectorAll("[data-done]").forEach(b => b.onclick = () => { const x = jGet(), key = jDay + "|" + b.dataset.done; if (x.done[key]) delete x.done[key]; else { x.done[key] = true; ping(true); } jSave(x); re(); });
+    app.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { const bl = list.find(x => x.id === b.dataset.go), to = bl && blockTarget(bl); if (to) location.hash = to; else blockSheet(bl); });
+    $("jauto").onclick = () => {
+      const plan = autoPlan(jGet(), jDay); if (!plan.length) return toast(state.cards.length ? "Plus de place libre ce jour-là." : "Importe d'abord un cours pour avoir quelque chose à réviser.");
+      previewSheet(plan, "Voici une proposition pour " + (jDay === today ? "aujourd'hui" : esc(fmtDate(jDay))) + ".");
+    };
+    $("jai").onclick = () => aiSheet();
+  }
+  // Ajouter ou modifier un bloc : activité, matière, chapitre (choisi par Merge par défaut), heure, durée, répétition.
+  function blockSheet(b, at) {
+    const j = jGet(), edit = !!b, v = Object.assign({ act: "cartes", s: (state.subjects[0] || {}).id || null, ch: null, start: at || hm(Math.max(mins("17:00"), Math.ceil((new Date().getHours() * 60 + new Date().getMinutes()) / 15) * 15)), dur: 30, title: "", weekly: false }, b || {});
+    const durs = [15, 20, 30, 45, 60, 90];
+    const paint = el => {
+      const chs = state.chapters.filter(c => c.subject_id === v.s), auto = v.s && bestChapter(v.s), noSubj = v.act === "pause";
+      el.querySelector("#bacts").innerHTML = ACTS.map(a => `<button type="button" class="chip" data-ba="${a[0]}" aria-pressed="${v.act === a[0]}">${I[a[2]]}&nbsp;${a[1]}</button>`).join("");
+      el.querySelector("#bsubj").innerHTML = noSubj ? "" : `<span class="label">Matière</span><div class="chips">${state.subjects.map(x => `<button type="button" class="chip" data-bs="${x.id}" aria-pressed="${v.s === x.id}" style="--c:${esc(x.color)}"><span class="dot"></span>&nbsp;${esc(x.name)}</button>`).join("") || '<span class="small muted">Ajoute d\'abord une matière.</span>'}</div>
+        ${chs.length ? `<label class="label" for="bch">Chapitre</label><select id="bch"><option value="">${auto ? "Choisi par Merge : " + esc(auto.name) : "Choisi par Merge"}</option>${chs.map(c => `<option value="${c.id}"${v.ch === c.id ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select>` : ""}`;
+      el.querySelector("#bdurs").innerHTML = durs.map(d => `<button type="button" class="chip" data-bd="${d}" aria-pressed="${v.dur === d}">${durTxt(d)}</button>`).join("");
+      el.querySelectorAll("[data-ba]").forEach(x => x.onclick = () => { v.act = x.dataset.ba; if (v.act === "pause" && v.dur > 15) v.dur = 5; paint(el); });
+      el.querySelectorAll("[data-bs]").forEach(x => x.onclick = () => { v.s = x.dataset.bs; v.ch = null; paint(el); });
+      el.querySelectorAll("[data-bd]").forEach(x => x.onclick = () => { v.dur = +x.dataset.bd; paint(el); });
+      if (el.querySelector("#bch")) el.querySelector("#bch").onchange = e => { v.ch = e.target.value || null; };
+    };
+    sheet(`<h1>${edit ? "Modifier" : "Ajouter une révision"}</h1><div class="chips" id="bacts"></div><div class="stack" id="bsubj"></div>
+      <div class="row" style="flex-wrap:wrap;gap:12px"><div class="field"><label for="bstart">Début</label><input id="bstart" type="time" value="${esc(v.start)}"></div><div class="field grow"><span class="label">Durée</span><div class="chips" id="bdurs"></div></div></div>
+      <div class="field"><label for="btitle">Nom (facultatif)</label><input id="btitle" type="text" maxlength="60" value="${esc(v.title || "")}" placeholder="Ex. Fiche sur la mitose"></div>
+      ${edit && b.weekly ? '<p class="small muted">Ce bloc revient chaque semaine.</p>' : `<button type="button" class="switch" role="switch" id="bweek" aria-checked="false"><i></i><span>Répéter chaque semaine</span></button>`}
+      <button class="btn" id="bok">${edit ? "Enregistrer" : "Ajouter"}</button>${edit ? '<button class="btn ghost" id="bdel">Supprimer</button>' : ""}`, el => {
+      paint(el); let weekly = false;
+      if (el.querySelector("#bweek")) el.querySelector("#bweek").onclick = e => { weekly = !weekly; e.currentTarget.setAttribute("aria-checked", String(weekly)); };
+      el.querySelector("#bok").onclick = () => {
+        const x = jGet(), nb = { id: edit ? b.id : jid(), start: el.querySelector("#bstart").value || v.start, dur: v.dur, s: v.act === "pause" ? null : v.s, ch: v.act === "pause" ? null : v.ch, act: v.act, title: el.querySelector("#btitle").value.trim().slice(0, 60) };
+        if (v.act !== "pause" && !nb.s && v.act !== "libre") return toast("Choisis une matière.");
+        if (edit && b.weekly) { const i = x.weekly.findIndex(y => y.id === b.id); if (i >= 0) x.weekly[i] = Object.assign(nb, { wd: b.wd }); }
+        else if (!edit && weekly) x.weekly.push(Object.assign(nb, { wd: (dayOf(jDay).getDay() + 6) % 7 }));
+        else { const l = x.blocks[jDay] || []; const i = l.findIndex(y => y.id === nb.id); if (i >= 0) l[i] = nb; else l.push(nb); x.blocks[jDay] = l; }
+        jSave(x); closeSheet(); toast(edit ? "Modifié." : "Ajouté à ta journée."); screenJournee();
+      };
+      if (el.querySelector("#bdel")) el.querySelector("#bdel").onclick = () => { const x = jGet(); if (b.weekly) x.weekly = x.weekly.filter(y => y.id !== b.id); else x.blocks[jDay] = (x.blocks[jDay] || []).filter(y => y.id !== b.id); jSave(x); closeSheet(); toast("Supprimé."); screenJournee(); };
+    });
+  }
+  // Aperçu d'un plan (fait par Merge ou par l'IA) avant de l'ajouter.
+  function previewSheet(plan, intro, byDay) {
+    const days = byDay || { [jDay]: plan }, all = Object.entries(days).filter(([, l]) => l.length);
+    sheet(`<div class="row"><span class="mico big">${I.spark}</span><h1>Ton plan</h1></div><p class="muted">${intro}</p>
+      ${all.map(([k, l]) => `${all.length > 1 || k !== jDay ? `<span class="label">${esc(fmtDate(k))}</span>` : ""}<div class="jprev">${l.map(b => { const s = state.subjects.find(x => x.id === b.s), a = actOf(b.act); return `<div class="row" style="--c:${esc(b.act === "pause" ? "#6b7280" : (s || {}).color || "#9483ff")}"><span class="jpill sm">${I[a[2]]}</span><span class="grow"><span class="small muted">${b.start} · ${durTxt(b.dur)}</span><br><b>${esc(b.title || (b.act === "pause" ? "Pause" : a[1] + (s ? " · " + s.name : "")))}</b></span></div>`; }).join("")}</div>`).join("")}
+      <button class="btn" id="pok">Ajouter à ma journée</button><button class="btn ghost" data-close>Annuler</button>`, el => {
+      el.querySelector("#pok").onclick = () => { const x = jGet(); all.forEach(([k, l]) => { x.blocks[k] = (x.blocks[k] || []).concat(l); }); jSave(x); closeSheet(); toast("Plan ajouté."); screenJournee(); };
+    });
+  }
+  // Mode IA : on écrit (ou on dicte au micro) ce qu'on veut, l'IA range ça dans la journée (1 appel).
+  function aiSheet() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    sheet(`<div class="row"><span class="mico big">${I.spark}</span><h1>Organise ma journée</h1></div><p class="muted">Dis ce que tu veux faire, avec tes mots. Exemple : « Ce soir 30 min de maths et un quiz de SVT, je finis à 18 h ».</p>
+      <div class="field"><textarea id="aiq" rows="4" maxlength="600" placeholder="Qu'est-ce que tu veux prévoir ?"></textarea></div>
+      <div class="row">${SR ? `<button class="iconbtn" id="aimic" aria-label="Dicter">${I.mic}</button>` : ""}<span class="grow"></span><button class="btn" id="aigo">${I.spark}Générer</button></div><p class="note" id="aimsg" role="status"></p>`, el => {
+      if (SR && el.querySelector("#aimic")) {
+        let rec = null;
+        el.querySelector("#aimic").onclick = () => {
+          if (rec) { rec.stop(); return; }
+          rec = new SR(); rec.lang = "fr-FR"; rec.interimResults = true; rec.continuous = false; const base = el.querySelector("#aiq").value;
+          rec.onresult = e => { el.querySelector("#aiq").value = (base ? base + " " : "") + [...e.results].map(r => r[0].transcript).join(""); };
+          rec.onend = () => { rec = null; el.querySelector("#aimic").classList.remove("on"); };
+          rec.onerror = () => toast("Micro indisponible. Écris ta demande à la place.");
+          el.querySelector("#aimic").classList.add("on"); rec.start();
+        };
+      }
+      el.querySelector("#aigo").onclick = async () => {
+        const q = el.querySelector("#aiq").value.trim(); if (q.length < 4) return toast("Écris ce que tu veux prévoir.");
+        if (state.offline) return toast("Il faut être connecté à Internet pour l'IA.");
+        const msg = el.querySelector("#aimsg"); msg.textContent = "L'IA prépare ta journée…"; el.querySelector("#aigo").disabled = true;
+        try {
+          const j = jGet(), days = [...Array(7)].map((_, i) => { const d = dayOf(jDay); d.setDate(d.getDate() + i); return localDay(d); });
+          const ctx = { aujourdhui: localDay(), heure: hm(new Date().getHours() * 60 + new Date().getMinutes()), jour_choisi: jDay,
+            jours: days.map(k => ({ date: k, pas_cours: !!j.off[k], cours: schoolOn(j, k).map(x => x.start + "-" + x.end + " " + x.subject), deja: blocksOn(j, k).map(b => ({ id: b.id, debut: b.start, duree: b.dur, act: b.act, matiere: (state.subjects.find(x => x.id === b.s) || {}).name || "", fait: isDone(j, k, b) })) })),
+            matieres: state.subjects.map(s => ({ id: s.id, nom: s.name, controle: (nextCtrl(s) || {}).d || null, chapitres: state.chapters.filter(c => c.subject_id === s.id && cardsOf(c.id).length).map(c => ({ id: c.id, nom: c.name, a_revoir: dueCards(cardsOf(c.id)).length, maitrise: mastery(cardsOf(c.id)) })) })) };
+          const r = await ai({ action: "planjour", demande: q, contexte: ctx }, "studio");
+          const ok = (r.blocks || []).map(b => ({ id: jid(), date: days.includes(b.date) ? b.date : jDay, start: /^([01]\d|2[0-3]):[0-5]\d$/.test(b.start || "") ? b.start : null, dur: Math.max(5, Math.min(240, Math.round(+b.dur || 0))), s: state.subjects.some(x => x.id === b.s) ? b.s : null, ch: state.chapters.some(c => c.id === b.ch && c.subject_id === b.s) ? b.ch : null, act: ACTS.some(a => a[0] === b.act) ? b.act : "libre", title: String(b.title || "").slice(0, 60) })).filter(b => b.start && b.dur);
+          const moved = (r.deplacer || []).filter(m => m && m.id && days.includes(m.date) && /^([01]\d|2[0-3]):[0-5]\d$/.test(m.start || ""));
+          if (moved.length) { const x = jGet(); moved.forEach(m => { Object.keys(x.blocks).forEach(k => { const i = (x.blocks[k] || []).findIndex(b => b.id === m.id); if (i >= 0) { const [b] = x.blocks[k].splice(i, 1); b.start = m.start; (x.blocks[m.date] = x.blocks[m.date] || []).push(b); } }); }); jSave(x); }
+          if (!ok.length && !moved.length) throw new Error(r.message || "L'IA n'a rien proposé. Précise ta demande.");
+          const byDay = {}; ok.forEach(b => { (byDay[b.date] = byDay[b.date] || []).push(b); delete b.date; });
+          if (!ok.length) { closeSheet(); toast(r.message || "C'est fait."); return screenJournee(); }
+          previewSheet(ok, esc(r.message || "Voici ce que je te propose."), byDay);
+        } catch (e) { showErr(msg, e); el.querySelector("#aigo").disabled = false; }
+      };
+      setTimeout(() => el.querySelector("#aiq").focus(), 100);
+    });
+  }
+  // Première ouverture de Journée : envoyer son emploi du temps (PDF ou photo), puis dire si on est en semaine A ou B.
+  function edtSetupSheet() {
+    sheet(`<div class="row"><span class="mico big">${I.cal}</span><h1>Ton emploi du temps</h1></div><p class="muted">Envoie le PDF (ou une photo) de ton emploi du temps : tes cours s'affichent dans ta journée et tu vois tout de suite quand tu es libre pour réviser.</p>
+      <label class="btn" for="sedt">${I.up}Envoyer mon emploi du temps</label><input id="sedt" type="file" accept="application/pdf,image/*" hidden><p class="note" id="sedtmsg" role="status"></p>
+      <button class="btn ghost" data-close>Plus tard</button>`, el => {
+      el.querySelector("#sedt").onchange = async ev => {
+        const f = ev.target.files[0]; if (!f) return; const msg = el.querySelector("#sedtmsg");
+        try {
+          const got = await edtRead(f, t => { msg.textContent = t; }); if (!got.length) throw new Error("Je n'ai trouvé aucun cours. Essaie un fichier plus net.");
+          const e = edtGet(); e.slots = got; e.ab = got.some(x => x.week); jset("merge.edt", e);
+          toast(plural(got.length, "cours ajouté", "cours ajoutés") + ".");
+          if (e.ab) abSheet(); else { closeSheet(); screenJournee(); }
+        } catch (er) { showErr(msg, er); }
+      };
+    });
+  }
+  function abSheet() {
+    sheet(`<h1>On est en quelle semaine ?</h1><p class="muted">Ton emploi du temps change une semaine sur deux. Dis-moi laquelle c'est en ce moment, Merge alterne ensuite tout seul chaque lundi.</p><div class="row"><button class="btn grow" data-ab="A">Semaine A</button><button class="btn grow" data-ab="B">Semaine B</button></div>`, el => {
+      el.querySelectorAll("[data-ab]").forEach(b => b.onclick = () => { const e = edtGet(); e.ab = true; e.ref = { monday: localDay(mondayOf(new Date())), letter: b.dataset.ab }; jset("merge.edt", e); closeSheet(); toast("Semaine " + b.dataset.ab + " enregistrée."); screenJournee(); });
+    });
+  }
+
+  // Vue heure par heure (le « zoom » maximum) : de 6 h à 23 h, chaque bloc à sa place ; toucher une heure vide pour y ajouter une révision.
+  function hoursHtml(j, k, school, list, colorOf) {
+    const H0 = 6 * 60, PX = 1.3, y = t => Math.max(0, (mins(t) - H0) * PX), now = new Date(), nowM = now.getHours() * 60 + now.getMinutes();
+    const grid = [...Array(18)].map((_, i) => `<button class="hrow" data-hour="${hm(H0 + i * 60)}" style="top:${i * 60 * PX}px" aria-label="Ajouter à ${6 + i} h"><span>${String(6 + i).padStart(2, "0")}:00</span></button>`).join("");
+    const sc = school.map(x => `<div class="hblk school" style="top:${y(x.start)}px;height:${Math.max(22, (mins(x.end) - mins(x.start)) * PX - 3)}px"><b>Cours · ${esc(x.subject)}</b><span>${esc(x.start)}–${esc(x.end)}</span></div>`).join("");
+    const bl = list.map(b => `<button class="hblk${isDone(j, k, b) ? " done" : ""}" data-edit="${b.id}" style="top:${y(b.start)}px;height:${Math.max(44, b.dur * PX - 3)}px;--c:${esc(colorOf(b))}"><b>${esc(b.title || (b.act === "pause" ? "Pause" : actOf(b.act)[1] + ((state.subjects.find(x => x.id === b.s) || {}).name ? " · " + state.subjects.find(x => x.id === b.s).name : "")))}</b><span>${b.start}–${hm(mins(b.start) + b.dur)}</span></button>`).join("");
+    return `<div class="hgrid" style="height:${18 * 60 * PX}px">${grid}${sc}${bl}${k === localDay() && nowM >= H0 ? `<i class="hnow" style="top:${(nowM - H0) * PX}px"></i>` : ""}</div><div style="height:80px"></div>`;
+  }
+  // Contrôles d'un jour, depuis la frise : toucher une ou plusieurs matières, puis choisir les chapitres.
+  function ctrlDaySheet(k, after) {
+    const draw = el => {
+      const onDay = ctrls().filter(c => c.d === k);
+      el.querySelector("#cdchips").innerHTML = state.subjects.map(x => `<button class="chip" data-sub="${x.id}" aria-pressed="${onDay.some(c => c.s === x.id)}" style="--c:${esc(x.color)}"><span class="dot"></span>&nbsp;${esc(x.name)}</button>`).join("") || '<span class="muted">Ajoute d\'abord une matière.</span>';
+      el.querySelectorAll("[data-sub]").forEach(b => b.onclick = async () => {
+        const sub = state.subjects.find(x => x.id === b.dataset.sub), have = ctrls().find(c => c.s === sub.id && c.d === k);
+        if (have) { await ctrlDel(have.id); toast("Contrôle de " + sub.name + " retiré."); return draw(el); }
+        if (isFree(sub)) { const err = await saveExam(sub.id, { date: null, free: false }); if (err) return fail(err, "Date non enregistrée"); }
+        const c = await ctrlAdd(sub.id, k); if (c) ctrlChSheet(c.id, after); else draw(el);
+      });
+    };
+    sheet(`<div class="row"><span class="mico big">${I.check}</span><h1>Contrôles</h1></div><p class="muted">${esc(fmtDate(k))} : touche une ou plusieurs matières.</p><div class="chips" id="cdchips"></div><button class="btn ghost" id="cdok">Fermer</button>`, el => { draw(el); el.querySelector("#cdok").onclick = () => { closeSheet(); after(); }; });
+  }
+  // ---------- Exercices : un chat relié à un chapitre (questions, exercices, correction d'une copie en photo) ----------
+  // Conversation gardée par chapitre (merge.exo.<chapitre>, synchronisée, 40 messages, texte seulement).
+  // Chaque message part à la fonction studio (action « exochat », 1 appel IA) avec le cours du chapitre, lu côté serveur.
+  const exoKey = ch => "merge.exo." + ch;
+  const exoGet = ch => { const v = jget(exoKey(ch), null); return Array.isArray(v) ? v : []; };
+  const EXO_QUICK = [["Fais-moi un exercice", "Fais-moi un exercice sur ce chapitre, de niveau contrôle, sans la correction : je te donnerai ma réponse."], ["Un exercice facile", "Fais-moi un exercice facile pour démarrer, sans la correction."], ["Corrige ma copie", null], ["Explique la méthode", "Explique-moi la méthode pour réussir les exercices de ce chapitre, étape par étape."], ["Donne-moi un indice", "Donne-moi juste un indice pour avancer, sans la solution."], ["La correction", "Donne-moi la correction complète et détaillée de l'exercice."]];
+  let exoCh = null;
+  function screenExos(arg) {
+    drawTabs("exos");
+    const withCours = state.chapters.filter(c => c.status === "ready" || cardsOf(c.id).length);
+    if (arg && state.chapters.some(c => c.id === arg)) exoCh = arg;
+    if (exoCh && !state.chapters.some(c => c.id === exoCh)) exoCh = null;
+    if (!exoCh) exoCh = safeGet("merge.exolast") || null;
+    if (exoCh && !withCours.some(c => c.id === exoCh)) exoCh = null;
+    const ch = exoCh && state.chapters.find(c => c.id === exoCh), s = ch && state.subjects.find(x => x.id === ch.subject_id);
+    if (!ch) {
+      app.innerHTML = `<h1>Prof</h1><p class="muted">Ton prof perso, relié à tes cours. Choisis un chapitre : pose tes questions, demande un exercice à faire ici même, ou envoie la photo de ta copie pour savoir où tu t'es trompé.</p>
+        ${state.subjects.map(x => { const l = withCours.filter(c => c.subject_id === x.id); return l.length ? `<div class="card pad stack" style="border-left:4px solid ${esc(x.color)}"><b>${esc(x.name)}</b><div class="chips">${l.map(c => `<button class="chip" data-exo="${c.id}" style="--c:${esc(x.color)}"><span class="dot"></span>&nbsp;${esc(c.name)}</button>`).join("")}</div></div>` : ""; }).join("") || '<p class="muted">Importe d\'abord un cours dans un chapitre.</p>'}`;
+      app.querySelectorAll("[data-exo]").forEach(b => b.onclick = () => { exoCh = b.dataset.exo; safeSet("merge.exolast", exoCh); screenExos(); });
+      return;
+    }
+    safeSet("merge.exolast", ch.id);
+    const msgs = exoGet(ch.id);
+    app.innerHTML = `<div class="row"><button class="iconbtn" id="exback" aria-label="Changer de chapitre">${I.back}</button><div class="grow" style="min-width:0"><h1 style="margin:0">Prof</h1><button class="linkbtn" id="exch"><span class="dot" style="background:${esc(s ? s.color : "#9483ff")}"></span>&nbsp;${esc(ch.name)}</button></div>${msgs.length ? `<button class="iconbtn flat" id="exclear" aria-label="Nouvelle conversation" title="Nouvelle conversation">${I.x}</button>` : ""}</div>
+      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") : md(m.t) + fieldsHtml(m, i)}</div>`).join("") : `<div class="card pad stack"><b>Pose ta question sur « ${esc(ch.name)} »</b><p class="small muted">Exemples : « Fais-moi un exercice », « J'ai trouvé 12 N, c'est bon ? », ou envoie la photo de ta copie : je te dis ce qui est juste dans ton raisonnement et où ça coince.</p></div>`}</div>
+      <div class="chips exquick">${EXO_QUICK.map((q, i) => `<button class="chip" data-q="${i}">${q[0]}</button>`).join("")}</div>
+      <div class="excompose card"><textarea id="exq" rows="2" maxlength="2000" placeholder="Ta question ou ta réponse…"></textarea><div class="row"><label class="iconbtn flat" for="exphoto" aria-label="Envoyer une photo de ta copie" title="Photo de ta copie">${I.up}</label><input id="exphoto" type="file" accept="image/*" capture="environment" hidden>${(window.SpeechRecognition || window.webkitSpeechRecognition) ? `<button class="iconbtn flat" id="exmic" aria-label="Dicter">${I.mic}</button>` : ""}<span class="small muted grow" id="eximg"></span><button class="btn sm" id="exsend">Envoyer</button></div></div>
+      <p class="note">L'IA s'appuie sur ton cours ; elle peut se tromper sur un calcul : vérifie avec ton prof en cas de doute. 1 message = 1 appel IA.</p>`;
+    // Réponses dans la bulle : l'IA donne un exercice avec des champs à remplir, on répond directement dedans.
+    app.querySelectorAll("[data-fsend]").forEach(b => b.onclick = () => {
+      const i = +b.dataset.fsend, h = exoGet(ch.id), m = h[i]; if (!m || !m.f) return;
+      const vals = m.f.map((_, k) => (app.querySelector(`[data-fv="${i}-${k}"]`) || {}).value || "").map(v => v.trim());
+      if (!vals.some(Boolean)) return toast("Écris au moins une réponse.");
+      m.rep = vals; jset(exoKey(ch.id), h);
+      $("exq").value = "Mes réponses :\n" + m.f.map((l, k) => "- " + l + " : " + (vals[k] || "(pas répondu)")).join("\n") + "\nCorrige-moi : dis ce qui est juste et où je me trompe.";
+      send();
+    });
+    // Choix de la façon de répondre : dans des cases ici, ou sur le cahier puis une photo de la copie.
+    app.querySelectorAll("[data-fmode]").forEach(b => b.onclick = () => { const h = exoGet(ch.id), m = h[+b.dataset.fmode]; if (!m) return; m.ici = b.dataset.m === "ici"; m.cahier = !m.ici; jset(exoKey(ch.id), h); screenExos(); });
+    app.querySelectorAll("[data-fphoto]").forEach(b => b.onclick = () => $("exphoto").click());
+    const th = $("exth"); th.scrollTop = th.scrollHeight; if (msgs.length) setTimeout(() => $("exq").scrollIntoView({ block: "nearest" }), 50);
+    let img = null;
+    $("exback").onclick = $("exch").onclick = () => { exoCh = null; safeSet("merge.exolast", ""); screenExos(); };
+    if ($("exclear")) $("exclear").onclick = () => { if ($("exclear").dataset.ok !== "1") { $("exclear").dataset.ok = "1"; toast("Touche encore pour effacer la conversation."); return; } jset(exoKey(ch.id), []); screenExos(); };
+    $("exphoto").onchange = async e => { const f = e.target.files[0]; if (!f) return; try { img = await shrinkImage(f); $("eximg").textContent = "Photo prête"; if (!$("exq").value.trim()) $("exq").value = "Voici ma copie : dis-moi ce qui est juste dans mon raisonnement et où je me suis trompé."; } catch (er) { toast("Photo illisible."); } };
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if ($("exmic")) { let rec = null; $("exmic").onclick = () => { if (rec) { rec.stop(); return; } rec = new SR(); rec.lang = "fr-FR"; rec.interimResults = true; const base = $("exq").value; rec.onresult = e => { $("exq").value = (base ? base + " " : "") + [...e.results].map(r => r[0].transcript).join(""); }; rec.onend = () => { rec = null; $("exmic").classList.remove("on"); }; rec.onerror = () => toast("Micro indisponible."); $("exmic").classList.add("on"); rec.start(); }; }
+    app.querySelectorAll("[data-q]").forEach(b => b.onclick = () => { const q = EXO_QUICK[+b.dataset.q]; if (!q[1]) { $("exphoto").click(); return; } $("exq").value = q[1]; send(); });
+    $("exsend").onclick = () => send();
+    async function send() {
+      const t = $("exq").value.trim(); if (!t && !img) return toast("Écris ta question.");
+      if (state.offline) return toast("Il faut être connecté à Internet pour l'IA.");
+      const hist = exoGet(ch.id), mine = { r: "u", t: t || "Voici ma copie.", img: !!img }; hist.push(mine); jset(exoKey(ch.id), hist.slice(-40));
+      $("exsend").disabled = true; $("exq").value = "";
+      th.insertAdjacentHTML("beforeend", `<div class="exmsg me">${esc(mine.t).replace(/\n/g, "<br>")}${img ? '<span class="small muted"> · photo envoyée</span>' : ""}</div><div class="exmsg ai wait"><span class="spin" aria-hidden="true"></span> Je réfléchis…</div>`); th.scrollTop = th.scrollHeight;
+      try {
+        const r = await ai({ action: "exochat", chapter_id: ch.id, messages: hist.slice(-12).map(m => ({ r: m.r, t: m.t })), image: img }, "studio");
+        const h2 = exoGet(ch.id); h2.push(Object.assign({ r: "a", t: String(r.answer || "") }, Array.isArray(r.fields) && r.fields.length ? { f: r.fields.map(x => String(x).slice(0, 120)).slice(0, 6) } : {})); jset(exoKey(ch.id), h2.slice(-40)); img = null;
+        if (location.hash.startsWith("#exos")) screenExos();
+      } catch (e) { const w = th.querySelector(".wait"); if (w) { w.classList.remove("wait"); w.textContent = e.message || "L'IA n'a pas répondu. Réessaie."; } $("exsend").disabled = false; }
+    }
+  }
+  // Champs de réponse d'un message de l'IA : à remplir (dernier exercice), ou réponses déjà envoyées.
+  function fieldsHtml(m, i) {
+    if (!Array.isArray(m.f) || !m.f.length) return "";
+    if (m.rep) return `<div class="exform done">${m.f.map((l, k) => `<div class="exf"><span class="small muted">${esc(l)}</span><b>${esc(m.rep[k] || "—")}</b></div>`).join("")}</div>`;
+    if (m.cahier) return `<div class="exform"><p class="small muted">Fais l'exercice sur ton cahier, puis envoie la photo de ta copie : je te dis ce qui est juste et où ça coince.</p><div class="row" style="flex-wrap:wrap"><button class="btn sm" data-fphoto="${i}">${I.up}Envoyer ma copie</button><button class="btn sm ghost" data-fmode="${i}" data-m="ici">Répondre ici plutôt</button></div></div>`;
+    if (!m.ici) return `<div class="exform"><p class="small"><b>Comment veux-tu répondre ?</b></p><div class="row" style="flex-wrap:wrap"><button class="btn sm" data-fmode="${i}" data-m="ici">Ici, dans des cases</button><button class="btn sm ghost" data-fmode="${i}" data-m="cahier">Sur mon cahier, puis une photo</button></div></div>`;
+    return `<div class="exform">${m.f.map((l, k) => `<label class="exf"><span class="small">${esc(l)}</span><textarea rows="1" data-fv="${i}-${k}" placeholder="Ta réponse"></textarea></label>`).join("")}<div class="row" style="flex-wrap:wrap"><button class="btn sm" data-fsend="${i}">Envoyer mes réponses</button><button class="btn sm ghost" data-fmode="${i}" data-m="cahier">Sur mon cahier</button></div></div>`;
+  }
+  // Photo de copie : réduite (1 600 px, JPEG) avant l'envoi.
+  async function shrinkImage(f) {
+    const bmp = await createImageBitmap(f), k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height)), cv = document.createElement("canvas");
+    cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k); cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
+    return { mime: "image/jpeg", data: cv.toDataURL("image/jpeg", 0.82).split(",")[1] };
   }
 
   // ---------- modes : apprendre, quiz, contrôle ----------
@@ -3749,7 +4088,7 @@
     if (safeGet("merge.duoin") && location.hash !== "#duo") { location.hash = "#duo"; return; }
     const h = location.hash.replace("#", ""), arg = h.slice(h.indexOf("-") + 1);
     document.body.classList.add("nav"); closeSheet();
-    drawTabs(/^(calendrier|progres|duo|reglages)$/.test(h) ? h : h === "edt" ? "calendrier" : h === "corbeille" ? "reglages" : h === "bilan" || h === "minuteur" || h === "recompenses" || h === "boutique" ? "progres" : !h || h === "accueil" || h === "cartes-jour" || h === "melange" || h === "perso" || h === "mixte" ? "accueil" : "matieres");
+    drawTabs(/^(progres|calendrier|reglages)$/.test(h) ? h : h === "duo" ? "progres" : h === "journee" || h === "edt" ? "calendrier" : /^exos/.test(h) ? "exos" : h === "corbeille" ? "reglages" : h === "bilan" || h === "minuteur" || h === "recompenses" || h === "boutique" ? "progres" : !h || h === "accueil" || h === "cartes-jour" || h === "melange" || h === "perso" || h === "mixte" ? "accueil" : "matieres");
     screenSession.key = null;
     if (busStop) busStop();
     stopSpeak();
@@ -3771,9 +4110,12 @@
     else if (h.startsWith("interro-")) screenInterro(arg);
     else if (h.startsWith("synthese-")) screenSynth(arg);
     else if (h.startsWith("planche-")) screenPrintCards(arg);
-    else if (h === "calendrier") screenCalendar();
+    else if (h === "calendrier") screenPlanning();
     else if (h === "progres") screenProgress();
     else if (h === "duo") screenDuo();
+    else if (h === "journee") jGo("jour");
+    else if (h === "exos") screenExos();
+    else if (h.startsWith("exos-")) screenExos(arg);
     else if (h.startsWith("apprendre-")) screenQuestions(arg, "apprendre");
     else if (h.startsWith("quiz-")) screenQuestions(arg, "quiz");
     else if (h.startsWith("controle-")) screenQuestions(arg, "controle");
