@@ -1031,3 +1031,4 @@ body[data-flame="cosmique"] .streak,[data-flameprev="cosmique"]{background:linea
 .ctrlrow .iconbtn.danger{color:#e5484d;border-color:#e5484d}
 .ctrlpick{min-height:44px;width:100%;background:none;border:0;border-top:1px solid var(--line);padding:6px 0;color:inherit;text-align:left;font:inherit}
 #sheet .chip.big{align-self:flex-start;font-size:1.02em}
+html,body{touch-action:manipulation}

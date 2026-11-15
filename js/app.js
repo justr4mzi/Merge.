@@ -325,6 +325,10 @@
     try { await loadAll(); } catch (e) { return; }
     if (location.hash === h) route();
   });
+  // Pas de zoom (pincement ou double appui) : l'appli est faite pour l'écran du téléphone. Safari iOS ignore user-scalable=no, d'où ces gestes bloqués.
+  ["gesturestart", "gesturechange"].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
+  document.addEventListener("touchmove", e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+  let lastTap = 0; document.addEventListener("touchend", e => { const t = Date.now(); if (t - lastTap < 300 && !e.target.closest("input,textarea,select,.mindmap")) e.preventDefault(); lastTap = t; }, { passive: false });
   // Hors ligne complet : résumés et contenus déjà générés (quiz, fiche, carte mentale…) copiés sur l'appareil, au plus toutes les 30 min.
   function offlineKeep(k, v) { const t = JSON.stringify(v); try { if (localStorage.getItem(k) !== t) localStorage.setItem(k, t); return true; } catch (e) { return false; } }
   let prefetchAt = 0;
