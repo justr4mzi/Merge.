@@ -1372,10 +1372,12 @@ async function multiImport(browser) {
   await go(page, "#exos", 300); await page.fill("#exq", "Bonjour"); await page.click("#exsend"); await page.waitForTimeout(500);
   await page.reload(); await page.waitForSelector("#app > *", { state: "attached" }); await go(page, "#exos", 400);
   ok(await page.locator(".exmsg").count() === 0 && await page.evaluate(() => JSON.parse(localStorage.getItem("merge.prof")).convs.some(c => c.m.length)), tag + " : Prof rouvert sur une nouvelle discussion, l'ancienne gardée");
-  // Planning : la frise de la journée commence dans le premier écran.
-  await go(page, "#calendrier", 400);
+  // Planning : la frise de la journée commence dans le premier écran, juste sous la semaine ; les ronds d'action dessous.
+  await page.evaluate(() => { const d = (new Date().getDay() + 6) % 7; localStorage.setItem("merge.edt", JSON.stringify({ slots: [{ day: d, start: "08:00", end: "10:00", subject: "SVT", room: "B12", week: "" }, { day: d, start: "13:00", end: "14:00", subject: "Maths", room: "", week: "" }], ref: null })); localStorage.setItem("merge.edtask", "1"); });
+  await go(page, "#accueil", 200); await go(page, "#calendrier", 500);
+  ok(await page.evaluate(() => { const l = document.querySelector(".jline"), a = document.querySelector(".jall"); return l && a && a.getBoundingClientRect().top > l.getBoundingClientRect().top; }), tag + " : actions du jour (ronds) sous la journée");
   const top = await page.evaluate(() => { const l = document.querySelector(".jline"); return l ? l.getBoundingClientRect().top : 9999; });
-  ok(top < 480, tag + " : journée visible tout de suite dans Planning", String(top));
+  ok(top < 420, tag + " : journée visible tout de suite dans Planning (juste sous la semaine)", String(top));
   await page.screenshot({ path: path.join(SHOTS, "planning-journee-390.png") });
   ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
 }
