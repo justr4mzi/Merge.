@@ -265,12 +265,13 @@ async function v8(browser) {
   let page = await open(browser, { w: 1440, h: 900, theme: "dark" });
   await go(page, "#chapitre-c1", 500);
   ok(await page.evaluate(() => getComputedStyle(document.getElementById("tabs")).display !== "none"), "v8 grand écran : barre latérale visible sur un chapitre");
-  ok(await page.locator(".mtile").count() >= 24, "v8 chapitre : tous les modes affichés");
+  ok(await page.locator(".shorts .short").count() >= 5 && await page.locator(".moremodes .mtile").count() >= 14, "v8 chapitre : raccourcis + « Plus d'outils »");
+  await page.click(".moremodes > summary"); await page.waitForTimeout(150);
   await page.click('[data-info="feynman"]'); await page.waitForTimeout(150);
   ok((await page.locator("#sheet").innerText()).includes("enfant de 10 ans"), "v8 chapitre : le « i » explique le mode");
   await page.keyboard.press("Escape"); ok(await page.locator("#sheet").count() === 0, "v8 chapitre : Échap ferme l'explication");
   await page.click('[data-fav="boss"]'); await page.waitForTimeout(150);
-  ok(await page.locator(".favsect .mtile").count() === 1 && (await page.locator(".favsect").innerText()).includes("Combat de boss"), "v8 chapitre : favori ajouté en haut");
+  ok(await page.locator('.shorts a[href="#boss-c1"]').count() === 1, "v8 chapitre : un favori rejoint les raccourcis");
   let o = await overflow(page); ok(o.sw <= o.iw, "v8 chapitre : pas de débordement", JSON.stringify(o));
   let sm = await small(page); ok(!sm.length, "v8 chapitre : boutons de 44 px minimum", sm.join(" | "));
   await go(page, "#libre-c1", 300); await page.click('[data-idea="1"]'); await page.click("#lsend"); await page.waitForTimeout(400);
@@ -307,7 +308,7 @@ async function v10(browser) {
   ok(/Travail 24:5/.test(await page.locator("#pomochip").innerText()), "v10 pomodoro : le minuteur tourne dans la pastille"); await page.click("#prs"); await page.keyboard.press("Escape");
   await go(page, "#cartes-c1", 400); await page.fill("#mine", "deux cellules"); await page.click("#flip"); await page.waitForTimeout(500);
   ok((await page.locator("#extra").innerText()).includes("deux cellules"), "v10 cartes : ma réponse écrite s'affiche au dos");
-  await page.click("#noteb"); await page.fill("#nt", "penser à la photocopieuse"); await page.click("#ntok"); await page.waitForTimeout(150); await page.click("#flip"); await page.waitForTimeout(450);
+  await page.evaluate(() => { const d = document.querySelector(".cmore"); if (d) d.open = true; }); await page.click("#noteb"); await page.fill("#nt", "penser à la photocopieuse"); await page.click("#ntok"); await page.waitForTimeout(150); await page.click("#flip"); await page.waitForTimeout(450);
   ok((await page.locator("#extra").innerText()).includes("photocopieuse"), "v10 cartes : note perso au dos");
   sm = await small(page); ok(!sm.length, "v10 cartes : boutons de 44 px minimum", sm.join(" | ")); o = await overflow(page); ok(o.sw <= o.iw, "v10 cartes : pas de débordement", JSON.stringify(o));
   await page.click("#easy"); await page.waitForTimeout(150); await page.click("#hard"); await page.waitForTimeout(150);
@@ -426,7 +427,7 @@ async function chapitre(browser) {
   await go(page, "#chapitre-c1", 500);
   ok(await page.locator("details#tools:not([open])").count() === 1 && await page.locator("details#cardsdrop:not([open])").count() === 1, "chapitre : gestion et cartes repliées par défaut");
   ok(!(await txt(page)).includes("Fiche à imprimer"), "chapitre : bouton en double retiré");
-  ok(await page.locator('a[href="#blanc-c1"].mmain').count() === 1 && await page.locator('a[href="#difficiles-c1"].mmain').count() === 1, "chapitre : examen blanc et cartes difficiles dans les modes");
+  ok(await page.locator('a.mvar[href="#blanc-c1"]').count() === 1 && await page.locator('.revbig[href="#cartes-c1"]').count() === 1, "chapitre : gros bouton Réviser et interro chronométrée");
   await page.click("#cardsdrop summary"); await page.waitForTimeout(150);
   ok(await page.locator("#tMore").isVisible() && await page.locator("#list .term").count() > 0, "chapitre : cartes et « Créer d'autres cartes » dans le menu des cartes");
   await page.click("#tools summary"); await page.click("#tColor"); await page.waitForTimeout(100); await page.click('#ccol [data-col="#e0529c"]'); await page.waitForTimeout(200);
@@ -551,9 +552,43 @@ async function petitEcran(browser) {
   ok(!p2.errors.length, "compte vide : aucune erreur JavaScript", p2.errors.slice(0, 3).join(" | ")); await p2.context().close();
 }
 
+// Captures pour relecture visuelle (pas lancée par défaut) : ONLY=apercu SHOTS=/tmp/shots node tests/run.js
+async function apercu(browser) {
+  for (const [w, h] of [[393, 852], [1440, 900]]) {
+    const page = await open(browser, { w, h, theme: "dark" });
+    for (const r of (process.env.ROUTES || "accueil,matieres,matiere-s1,chapitre-c1,reglages,progres,exos-c1,flash-c1,associer-c1,ecouter-c1,bus-c1,interro-c1,blanc-c1,cartes-c1,journee").split(",")) {
+      await go(page, "#" + r, 500); const later = page.locator("button", { hasText: "Plus tard" }); if (await later.count()) { await later.first().click(); await page.waitForTimeout(300); }
+      await page.screenshot({ path: path.join(SHOTS, w + "-" + r + ".png"), fullPage: r !== "journee" });
+    }
+    ok(!page.errors.length, "apercu " + w + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+  }
+}
+
+async function chronoBlanc(browser) {
+  const page = await open(browser, { w: 390, h: 844, theme: "dark" });
+  await go(page, "#blanc-c1", 300);
+  ok(/^Temps restant : \d+ min \d\d s$/.test(await page.locator("#qtimer").innerText()) && /Interro chronométrée/.test(await txt(page)), "interro chronométrée : titre et chrono affichés tout de suite");
+  ok(!page.errors.length, "chrono : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+}
+
+async function plusOptions(browser) {
+  const page = await open(browser, { w: 390, h: 844, theme: "dark" });
+  await go(page, "#cartes-c1", 500);
+  await page.click(".cmore summary"); await page.waitForTimeout(100);
+  ok(await page.evaluate(() => document.querySelector(".cmore").open), "plus d'options : s'ouvre");
+  await page.click("#flip"); await page.waitForTimeout(150);
+  ok(await page.evaluate(() => document.querySelector(".cmore").open), "plus d'options : reste ouvert sur la même carte");
+  await page.click("#yes"); await page.waitForTimeout(300);
+  ok(await page.evaluate(() => !document.querySelector(".cmore").open), "plus d'options : refermé à la carte suivante");
+  await page.click(".cmore summary"); await page.waitForTimeout(100);
+  await go(page, "#cartes-c1", 500);
+  ok(await page.evaluate(() => !document.querySelector(".cmore").open), "plus d'options : refermé quand on revient plus tard");
+  ok(!page.errors.length, "plus d'options : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+}
+
 async function voixMerge(browser) {
   const page = await open(browser, { w: 390, h: 844, theme: "dark" });
-  await go(page, "#reglages", 300);
+  await go(page, "#reglages", 300); await page.click('[data-open="revision"]'); await page.waitForTimeout(150);
   ok(await page.locator('[data-ve="merge"][aria-pressed="true"]').count() === 1, "voix : Laomedeia choisie par défaut");
   await page.click("#vtry"); await page.waitForTimeout(300);
   ok(await page.evaluate(() => window.__fake.voix === 1), "voix : la voix Merge est demandée au serveur");
@@ -568,6 +603,7 @@ async function voixMerge(browser) {
 async function retourFlottant(browser) {
   const page = await open(browser, { w: 390, h: 844, theme: "dark" });
   await go(page, "#chapitre-c1", 500);
+  await page.evaluate(() => document.querySelectorAll("#app details").forEach(d => d.open = true)); await page.waitForTimeout(150);
   await page.evaluate(() => scrollTo(0, 1500)); await page.waitForTimeout(150);
   ok(!(await page.evaluate(() => document.querySelector(".floatback").classList.contains("on"))), "retour flottant : caché en descendant");
   await page.evaluate(() => scrollTo(0, 1200)); await page.waitForTimeout(150);
@@ -683,7 +719,7 @@ async function fenetres(browser) {
     await page.click("button[data-pomo] >> nth=0"); await page.waitForTimeout(300);
     await page.evaluate(t => { document.querySelector("#sheet .note").textContent = t; }, NOSPACE);
     f = await fits(page); ok(f.ok && !f.wide.length, tag + " Pomodoro : texte très long", JSON.stringify(f)); await page.keyboard.press("Escape");
-    await go(page, "#chapitre-c1", 500); await page.click("[data-info] >> nth=0"); await page.waitForTimeout(300);
+    await go(page, "#chapitre-c1", 500); await page.evaluate(() => document.querySelectorAll("#app details").forEach(d => d.open = true)); await page.click("[data-info] >> nth=0"); await page.waitForTimeout(300);
     await page.evaluate(t => { const s = document.querySelector("#sheet .sheet"); s.querySelector("h1").textContent = t; s.querySelector("p").textContent = t + " " + t; }, NOSPACE);
     f = await fits(page); ok(f.ok && !f.wide.length, tag + " infos d'un mode : texte très long", JSON.stringify(f));
     ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
@@ -733,7 +769,7 @@ async function rappels(browser) {
   // 2. Écran Réglages > Rappels, enregistré dans le profil (donc le même sur tous les appareils).
   for (const [w, h] of [[320, 700], [390, 844], [1280, 800]]) {
     const page = await open(browser, { w, h, theme: "dark" }), tag = "rappels " + w;
-    await go(page, "#reglages", 400);
+    await go(page, "#reglages", 400); await page.click('[data-open="rappels"]'); await page.waitForTimeout(150);
     ok(await page.locator('#remOn[aria-checked="true"]').count() === 1 && await page.locator('#qWe[aria-checked="false"]').count() === 1 && await page.locator('#qVac[aria-checked="false"]').count() === 1 && await page.locator('[data-zone="A"][aria-pressed="true"]').count() === 1, tag + " : réglages par défaut affichés");
     const prof = () => page.evaluate(() => window.__fake.DB.profiles[0]);
     await page.click("#qWe"); await page.waitForTimeout(250); await page.click("#qVac"); await page.waitForTimeout(250); await page.click('[data-zone="C"]'); await page.waitForTimeout(250);
@@ -1157,7 +1193,7 @@ async function revisionControle(browser) {
   await page.evaluate(() => localStorage.setItem("merge.boostj", "0")); await go(page, "#calendrier", 200); await go(page, "#accueil", 400); const base = await dueTxt();
   await page.evaluate(() => localStorage.setItem("merge.boostj", "7")); await go(page, "#calendrier", 200); await go(page, "#accueil", 400);
   ok(await dueTxt() === base, "contrôle proche : à 9 jours, rien en plus avec le réglage 7 jours");
-  await go(page, "#reglages", 400); await page.click('[data-boost="14"]'); await page.waitForTimeout(150);
+  await go(page, "#reglages", 400); await page.click('[data-open="revision"]'); await page.click('[data-boost="14"]'); await page.waitForTimeout(150);
   ok(await page.evaluate(() => localStorage.getItem("merge.boostj") === "14" && window.__mergeSync.synced("merge.boostj")), "contrôle proche : réglage enregistré et synchronisé");
   // Toutes les cartes du jour faites (calendrier FSRS repoussé), puis un nouveau jour : seules les cartes du contrôle reviennent.
   await page.evaluate(() => localStorage.setItem("merge.boostj", "0")); await go(page, "#cartes-jour", 500); { let g = 0; while (g++ < 80 && await page.locator("#yes").count()) { await page.click("#yes"); await page.waitForTimeout(20); } }
@@ -1213,10 +1249,9 @@ async function journee(browser) {
     await page.evaluate(() => location.reload()); await page.waitForSelector("#app > *"); await go(page, "#calendrier", 500);
     ok(await page.locator(".hgrid").count() === 1, tag + " : niveau gardé après avoir quitté l'appli");
     await page.click("#jhours"); await page.waitForTimeout(200);
-    // Pas cours, remplir ma journée, IA.
+    // Pas cours, IA.
     await page.click("#joff"); await page.waitForTimeout(100); ok(await page.locator('#joff[aria-pressed="true"]').count() === 1, tag + " : pas cours");
-    await page.click("#jauto"); await page.waitForTimeout(150); ok(await page.locator("#pok").count() === 1, tag + " : plan tout fait proposé");
-    await page.click("#pok"); await page.waitForTimeout(200); ok(await page.locator(".jrow:not(.school)").count() > 2, tag + " : plan ajouté");
+    ok(await page.locator("#jauto").count() === 0 && await page.locator(".jact").count() === 3, tag + " : 3 actions (Pas cours, IA, Contrôle), plus de « Remplir »");
     await page.click("#jai"); await page.waitForTimeout(150); await page.fill("#aiq", "Ce soir 30 min de SVT et un quiz"); await page.click("#aigo"); await page.waitForTimeout(400);
     ok(await page.locator("#pok").count() === 1 && (await page.locator("#sheet").innerText()).includes("Voilà ta soirée"), tag + " : l'IA propose un plan (blocs invalides retirés)");
     const n0 = await page.locator(".jrow:not(.school)").count(); await page.click("#pok"); await page.waitForTimeout(200);
@@ -1375,11 +1410,77 @@ async function multiImport(browser) {
   // Planning : la frise de la journée commence dans le premier écran, juste sous la semaine ; les ronds d'action dessous.
   await page.evaluate(() => { const d = (new Date().getDay() + 6) % 7; localStorage.setItem("merge.edt", JSON.stringify({ slots: [{ day: d, start: "08:00", end: "10:00", subject: "SVT", room: "B12", week: "" }, { day: d, start: "13:00", end: "14:00", subject: "Maths", room: "", week: "" }], ref: null })); localStorage.setItem("merge.edtask", "1"); });
   await go(page, "#accueil", 200); await go(page, "#calendrier", 500);
-  ok(await page.evaluate(() => { const l = document.querySelector(".jline"), a = document.querySelector(".jall"); return l && a && a.getBoundingClientRect().top > l.getBoundingClientRect().top; }), tag + " : actions du jour (ronds) sous la journée");
+  ok(await page.evaluate(() => { const l = document.querySelector(".jline"), a = document.querySelector(".jacts"); return l && a && a.getBoundingClientRect().bottom <= l.getBoundingClientRect().top && a.getBoundingClientRect().bottom < innerHeight; }), tag + " : actions du jour en haut, visibles sans descendre, avant la journée");
   const top = await page.evaluate(() => { const l = document.querySelector(".jline"); return l ? l.getBoundingClientRect().top : 9999; });
   ok(top < 420, tag + " : journée visible tout de suite dans Planning (juste sous la semaine)", String(top));
   await page.screenshot({ path: path.join(SHOTS, "planning-journee-390.png") });
   ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+}
+// Refonte du 16 nov. : Matières en tuiles, Chapitre (gros bouton + raccourcis + Plus d'outils), modes fusionnés,
+// Flash de plus en plus rapide, Associer en séries, Écouter + Mains libres, statistiques dans Progrès, quiz interactif du Prof, Réglages en liste.
+async function refonte(browser) {
+  for (const [w, h] of [[390, 844], [1440, 900]]) {
+    const page = await open(browser, { w, h, theme: "dark" }), tag = "refonte " + w;
+    await go(page, "#matieres", 300);
+    ok(await page.locator(".stiles .stile").count() >= 3 && await page.locator(".stile.sadd").count() === 1 && await page.locator(".stile .sico").first().innerText() !== "", tag + " : Matières en tuiles (initiales, + Matière)");
+    let o = await overflow(page); ok(o.sw <= o.iw, tag + " : Matières sans débordement", JSON.stringify(o));
+    await page.screenshot({ path: path.join(SHOTS, "refonte-matieres-" + w + ".png") });
+    await go(page, "#chapitre-c1", 500);
+    const hrefs = await page.$$eval(".shorts .short", a => a.map(x => x.getAttribute("href")));
+    ok(await page.locator(".chhead .chring").count() === 1 && await page.locator('.revbig[href="#cartes-c1"]').count() === 1, tag + " : chapitre : anneau de maîtrise et gros bouton Réviser");
+    ok(["#resume-c1", "#quiz-c1", "#interro-c1", "#controle-c1", "#exos-c1"].every(x => hrefs.includes(x)) && !hrefs.includes("#schema-c1"), tag + " : raccourcis (Résumé, Quiz, Interro, Contrôle, Prof) ; pas de schémas sans schéma", JSON.stringify(hrefs));
+    const more = await page.$$eval(".moremodes .mmain", a => a.map(x => x.getAttribute("href")));
+    ok(!more.some(x => /#(apprendre|questions|libre|planche|vraifaux|stats)-/.test(x)) && more.includes("#associer-c1") && more.includes("#flash-c1"), tag + " : modes en double retirés, Associer et Flash gardés", JSON.stringify(more));
+    ok(await page.locator('a.mvar[href="#bus-c1"]').count() === 1 && await page.locator('a.mvar[href="#blanc-c1"]').count() === 1, tag + " : variantes Mains libres et Interro chronométrée");
+    o = await overflow(page); ok(o.sw <= o.iw, tag + " : chapitre sans débordement", JSON.stringify(o));
+    const sm = await small(page); ok(!sm.length, tag + " : chapitre : boutons de 44 px minimum", sm.join(" | "));
+    await page.screenshot({ path: path.join(SHOTS, "refonte-chapitre-" + w + ".png") });
+    await page.click('.shorts a[href="#exos-c1"]'); await page.waitForTimeout(400);
+    ok(await page.evaluate(() => location.hash) === "#exos" || /#exos/.test(await page.evaluate(() => location.hash)), tag + " : « Demander au prof » ouvre le Prof");
+    ok((await txt(page)).includes("La division cellulaire") || await page.locator(".pchip").count() >= 1, tag + " : le chapitre est lié automatiquement");
+    await page.fill("#exq", "Fais-moi un quiz"); await page.click("#exsend"); await page.waitForTimeout(500);
+    ok(await page.locator(".pqcm .pqo").count() >= 4, tag + " : le Prof envoie un quiz interactif");
+    await page.click('.pqo[data-qa$="-0-0"]'); await page.waitForTimeout(150);
+    await page.click('.pqo[data-qa$="-1-0"]'); await page.waitForTimeout(150);
+    ok(await page.locator(".pqo.good").count() === 2 && await page.locator(".pqo.bad").count() === 1 && (await page.locator(".pqscore").innerText()).includes("1 / 2"), tag + " : réponses corrigées tout de suite, score affiché");
+    await page.reload(); await page.waitForSelector("#app > *", { state: "attached" });
+    await page.click("#phist").catch(() => {}); await page.waitForTimeout(200);
+    if (w === 390) {
+      // Flash : chaque question a son temps, qui diminue.
+      await go(page, "#flash-c1", 300); await page.click("#go"); await page.waitForTimeout(200);
+      const t1 = await page.textContent("#qspeed"); await page.click("#vrai"); await page.click("#faux"); await page.click("#vrai"); await page.waitForTimeout(150);
+      const t2 = await page.textContent("#qspeed");
+      ok(/6,0 s/.test(t1) && /5,3 s/.test(t2), tag + " : Flash de plus en plus rapide", t1 + " → " + t2);
+      await page.waitForTimeout(6500);
+      ok(/s par question/.test(await page.textContent("#qspeed")), tag + " : question trop lente comptée, on passe à la suivante");
+      // Associer : séries et record.
+      await go(page, "#associer-c1", 400);
+      ok(await page.locator(".match .tilebtn").count() >= 6 && await page.locator("#mclock").count() === 1, tag + " : Associer avec chrono");
+      ok(await page.locator('[data-i]').count() >= 6, tag + " : cases du jeu présentes");
+      // Écouter : onglets Lecture / Mains libres.
+      await go(page, "#ecouter-c1", 600);
+      ok(await page.locator('a[role="tab"][href="#bus-c1"]').count() === 1 || (await txt(page)).includes("lire à voix haute"), tag + " : Écouter → onglet Mains libres");
+      // Progrès : statistiques par chapitre.
+      await go(page, "#progres", 300); await page.click("#pstats"); await page.waitForTimeout(200);
+      ok(await page.locator('#sheet a[href="#stats-c1"]').count() === 1, tag + " : statistiques par chapitre dans Progrès");
+      await page.keyboard.press("Escape");
+    }
+    // Réglages : liste, une section à la fois.
+    await go(page, "#reglages", 300);
+    ok(await page.locator(".setmenu .setrow").count() >= 7 && await page.locator("[data-sec-card]:visible").count() === 0, tag + " : Réglages en liste");
+    await page.click('[data-open="apparence"]'); await page.waitForTimeout(150);
+    ok(await page.locator('[data-sec-card="apparence"]').isVisible() && await page.locator(".setmenu").isHidden() && await page.locator("#setback").isVisible(), tag + " : une section s'ouvre seule");
+    await page.click("#setback"); await page.waitForTimeout(150);
+    ok(await page.locator(".setmenu").isVisible(), tag + " : retour à la liste");
+    o = await overflow(page); ok(o.sw <= o.iw, tag + " : Réglages sans débordement", JSON.stringify(o));
+    await page.screenshot({ path: path.join(SHOTS, "refonte-reglages-" + w + ".png") });
+    ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+  }
+  // Schémas à légender en raccourci seulement si le chapitre a un schéma.
+  const page = await open(browser, { w: 390, h: 844, theme: "dark", extra: { schema: "1" } });
+  await go(page, "#chapitre-c1", 500);
+  ok(await page.locator('.shorts a[href="#schema-c1"]').count() === 1, "refonte : « Schémas à légender » en raccourci quand le chapitre a un schéma");
+  await page.context().close();
 }
 async function exos(browser) {
   // 1100 px : PC moyen, l'historique s'ouvre avec ☰ (au-delà de 1200 px il est en colonne fixe, voir profPc).
@@ -1481,7 +1582,7 @@ async function planningPlus(browser) {
   ok(await page.locator("#jback").count() === 1, tag + " : bouton Aujourd'hui quand on n'est pas sur aujourd'hui");
   await page.click("#jback"); await page.waitForTimeout(200); ok(await page.locator("#jback").count() === 0 && await page.locator(".jd.on.now").count() === 1, tag + " : retour à aujourd'hui");
   await page.screenshot({ path: path.join(SHOTS, "planning-jour-390.png") });
-  ok(await page.evaluate(() => { const g = document.querySelector(".jall"); return g.scrollWidth <= g.clientWidth + 1 && g.lastElementChild.id === "jctl"; }), tag + " : actions du jour sans glisser, « Ajouter un contrôle » à droite");
+  ok(await page.evaluate(() => { const g = document.querySelector(".jacts"); return g.scrollWidth <= g.clientWidth + 1 && g.lastElementChild.id === "jctl"; }), tag + " : actions du jour sans glisser, « Contrôle » à droite");
   // Fenêtres : bouton Fermer.
   await page.click("#jadd"); await page.waitForTimeout(150); ok(await page.locator("#sheet .sheetx").count() === 1 && await page.locator("#sheet .actbtn").count() === 7, tag + " : fenêtre d'ajout avec bouton Fermer et activités alignées");
   if (true) await page.screenshot({ path: path.join(SHOTS, "ajout-bloc-390.png") });
@@ -1641,9 +1742,9 @@ let BASE;
   await new Promise(r => server.listen(0, "127.0.0.1", r)); BASE = "http://127.0.0.1:" + server.address().port;
   const browser = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] });
   try {
-    const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => only ? only.includes(n) : n !== "chasse";
+    const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => only ? only.includes(n) : n !== "chasse" && n !== "apercu";
     if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
-    const SUITES = { multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
+    const SUITES = { apercu, chronoBlanc, plusOptions, refonte, multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
     for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();

@@ -55,13 +55,14 @@
     const top = (t) => `<div class="row"><a class="iconbtn" href="${back}" aria-label="Fermer">${I.x}</a><div class="grow" style="text-align:center;font-weight:800">${t}</div><span style="width:44px"></span></div>`;
     if (kind === "controle" && mastery(cardsOf(id)) < 100) { app.innerHTML = top("Contrôle") + `<div class="card done"><div class="tutoicon">${I.lock}</div><h1>Pas encore débloqué</h1><p class="muted">Le contrôle s'ouvre quand tu atteins 100 % de maîtrise sur ce chapitre. Tu en es à ${mastery(cardsOf(id))} %.</p><div class="bar" style="width:100%"><i style="width:${mastery(cardsOf(id))}%"></i></div><a class="btn" href="#cartes-${id}">Réviser les cartes</a></div>`; return; }
     if (all.length < 4) { app.innerHTML = top(ch.name) + `<div class="card done"><p class="muted">Il faut au moins 4 cartes dans ce chapitre pour ce mode.</p><a class="btn" href="${back}">Retour</a></div>`; return; }
-    const title = kind === "apprendre" ? "Apprendre" : kind === "quiz" ? "Quiz" : kind === "blanc" ? "Examen blanc" : "Contrôle";
+    const title = kind === "apprendre" ? "Apprendre" : kind === "quiz" ? "Quiz" : kind === "blanc" ? "Interro chronométrée" : "Contrôle";
     const S = { written: kind === "blanc", queue: [], total: 0, good: 0, missed: [], asked: [] };
     const okQ = q => q && q.q && (Array.isArray(q.choix) ? q.choix.length >= 2 && q.choix[+q.bonne] != null : !!q.ideal);
     const fromAi = (list, n, tag) => (list || []).filter(okQ).slice(0, n).map((q, k) => Array.isArray(q.choix) ? { id: tag + k, front: String(q.q), back: String(q.choix[+q.bonne]), opts: q.choix.map(String), expl: q.explication || "", ia: true } : { id: tag + k, front: String(q.q), back: String(q.ideal), ia: true });
+    const leftS = () => Math.max(0, Math.round((S.deadline - Date.now()) / 1000)), leftTxt = () => "Temps restant : " + Math.floor(leftS() / 60) + " min " + String(leftS() % 60).padStart(2, "0") + " s";
     function begin(items) {
       S.queue = items || shuffle(all).slice(0, kind === "apprendre" ? 12 : kind === "quiz" ? 8 : 10); S.total = S.queue.length;
-      if (kind === "blanc") { S.deadline = Date.now() + S.total * 60000; clearInterval(timerInt); timerInt = setInterval(() => { const el = $("qtimer"); if (!el) { if (!S.queue.length || !location.hash.startsWith("#blanc-")) clearInterval(timerInt); return; } const left = Math.max(0, Math.round((S.deadline - Date.now()) / 1000)); el.textContent = "Temps restant : " + Math.floor(left / 60) + " min " + String(left % 60).padStart(2, "0") + " s"; if (left <= 0) { clearInterval(timerInt); S.total = Math.max(1, S.asked.length + S.queue.length); S.queue.forEach(c => S.asked.push({ q: c.front, a: c.back, ok: false })); S.queue = []; end(); } }, 1000); }
+      if (kind === "blanc") { S.deadline = Date.now() + S.total * 60000; clearInterval(timerInt); timerInt = setInterval(() => { const el = $("qtimer"); if (!el) { if (!S.queue.length || !location.hash.startsWith("#blanc-")) clearInterval(timerInt); return; } const left = leftS(); el.textContent = leftTxt(); if (left <= 0) { clearInterval(timerInt); S.total = Math.max(1, S.asked.length + S.queue.length); S.queue.forEach(c => S.asked.push({ q: c.front, a: c.back, ok: false })); S.queue = []; end(); } }, 1000); }
       ask();
     }
     // Prépare (ou relit) le contenu IA puis lance ; en cas d'échec, propose la version avec les cartes.
@@ -91,7 +92,7 @@
       S.queue.shift(); S.queue.length ? ask() : end();
     }
     function ask() {
-      const c = S.queue[0], done = S.total - new Set(S.queue).size, head = top(title) + `<div class="bar"><i style="width:${done / S.total * 100}%"></i></div>${S.deadline ? '<p class="small muted" id="qtimer" role="timer"></p>' : ""}`;
+      const c = S.queue[0], done = S.total - new Set(S.queue).size, head = top(title) + `<div class="bar"><i style="width:${done / S.total * 100}%"></i></div>${S.deadline ? '<p class="small muted" id="qtimer" role="timer">' + leftTxt() + '</p>' : ""}`;
       if (!c.opts && (S.written || c.ia)) {
         screenSession.key = null;
         app.innerHTML = head + `<div class="card pad stack"><p class="small muted">Question ${Math.min(S.asked.length + 1, S.total)} sur ${S.total} · réponse rédigée</p><h2 class="qtxt">${cfront(c)}</h2><div class="field"><label for="ans">Ta réponse</label><textarea id="ans" style="min-height:110px"></textarea></div><button class="btn" id="check">Voir la réponse attendue</button><div id="fb"></div></div>`;
@@ -134,22 +135,43 @@
   }
 
   // ---------- mode associer ----------
-  async function screenMatch(id) {
+  // Séries de 6 paires question-réponse. Chrono en direct, record du chapitre, et à la fin : « Nouvelle série » (d'autres
+  // cartes, celles déjà vues passent en dernier) ou « Rejouer la même ». Une erreur fait trembler les deux cases.
+  const matchSeen = {};
+  async function screenMatch(id, same) {
     tabs.hidden = true; app.innerHTML = `<p class="muted">Chargement…</p>`;
-    const all = await chapterCards(id), back = "#chapitre-" + id;
+    const all = await chapterCards(id), back = "#chapitre-" + id, bestKey = "merge.match." + id;
     const head = `<div class="row"><a class="iconbtn" href="${back}" aria-label="Fermer">${I.x}</a><div class="grow" style="text-align:center;font-weight:800">Associer</div><span style="width:44px"></span></div>`;
     if (all.length < 3) { app.innerHTML = head + `<div class="card done"><p class="muted">Il faut au moins 3 cartes pour ce jeu.</p><a class="btn" href="${back}">Retour</a></div>`; return; }
-    const pairs = shuffle(all).slice(0, 6), tiles = shuffle(pairs.flatMap(c => [{ k: c.id, t: c.front }, { k: c.id, t: c.back }])), t0 = Date.now();
-    let first = null, left = pairs.length, errors = 0;
-    app.innerHTML = head + `<p class="muted">Touche une question puis sa réponse.</p><div class="match">${tiles.map((t, i) => `<button class="card tilebtn" data-i="${i}">${mx(t.t)}</button>`).join("")}</div>`;
+    const seen = matchSeen[id] = matchSeen[id] || { ids: [], last: [] };
+    let pairs;
+    if (same && seen.last.length) pairs = seen.last.map(k => all.find(c => c.id === k)).filter(Boolean);
+    else {
+      const fresh = shuffle(all.filter(c => !seen.ids.includes(c.id))), old = shuffle(all.filter(c => seen.ids.includes(c.id)));
+      pairs = fresh.concat(old).slice(0, 6);
+      if (fresh.length < 6) seen.ids = []; // tout le chapitre a été vu : on repart de zéro
+      seen.ids.push(...pairs.map(c => c.id)); seen.last = pairs.map(c => c.id);
+    }
+    const tiles = shuffle(pairs.flatMap(c => [{ k: c.id, t: c.front, q: 1 }, { k: c.id, t: c.back, q: 0 }])), t0 = Date.now(), best = +(safeGet(bestKey) || 0);
+    let first = null, left = pairs.length, errors = 0, tick;
+    app.innerHTML = head + `<div class="row between"><span class="small muted">Touche une question puis sa réponse.</span><span class="pill" id="mclock" role="timer">0 s</span></div>
+      <div class="bar"><i id="mbar" style="width:0%"></i></div><div class="match">${tiles.map((t, i) => `<button class="card tilebtn${t.q ? " isq" : ""}" data-i="${i}">${mx(t.t)}</button>`).join("")}</div>`;
+    tick = setInterval(() => { const el = $("mclock"); if (!el) return clearInterval(tick); el.textContent = Math.round((Date.now() - t0) / 1000) + " s"; }, 500);
     app.querySelectorAll(".tilebtn").forEach(b => b.onclick = () => {
       if (b.classList.contains("sel")) { b.classList.remove("sel"); first = null; return; }
       if (!first) { first = b; b.classList.add("sel"); return; }
       const a = first; first = null; a.classList.remove("sel");
-      if (tiles[+a.dataset.i].k === tiles[+b.dataset.i].k) {
-        [a, b].forEach(x => { x.classList.add("gone"); x.disabled = true; });
-        if (--left === 0) { const s = Math.round((Date.now() - t0) / 1000); app.innerHTML = head + `<div class="card done"><h1>Bon travail !</h1><div class="big">${s} s</div><p class="muted">${plural(pairs.length, "paire trouvée", "paires trouvées")}, ${plural(errors, "erreur", "erreurs")}.</p><button class="btn" id="again">Rejouer</button><a class="btn ghost" href="${back}">Retour au chapitre</a></div>`; $("again").onclick = () => screenMatch(id); }
-      } else { errors++; [a, b].forEach(x => { x.classList.add("miss"); setTimeout(() => x.classList.remove("miss"), 500); }); }
+      if (tiles[+a.dataset.i].k === tiles[+b.dataset.i].k && a !== b) {
+        [a, b].forEach(x => { x.classList.add("gone"); x.disabled = true; }); ping(true);
+        $("mbar").style.width = ((pairs.length - left + 1) / pairs.length * 100) + "%";
+        if (--left === 0) {
+          clearInterval(tick);
+          const sec = Math.round((Date.now() - t0) / 1000), rec = !errors && (!best || sec < best), stars = errors === 0 ? 3 : errors <= 2 ? 2 : 1;
+          if (rec) safeSet(bestKey, String(sec));
+          app.innerHTML = head + `<div class="card done"><h1>${rec ? "Nouveau record !" : stars === 3 ? "Parfait !" : "Bien joué !"}</h1><div class="mstars" aria-label="${stars} étoiles sur 3">${[1, 2, 3].map(n => `<span class="${n <= stars ? "on" : ""}">${I.star}</span>`).join("")}</div><div class="big">${sec} s</div><p class="muted">${plural(pairs.length, "paire trouvée", "paires trouvées")}, ${plural(errors, "erreur", "erreurs")}.${best || rec ? ` Record sans erreur : ${rec ? sec : best} s.` : ""}</p><button class="btn" id="again">Nouvelle série</button><button class="btn ghost" id="same">Rejouer la même série</button><a class="btn ghost" href="${back}">Retour au chapitre</a></div>`;
+          $("again").onclick = () => screenMatch(id); $("same").onclick = () => screenMatch(id, true);
+        }
+      } else { errors++; ping(false); [a, b].forEach(x => { x.classList.add("miss"); setTimeout(() => x.classList.remove("miss"), 500); }); }
     });
   }
 
@@ -157,7 +179,8 @@
   async function screenListen(id) {
     const ch = state.chapters.find(c => c.id === id); if (!ch) { location.hash = "#accueil"; return; }
     tabs.hidden = true; app.innerHTML = `<p class="muted">Chargement…</p>`;
-    const back = "#chapitre-" + id, head = `<div class="row"><a class="iconbtn" href="${back}" aria-label="Fermer">${I.x}</a><div class="grow" style="text-align:center;font-weight:800">Écouter</div><span style="width:44px"></span></div>`;
+    // Écouter et Mains libres réunis : deux façons d'écouter, on passe de l'une à l'autre en haut de l'écran.
+    const back = "#chapitre-" + id, head = `<div class="row"><a class="iconbtn" href="${back}" aria-label="Fermer">${I.x}</a><div class="grow" style="text-align:center;font-weight:800">Écouter</div><span style="width:44px"></span></div><div class="seg" role="tablist"><button role="tab" aria-selected="true">Lecture</button><a role="tab" aria-selected="false" href="#bus-${id}">Mains libres</a></div>`;
     if (!("speechSynthesis" in window) && !neuralWanted()) { app.innerHTML = head + `<div class="card done"><p class="muted">Ton navigateur ne sait pas lire à voix haute.</p><a class="btn" href="${back}">Retour</a></div>`; return; }
     const [cards, sum, src] = await Promise.all([chapterCards(id), sb.from("summaries").select("markdown").eq("chapter_id", id).maybeSingle(), sb.from("sources").select("extracted_text").eq("chapter_id", id)]);
     const clean = s => String(s || "").replace(/[#*_>`]/g, "").replace(/\s+/g, " ").trim();
@@ -638,16 +661,19 @@
     if (all.length < 4) return emptyTool(id, T, "Il faut au moins 4 cartes dans ce chapitre pour ce mode.");
     const S = { score: 0, combo: 0, good: 0, n: 0, end: 0, q: null, int: null, best: +(safeGet(bestKey) || 0) };
     const mult = () => Math.min(5, 1 + Math.floor(S.combo / 3));
-    function nextQ() { const c = all[Math.floor(Math.random() * all.length)], truth = Math.random() < 0.5, other = lookalikes(c.back, shuffle(all.filter(x => x.id !== c.id && x.back !== c.back)), 2, x => x.back)[Math.random() < 0.7 ? 0 : 1] || all.find(x => x.id !== c.id && x.back !== c.back); S.q = { c, truth: truth || !other, shown: truth || !other ? c.back : other.back }; draw(); }
+    // De plus en plus vite : chaque question a son propre temps (6 s au début, puis 0,25 s de moins à chaque réponse,
+    // 1,5 s au minimum). Trop lent = compté faux et le combo retombe.
+    const qTime = () => Math.max(1500, 6000 - S.n * 250);
+    function nextQ() { S.qEnd = Date.now() + qTime(); S.qLen = qTime(); const c = all[Math.floor(Math.random() * all.length)], truth = Math.random() < 0.5, other = lookalikes(c.back, shuffle(all.filter(x => x.id !== c.id && x.back !== c.back)), 2, x => x.back)[Math.random() < 0.7 ? 0 : 1] || all.find(x => x.id !== c.id && x.back !== c.back); S.q = { c, truth: truth || !other, shown: truth || !other ? c.back : other.back }; draw(); }
     function draw(flash) {
       const left = Math.max(0, Math.ceil((S.end - Date.now()) / 1000));
       app.innerHTML = toolHead(id, T) + `<div class="row between"><span class="big" id="fclock" role="timer">${left} s</span><div style="text-align:right"><div class="big">${S.score}</div><span class="pill ${mult() > 1 ? "" : "ghostpill"}">x${mult()}</span></div></div><div class="bar"><i id="fbar" style="width:${left / 60 * 100}%"></i></div>
-        <div class="card pad stack flashq ${flash || ""}"><h2 class="qtxt">${mx(S.q.c.front)}</h2><p class="expected neutral">${mx(S.q.shown)}</p></div>
+        <div class="card pad stack flashq ${flash || ""}"><div class="qbar" aria-hidden="true"><i id="qbar"></i></div><span class="small muted" id="qspeed">${(S.qLen / 1000).toFixed(1).replace(".", ",")} s par question</span><h2 class="qtxt">${mx(S.q.c.front)}</h2><p class="expected neutral">${mx(S.q.shown)}</p></div>
         <div class="answers"><button class="btn bad" id="faux">${I.x}Faux</button><button class="btn good" id="vrai">${I.check}Vrai</button></div><p class="note" style="text-align:center">La réponse affichée est-elle la bonne ? Au clavier : flèche gauche = faux, flèche droite = vrai.</p>`;
       $("vrai").onclick = () => pick(true); $("faux").onclick = () => pick(false);
     }
-    function pick(v) {
-      if (Date.now() >= S.end) return; const ok = v === S.q.truth; S.n++;
+    function pick(v, late) {
+      if (Date.now() >= S.end) return; const ok = !late && v === S.q.truth; S.n++;
       if (ok) { S.score += 10 * mult(); S.combo++; S.good++; } else { S.combo = 0; logMistake(id, S.q.c.front, S.q.c.back, S.q.truth ? "" : S.q.shown, "flash", S.q.c.id); }
       ping(ok); const prev = ok ? "okflash" : "koflash"; nextQ(); const el = app.querySelector(".flashq"); if (el) el.classList.add(prev);
     }
@@ -656,10 +682,10 @@
       app.innerHTML = toolHead(id, T) + `<div class="card done"><h1>${rec ? "Nouveau record !" : "Temps écoulé"}</h1><div class="big">${S.score} points</div><p class="muted">${S.good} bonnes réponses sur ${S.n}. Record : ${Math.max(S.best, S.score)} points.</p><button class="btn" id="again">Rejouer</button><a class="btn ghost" href="#chapitre-${id}">Retour au chapitre</a></div>`;
       $("again").onclick = () => screenFlash(id);
     }
-    app.innerHTML = toolHead(id, T) + `<div class="card done"><div class="tutoicon">${I.bolt}</div><h1>60 secondes chrono</h1><p class="muted">Une question, une réponse affichée : vrai ou faux ? Réponds le plus vite possible. Toutes les 3 bonnes réponses d'affilée, ton multiplicateur monte (jusqu'à x5). Une erreur le remet à x1.</p>${S.best ? `<p class="small muted">Ton record : ${S.best} points.</p>` : ""}<button class="btn" id="go">C'est parti</button></div>`;
+    app.innerHTML = toolHead(id, T) + `<div class="card done"><div class="tutoicon">${I.bolt}</div><h1>60 secondes chrono</h1><p class="muted">Une question, une réponse affichée : vrai ou faux ? Ça va de plus en plus vite : 6 secondes pour la première, puis un peu moins à chaque réponse. Trop lent, c'est compté faux. Toutes les 3 bonnes réponses d'affilée, ton multiplicateur monte (jusqu'à x5). Une erreur le remet à x1.</p>${S.best ? `<p class="small muted">Ton record : ${S.best} points.</p>` : ""}<button class="btn" id="go">C'est parti</button></div>`;
     $("go").onclick = () => {
       S.end = Date.now() + 60000;
-      S.int = setInterval(() => { const el = $("fclock"); if (!el) return clearInterval(S.int); const left = Math.max(0, Math.ceil((S.end - Date.now()) / 1000)); el.textContent = left + " s"; $("fbar").style.width = left / 60 * 100 + "%"; if (left <= 0) finish(); }, 250);
+      S.int = setInterval(() => { const el = $("fclock"); if (!el) return clearInterval(S.int); const now = Date.now(), left = Math.max(0, Math.ceil((S.end - now) / 1000)); el.textContent = left + " s"; $("fbar").style.width = left / 60 * 100 + "%"; const qb = $("qbar"); if (qb) qb.style.width = Math.max(0, (S.qEnd - now) / S.qLen * 100) + "%"; if (left <= 0) return finish(); if (now > S.qEnd) pick(null, true); }, 100);
       screenSession.key = (e) => { if (e.key === "ArrowRight" || e.key.toLowerCase() === "v") pick(true); if (e.key === "ArrowLeft" || e.key.toLowerCase() === "f") pick(false); };
       nextQ();
     };
@@ -716,7 +742,7 @@
     function move(d) { const was = B.playing; pause(); B.i = (B.i + d + B.list.length) % B.list.length; B.phase = "q"; was ? play() : draw(); }
     function draw() {
       if (!location.hash.startsWith("#bus-")) return; const c = B.list[B.i];
-      app.innerHTML = toolHead(id, T) + `<h1>${mx(ch.name)}</h1><div class="card pad stack player"><p class="small muted">Carte ${B.i + 1} sur ${B.list.length} · ${B.phase === "q" ? "Question" : B.phase === "p" ? "Réfléchis…" : "Réponse"}</p><p class="qtxt" aria-live="polite">${cfront(c)}</p><p class="expected${B.phase === "a" ? "" : " veiled"}">${B.phase === "a" ? esc(c.back) : "La réponse arrive après la pause."}</p><div class="bar"><i style="width:${(B.i + (B.phase === "a" ? 0.7 : 0.2)) / B.list.length * 100}%"></i></div>
+      app.innerHTML = toolHead(id, "Écouter") + `<div class="seg" role="tablist"><a role="tab" aria-selected="false" href="#ecouter-${id}">Lecture</a><button role="tab" aria-selected="true">Mains libres</button></div><h1>${mx(ch.name)}</h1><div class="card pad stack player"><p class="small muted">Carte ${B.i + 1} sur ${B.list.length} · ${B.phase === "q" ? "Question" : B.phase === "p" ? "Réfléchis…" : "Réponse"}</p><p class="qtxt" aria-live="polite">${cfront(c)}</p><p class="expected${B.phase === "a" ? "" : " veiled"}">${B.phase === "a" ? esc(c.back) : "La réponse arrive après la pause."}</p><div class="bar"><i style="width:${(B.i + (B.phase === "a" ? 0.7 : 0.2)) / B.list.length * 100}%"></i></div>
         <div class="row" style="justify-content:center"><button class="iconbtn" id="bprev" aria-label="Carte précédente">${I.back}</button><button class="btn" id="bplay" style="min-width:140px">${B.playing ? "Pause" : "Lecture"}</button><button class="iconbtn" id="bnext" aria-label="Carte suivante" style="transform:scaleX(-1)">${I.back}</button></div></div>
         <div class="field"><span class="label">Temps de réflexion avant la réponse</span><div class="chips">${[2, 4, 6, 10].map(s => `<button class="chip" data-ps="${s}" aria-pressed="${B.pause === s}">${s} s</button>`).join("")}</div></div>
         <div class="row"><button class="chip" id="bshuf">Mélanger les cartes</button></div>

@@ -10,22 +10,34 @@
     drawTabs("reglages");
     const p = state.profile;
     const chips = (name, list, cur) => `<div class="chips">${list.map(t => `<button class="chip" data-${name}="${t[0]}" aria-pressed="${cur === t[0]}">${t[1]}</button>`).join("")}</div>`;
-    app.innerHTML = `<h1>Réglages</h1>
-      <div class="card pad stack"><h2>Ton profil</h2>
+    // Design A (16 nov.) : liste façon iPhone. Chaque ligne ouvre sa section (les sections restent dans la page, une seule
+    // est montrée à la fois, avec « ‹ Réglages » pour revenir à la liste).
+    const goalTxt = p.daily_goal_kind === "cards" ? p.daily_goal_value + " cartes/jour" : p.daily_goal_value + " min/jour";
+    const row = (sec, ic, col, label, val, href) => `<${href ? `a href="${href}"` : `button type="button" data-open="${sec}"`} class="setrow"><span class="setico" style="background:${col}">${I[ic]}</span><span class="grow">${label}</span>${val ? `<span class="setval">${val}</span>` : ""}<span class="chev">${I.back}</span></${href ? "a" : "button"}>`;
+    const menu = `<div class="setmenu stack">
+      <button type="button" class="setprof" data-open="profil"><span class="setav">${esc((p.display_name || "?").trim().slice(0, 1).toUpperCase())}</span><span class="grow"><b>${esc(p.display_name || "Ton profil")}</b><span class="small muted">${esc(p.classe || "Classe")} · objectif ${goalTxt}</span></span><span class="chev">${I.back}</span></button>
+      <p class="setgrp">Révision</p><div class="setlist">${row("revision", "cards", "#7f77dd", "Révision et voix", "")}${row("rappels", "bell", "#1d9e75", "Rappels", p.reminders_enabled === false ? "Coupés" : esc((p.reminder_time || "").slice(0, 5)))}${row("", "cal", "#378add", "Emploi du temps", "", "#edt")}</div>
+      <p class="setgrp">Appli</p><div class="setlist">${row("apparence", "moon", "#5f5e5a", "Apparence", { light: "Clair", dark: "Sombre", system: "Auto" }[p.theme] || "")}${row("ia", "spark", "#d4537e", "IA", "")}${row("partage", "duo", "#0ea5a4", "Ce qui est partagé", "")}</div>
+      <p class="setgrp">Compte</p><div class="setlist">${row("archives", "folder", "#a16207", "Archives", "")}${row("donnees", "trash", "#e5484d", "Supprimer mes données", "")}</div>
+      <button class="btn ghost" id="logout">Se déconnecter</button>
+      <p class="note">${esc(state.user.email || "")}</p></div>
+      <button type="button" class="linkbtn setback" id="setback">${I.back}Réglages</button>`;
+    app.innerHTML = `<h1>Réglages</h1>${menu}
+      <div class="card pad stack" data-sec-card="profil"><h2>Ton profil</h2>
         <div class="field"><label for="prenom">Prénom</label><input id="prenom" type="text" value="${esc(p.display_name || "")}"></div>
         <div class="field"><label for="classe">Classe</label><select id="classe">${classOpts(p.classe)}</select>${classeFree()}</div>
         <div class="field"><span class="label">Objectif par jour</span>${chips("k", [["minutes", "En minutes"], ["cards", "En cartes"]], p.daily_goal_kind)}<input id="val" type="number" inputmode="numeric" min="1" max="500" value="${p.daily_goal_value}" aria-label="Valeur de l'objectif"></div>
         <button class="btn" id="saveP">Enregistrer</button></div>
-      <div class="card pad stack"><h2>Apparence</h2>
+      <div class="card pad stack" data-sec-card="apparence"><h2>Apparence</h2>
         <div class="field"><span class="label">Thème</span>${chips("t", [["light", "Clair"], ["dark", "Sombre"], ["system", "Comme mon téléphone"]], p.theme)}</div>
         <div class="field"><span class="label">Taille du texte</span>${chips("s", [["small", "Petit"], ["normal", "Normal"], ["large", "Grand"]], p.text_size)}</div></div>
-      <div class="card pad stack"><h2>Révision</h2>
+      <div class="card pad stack" data-sec-card="revision"><h2>Révision</h2>
         <div class="field"><span class="label">Avant un contrôle, revoir les cartes de ses chapitres tous les jours</span>${chips("boost", [["0", "Jamais"], ["3", "3 jours avant"], ["7", "7 jours avant"], ["14", "14 jours avant"]], String(boostDays()))}<p class="small muted">Ces cartes reviennent chaque jour, même réussies, jusqu'au contrôle. Les autres suivent la répétition espacée normale.</p></div>
         <div class="field"><span class="label">Sons et vibrations</span>${chips("snd", [["1", "Activés"], ["0", "Coupés"]], p.sounds === false ? "0" : "1")}</div>
         <div class="field"><span class="label">Voix qui lit tes cartes</span><div class="chips"><button class="chip" data-ve="merge" aria-pressed="${neuralWanted()}">Voix Merge (Laomedeia)</button><button class="chip" data-ve="appareil" aria-pressed="${!neuralWanted()}">Voix de mon appareil</button></div><div class="row"><button class="btn sm ghost" id="vtry">Écouter un exemple</button></div><p class="note">La voix Merge est plus naturelle. Sans réseau, c'est la voix de ton appareil qui prend le relais.</p></div>
         ${"speechSynthesis" in window ? `<div class="field"><label for="voice">Voix de l'appareil</label><select id="voice"><option value="">Chargement des voix…</option></select><div class="row"><label class="small muted" for="vrate">Vitesse</label><input id="vrate" class="grow" type="range" min="0.5" max="2" step="0.05" value="${voiceRate()}"><button class="btn sm ghost" id="vtest">Écouter</button></div><p class="note">Les voix viennent de ton appareil et de ton navigateur. Merge choisit la plus naturelle. Sur PC, Microsoft Edge en propose de bien meilleures que Chrome.</p></div>` : ""}
         <button class="btn sm ghost" id="tuto">Revoir le tutoriel</button></div>
-      <div class="card pad stack" id="rappels"><h2>Rappels</h2>
+      <div class="card pad stack" data-sec-card="rappels" id="rappels"><h2>Rappels</h2>
         <button type="button" class="switch" role="switch" id="remOn" aria-checked="${p.reminders_enabled !== false}"><i></i><span>Recevoir les rappels</span></button>
         <div class="stack" id="remOpts"${p.reminders_enabled === false ? ' style="display:none"' : ""}>
           <div class="field"><label for="rem">Heure du rappel quotidien</label><input id="rem" type="time" value="${esc((p.reminder_time || "").slice(0, 5))}"><p class="note">Seulement si tu n'as pas encore révisé ce jour-là. À 21 h, un dernier rappel si ta série est en danger.</p></div>
@@ -36,12 +48,16 @@
           <button class="btn sm" id="pushon">Activer les rappels sur cet appareil</button><p class="note" id="pushmsg">Sur iPhone, ajoute d'abord Merge à l'écran d'accueil (Partager, puis « Sur l'écran d'accueil »).</p>
         </div>
         <p class="note">Ces réglages sont les mêmes sur ton téléphone et ton ordinateur.</p></div>
-      <div class="card pad stack"><h2>IA</h2><p class="muted" id="quota">Appels IA aujourd'hui : …</p><p class="note">Tout ce que l'IA prépare (résumés, quiz, fiches, cartes mentales…) est gardé : rouvrir un contenu ne coûte aucun appel.</p><a class="btn sm ghost" href="${esc(C.CONTACT_CREATEUR)}" target="_blank" rel="noopener" style="align-self:flex-start">${I.mail}Contacter le créateur</a></div>
-      <div class="card pad stack"><h2>Ce qui est partagé</h2><p class="muted">Tes cours, résumés et cartes restent toujours privés. Le partage de statistiques à deux se règle dans l'onglet Duo.</p><a class="btn sm ghost" href="#duo">Ouvrir Duo</a></div>
-      <div class="card pad stack"><h2>Archives</h2><p class="muted">En fin d'année, range tes anciennes matières. Elles restent consultables et tu peux les restaurer.</p><div class="row" style="flex-wrap:wrap"><button class="btn sm ghost" id="archShow">Voir mes archives</button><a class="btn sm ghost" href="#corbeille">Corbeille</a><button class="btn sm ghost" id="archAll">Archiver toutes mes matières</button></div><div id="archBox" class="stack"></div></div>
-      <div class="card pad stack"><h2>Supprimer mes données</h2><p class="muted">Efface définitivement tes matières, chapitres, cartes, résumés, notes et statistiques. Impossible à annuler.</p><div class="field"><label for="delw">Écris SUPPRIMER pour confirmer</label><input id="delw" type="text" autocomplete="off"></div><button class="btn sm peach" id="delall">Supprimer toutes mes données</button></div>
-      <button class="btn ghost" id="logout">Se déconnecter</button>
-      <p class="note">${esc(state.user.email || "")}</p>`;
+      <div class="card pad stack" data-sec-card="ia"><h2>IA</h2><p class="muted" id="quota">Appels IA aujourd'hui : …</p><p class="note">Tout ce que l'IA prépare (résumés, quiz, fiches, cartes mentales…) est gardé : rouvrir un contenu ne coûte aucun appel.</p><a class="btn sm ghost" href="${esc(C.CONTACT_CREATEUR)}" target="_blank" rel="noopener" style="align-self:flex-start">${I.mail}Contacter le créateur</a></div>
+      <div class="card pad stack" data-sec-card="partage"><h2>Ce qui est partagé</h2><p class="muted">Tes cours, résumés et cartes restent toujours privés. Le partage de statistiques à deux se règle dans l'onglet Duo.</p><a class="btn sm ghost" href="#duo">Ouvrir Duo</a></div>
+      <div class="card pad stack" data-sec-card="archives"><h2>Archives</h2><p class="muted">En fin d'année, range tes anciennes matières. Elles restent consultables et tu peux les restaurer.</p><div class="row" style="flex-wrap:wrap"><button class="btn sm ghost" id="archShow">Voir mes archives</button><a class="btn sm ghost" href="#corbeille">Corbeille</a><button class="btn sm ghost" id="archAll">Archiver toutes mes matières</button></div><div id="archBox" class="stack"></div></div>
+      <div class="card pad stack" data-sec-card="donnees"><h2>Supprimer mes données</h2><p class="muted">Efface définitivement tes matières, chapitres, cartes, résumés, notes et statistiques. Impossible à annuler.</p><div class="field"><label for="delw">Écris SUPPRIMER pour confirmer</label><input id="delw" type="text" autocomplete="off"></div><button class="btn sm peach" id="delall">Supprimer toutes mes données</button></div>
+`;
+    const openSec = (k, keep) => { if (k) app.dataset.sec = k; else app.removeAttribute("data-sec"); app.querySelectorAll("[data-sec-card]").forEach(c => c.classList.toggle("on", c.dataset.secCard === k)); if (!keep) window.scrollTo(0, 0); };
+    // Un réglage changé redessine l'écran : la section ouverte reste ouverte, à la même hauteur.
+    if (app.dataset.sec) openSec(app.dataset.sec, true);
+    app.querySelectorAll("[data-open]").forEach(b => b.onclick = () => openSec(b.dataset.open));
+    $("setback").onclick = () => openSec(null);
     let kind = p.daily_goal_kind;
     const patch = async (o, msg) => { const { error } = await sb.from("profiles").update(o).eq("user_id", state.user.id); if (error) return fail(error, "Réglage non enregistré"); Object.assign(state.profile, o); applyLook(state.profile); screenSettings(); if (msg) toast(msg); };
     app.querySelectorAll("[data-k]").forEach(b => b.onclick = () => { kind = b.dataset.k; app.querySelectorAll("[data-k]").forEach(x => x.setAttribute("aria-pressed", x === b)); });

@@ -51,7 +51,7 @@
     // Sur grand écran (PC) : historique toujours visible à gauche, conversation sur tout le reste.
     app.innerHTML = `<aside class="pside" aria-label="Mes discussions"><button class="btn" id="psnew">${I.plus}Nouvelle discussion</button><div class="pdlist">${histRows(p)}</div></aside><div class="pmain"><div class="row profhead"><button class="iconbtn flat" id="phist" aria-label="Mes discussions" title="Mes discussions">${I.menu}</button><h1 class="grow ptitle">${esc(conv.t || "Prof")}</h1><button class="iconbtn flat" id="pnew" aria-label="Nouvelle discussion" title="Nouvelle discussion">${I.edit}</button></div>
       <div class="pctx">${ctxChips(conv.ctx)}<button class="pchip add" id="pctx">${I.book}${linked ? "Modifier" : "Lier un cours"}</button></div>
-      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") : md(m.t) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.prof}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur les cours liés en haut. " : "Pour que je m'appuie sur ton cours, touche « Lier un cours » : un ou plusieurs chapitres, ou des matières entières. "}Demande un exercice, une explication, ou envoie la photo de ta copie avec le bouton +.</p><div class="chips exquick">${EXO_QUICK.map((q, i) => `<button class="chip" data-q="${i}">${q[0]}</button>`).join("")}</div><p class="small muted">${linked ? "Le prof s'appuie sur les cours liés" : "Sans cours lié, le prof répond avec ses connaissances de lycée"} ; il peut se tromper sur un calcul. 1 message = 1 appel IA.</p></div>`}</div>
+      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") : md(m.t) + qcmHtml(m, i) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.prof}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur les cours liés en haut. " : "Pour que je m'appuie sur ton cours, touche « Lier un cours » : un ou plusieurs chapitres, ou des matières entières. "}Demande un exercice, une explication, ou envoie la photo de ta copie avec le bouton +.</p><div class="chips exquick">${EXO_QUICK.map((q, i) => `<button class="chip" data-q="${i}">${q[0]}</button>`).join("")}</div><p class="small muted">${linked ? "Le prof s'appuie sur les cours liés" : "Sans cours lié, le prof répond avec ses connaissances de lycée"} ; il peut se tromper sur un calcul. 1 message = 1 appel IA.</p></div>`}</div>
       <div class="pcomp"><div id="eximg" class="pimg" hidden></div><div class="pbar"><button class="iconbtn flat" id="pplus" aria-label="Ajouter une photo, un cours ou une demande rapide">${I.plus}</button><textarea id="exq" rows="1" maxlength="2000" placeholder="Écris ton message…"></textarea>${canDictate() ? `<button class="iconbtn flat" id="exmic" aria-label="Dicter">${I.mic}</button>` : ""}<button class="iconbtn psend" id="exsend" aria-label="Envoyer">${I.send}</button></div>
       <input id="exphoto" type="file" accept="image/*" capture="environment" hidden><input id="exfile" type="file" accept="image/*" hidden></div></div>`;
     const save = () => { conv.at = Date.now(); profSave(p); };
@@ -62,6 +62,14 @@
     $("phist").onclick = () => histDrawer(p);
     $("psnew").onclick = () => $("pnew").click();
     histBind(app.querySelector(".pside"), p, what => { if (what === "del") screenExos(); });
+    // Quiz interactif dans la bulle : on touche une réponse, elle est corrigée tout de suite avec l'explication.
+    // (on ne redessine que le quiz, pour ne pas faire sauter la conversation).
+    const wireQcm = () => app.querySelectorAll("[data-qa]").forEach(b => b.onclick = () => {
+      const [i, k, c] = b.dataset.qa.split("-").map(Number), m = msgs[i]; if (!m || !m.q || !m.q[k] || m.q[k].a != null) return;
+      m.q[k].a = c; save(); ping(c === m.q[k].b);
+      const box = app.querySelector(`[data-qbox="${i}"]`); if (box) { box.outerHTML = qcmHtml(m, i); renderMath(app); wireQcm(); }
+    });
+    wireQcm();
     // Réponses dans la bulle : l'IA donne un exercice avec des champs à remplir.
     app.querySelectorAll("[data-fsend]").forEach(b => b.onclick = () => {
       const i = +b.dataset.fsend, m = msgs[i]; if (!m || !m.f) return;
@@ -109,7 +117,8 @@
         const subjNames = conv.ctx.s.map(id => (state.subjects.find(x => x.id === id) || {}).name).filter(Boolean);
         const r = await ai({ action: "exochat", want_title: !conv.named, chapter_ids: ctxChapters(conv.ctx), matieres: subjNames, messages: msgs.slice(-12).map(m => ({ r: m.r, t: m.t })), image: photo }, "studio");
         if (!conv.named && r.title) { conv.t = String(r.title).slice(0, 60); conv.named = true; }
-        msgs.push(Object.assign({ r: "a", t: String(r.answer || "").slice(0, 8000) }, Array.isArray(r.fields) && r.fields.length ? { f: r.fields.map(x => String(x).slice(0, 120)).slice(0, 6) } : {})); save();
+        const qcm = cleanQcm(r.qcm);
+        msgs.push(Object.assign({ r: "a", t: String(r.answer || "").slice(0, 8000) }, qcm.length ? { q: qcm } : Array.isArray(r.fields) && r.fields.length ? { f: r.fields.map(x => String(x).slice(0, 120)).slice(0, 6) } : {})); save();
         profJustAnswered = true; if (location.hash.startsWith("#exos")) screenExos();
       } catch (e) { const w = th.querySelector(".wait"); if (w) { w.classList.remove("wait"); w.textContent = e.message || "L'IA n'a pas répondu. Réessaie."; } $("exsend").disabled = false; }
     }
@@ -182,6 +191,15 @@
     });
   }
   // Champs de réponse d'un message de l'IA : choix de la façon de répondre, cases à remplir, ou réponses déjà envoyées.
+  // Quiz rendu par le prof : [{ q, c: [choix], b: index de la bonne, e: explication, a: choix de l'élève }].
+  function cleanQcm(x) {
+    return (Array.isArray(x) ? x : []).map(o => ({ q: String(o && o.q || "").slice(0, 400), c: (Array.isArray(o && o.choix) ? o.choix : []).map(v => String(v).slice(0, 200)).slice(0, 5), b: Number(o && o.bonne), e: String(o && o.explication || "").slice(0, 600) })).filter(o => o.q && o.c.length >= 2 && o.b >= 0 && o.b < o.c.length).slice(0, 10);
+  }
+  function qcmHtml(m, i) {
+    if (!Array.isArray(m.q) || !m.q.length) return "";
+    const done = m.q.filter(o => o.a != null), ok = done.filter(o => o.a === o.b).length;
+    return `<div class="pqcm" data-qbox="${i}">${m.q.map((o, k) => `<div class="pq${o.a != null ? (o.a === o.b ? " ok" : " ko") : ""}"><b>${k + 1}. ${mx(o.q)}</b><div class="pqc">${o.c.map((c, j) => `<button class="pqo${o.a != null && j === o.b ? " good" : ""}${o.a === j && j !== o.b ? " bad" : ""}" data-qa="${i}-${k}-${j}"${o.a != null ? " disabled" : ""}>${mx(c)}</button>`).join("")}</div>${o.a != null && o.e ? `<p class="small pqe">${mx(o.e)}</p>` : ""}</div>`).join("")}${done.length === m.q.length ? `<p class="pqscore"><b>${ok} / ${m.q.length}</b> ${ok === m.q.length ? "Parfait !" : ok >= m.q.length / 2 ? "Bien joué." : "Relis les explications, puis demande-moi un autre quiz."}</p>` : ""}</div>`;
+  }
   function fieldsHtml(m, i) {
     if (!Array.isArray(m.f) || !m.f.length) return "";
     if (m.rep) return `<div class="exform done">${m.f.map((l, k) => `<div class="exf"><span class="small muted">${esc(l)}</span><b>${esc(m.rep[k] || "—")}</b></div>`).join("")}</div>`;

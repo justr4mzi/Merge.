@@ -98,6 +98,7 @@
     back: svg('<path d="M15 6l-6 6 6 6"/>'), undo: svg('<path d="M9 7L4.5 11.5 9 16"/><path d="M5 11.5h9.5a5 5 0 010 10H12"/>'), search: svg('<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>'), clock: svg('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 3h5"/>'), star: svg('<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8L3.5 9.7l5.9-.8z"/>'), info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>'), spark: svg('<path d="M12 3.5c.7 4.3 3.2 6.8 7.5 7.5-4.3.7-6.8 3.2-7.5 7.5-.7-4.3-3.2-6.8-7.5-7.5 4.3-.7 6.8-3.2 7.5-7.5z"/>'), x: svg('<path d="M6 6l12 12M18 6L6 18"/>'), plus: svg('<path d="M12 5v14M5 12h14"/>'), menu: svg('<path d="M4 7h16M4 12h16M4 17h16"/>'), edit: svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'), prof: svg('<path d="M21.4 10.9a1 1 0 0 0 0-1.8l-8.6-3.9a2 2 0 0 0-1.7 0L2.6 9.1a1 1 0 0 0 0 1.8l8.6 3.9a2 2 0 0 0 1.7 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>'), send: svg('<path d="M12 19V5M6 11l6-6 6 6"/>'), cam: svg('<path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>'), img: svg('<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4.5 4 3.5 3-2.5 4 3.5"/>'),
     play: svg('<path d="M8 5.5v13l10.5-6.5z"/>'), pause: svg('<path d="M8.5 5.5v13M15.5 5.5v13"/>'), next: svg('<path d="M6 6v12l8.5-6zM18 6v12"/>'),
     home: svg('<path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/>'),
+    bell: svg('<path d="M6 16V11a6 6 0 0112 0v5l1.5 2h-15z"/><path d="M10 20.5a2.2 2.2 0 004 0"/>'), moon: svg('<path d="M19.5 14.5A8 8 0 019.5 4.5a8 8 0 1010 10z"/>'), trash: svg('<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5"/>'),
     gear: svg('<g transform="translate(12 12) scale(.82) translate(-12 -12)" stroke-width="2.2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></g>'),
     cards: svg('<rect x="2" y="7" width="15" height="13" rx="2.5"/><path d="M7 4h12.5A2.5 2.5 0 0 1 22 6.5V16"/>'),
     learn: svg('<path d="M20 12a8 8 0 11-3-6.2"/><path d="M20 4v4h-4"/>'),
@@ -1260,11 +1261,11 @@
         ${due ? '<a class="btn" href="#cartes-jour">Réviser maintenant</a>' : ""}${state.cards.length > 3 ? `<details class="moreways"><summary class="btn ghost">Autres façons de réviser</summary><div class="stack"><a class="btn ghost mixbtn" href="#melange">Révision mélangée<span class="small">${state.subjects.some(x => x.exam_date && daysUntil(x.exam_date) >= 0) ? "priorité aux contrôles proches" : "toutes tes matières"}</span></a><a class="btn ghost mixbtn" href="#perso">Choisir quoi réviser<span class="small">matières, dossiers ou chapitres au choix</span></a></div></details>` : ""}${due ? "" : `<p class="small muted">${state.cards.length ? "Tu es à jour. Reviens plus tard ou ouvre un chapitre pour t'entraîner." : "Ajoute un chapitre et importe ton cours pour créer tes premières cartes."}</p>`}</div>
         ${weekHtml(week, p)}
         <div class="card pad stack upnext"><div class="row between"><h2>Prochains contrôles</h2><a class="linkbtn" href="#mois">Calendrier</a></div>${ups.length ? ups.map(({ c, s: x }) => `<a class="exam" href="#matiere-${x.id}" style="--c:${esc(x.color)}"><span class="jx">${jx(c.d)}</span><span class="grow"><b>${esc(x.name)}</b><span class="small muted">${esc(fmtDate(c.d))}${c.ch ? " · " + plural(c.ch.length, "chapitre", "chapitres") : ""}</span></span></a>`).join("") : '<p class="muted small">Aucun contrôle prévu. Place une date dans le calendrier pour avoir un plan de révision.</p>'}</div></div>
-      <div class="card stats two">${[[I.bolt, st, st > 1 ? "jours d'affilée" : "jour d'affilée", ""], [I.check, state.cards.filter(isMastered).length + " / " + state.cards.length, "cartes maîtrisées", ""], ].map((x, i) => `<div class="stat s${i + 1}"><span class="sico">${x[0]}</span><div><b${x[3] ? ` id="${x[3]}"` : ""}>${x[1]}</b><span>${x[2]}</span></div></div>`).join("")}</div>
+      <div class="card stats two">${[[I.bolt, st, st > 1 ? "jours d'affilée" : st === 1 ? "jour d'affilée" : "révise aujourd'hui pour lancer ta série", ""], [I.check, state.cards.filter(isMastered).length + " / " + state.cards.length, "cartes maîtrisées", ""], ].map((x, i) => `<div class="stat s${i + 1}"><span class="sico">${x[0]}</span><div><b${x[3] ? ` id="${x[3]}"` : ""}>${x[1]}</b><span>${x[2]}</span></div></div>`).join("")}</div>
       ${[0, 1].includes(new Date().getDay()) && state.sessions.length && safeGet("merge.bilanseen") !== localDay(mondayOf(new Date())) ? `<div class="banner"><div><h2>Ton bilan de la semaine est prêt</h2><p class="small">Ce que tu as fait, et ton objectif pour la suite.</p></div><a class="btn sm" href="#bilan">Voir</a></div>` : ""}
       ${planTodayHtml()}${installHtml()}
       ${newYear ? `<div class="banner"><div><h2>Nouvelle année scolaire</h2><p class="small">Tu passes en quelle classe ? Mets ta classe à jour dans Réglages.</p></div><a class="btn sm" href="#reglages">Mettre à jour</a></div>` : ""}
-      ${ready.length ? `<div class="stack"><h2>Reprendre</h2><div class="grid">${ready.map(c => `<div class="card subject"><a href="#chapitre-${c.id}" style="text-decoration:none"><b>${esc(c.name)}</b></a><div class="row"><div class="bar grow"><i style="width:${mastery(cardsOf(c.id))}%"></i></div><span class="small muted">${mastery(cardsOf(c.id))} %</span></div><div class="row"><a class="btn sm" href="#cartes-${c.id}">Cartes</a><a class="btn sm ghost" href="#ecouter-${c.id}">Écouter</a><a class="btn sm ghost" href="#apprendre-${c.id}">Apprendre</a></div></div>`).join("")}</div></div>` : ""}
+      ${ready.length ? `<div class="stack"><h2>Reprendre</h2><div class="grid">${ready.map(c => `<div class="card subject"><a href="#chapitre-${c.id}" style="text-decoration:none"><b>${esc(c.name)}</b></a><div class="row"><div class="bar grow"><i style="width:${mastery(cardsOf(c.id))}%"></i></div><span class="small muted">${mastery(cardsOf(c.id))} %</span></div><div class="row"><a class="btn sm" href="#cartes-${c.id}">Cartes</a><a class="btn sm ghost" href="#ecouter-${c.id}">Écouter</a><a class="btn sm ghost" href="#quiz-${c.id}">Quiz</a></div></div>`).join("")}</div></div>` : ""}
       ${state.subjects.length ? "" : `<div class="card pad stack"><h2>Commence par une matière</h2><p class="small muted">Crée ta première matière, puis importe ton cours pour avoir tes cartes.</p><a class="btn" href="#nouvelle-matiere">Ajouter une matière</a></div>`}`;
     if ($("insb")) { $("insb").onclick = installSheet; $("insno").onclick = () => { safeSet("merge.noinstall", "1"); screenHome(); }; }
     celebrate();
@@ -1410,39 +1411,38 @@
 
   // ---------- chapitre ----------
   // Tous les modes de révision d'un chapitre. ia : 0 = sans IA, 1 = un appel la première fois puis gardé, 2 = un appel à chaque utilisation.
+  // Modes d'un chapitre (16 nov.) : 6 en avant, le reste dans « Plus d'outils ». Fusionnés : les 4 façons de parler à l'IA
+  // (Professeur IA, Exercices et questions, Demande libre) → « Demander au prof » (onglet Prof, chapitre lié) ;
+  // Apprendre et Examen blanc → Interro écrite (variante « Chronométrée ») ; Cartes difficiles → variante des Flashcards ;
+  // Mains libres → variante d'Écouter ; Vrai ou faux → Flash 60 secondes. Retirés : Planche de cartes ; Statistiques → onglet Progrès.
+  // Les anciennes adresses (#apprendre-, #blanc-, #difficiles-, #bus-…) marchent toujours.
   const MODES = {
+    prof: { i: "prof", n: "Demander au prof", s: "Explication, exercice, quiz… tout", ia: 2, a: "Ouvre le Prof avec ce chapitre déjà lié : pose une question, demande un exercice, un quiz interactif, un plan, une fiche, un moyen de retenir… Il s'adapte à ce que tu demandes et s'appuie sur ton cours." },
     cartes: { i: "cards", n: "Flashcards", s: "Question d'un côté, réponse de l'autre", ia: 0, a: "Tu lis la question, tu réponds dans ta tête, puis tu retournes la carte. « Juste » : la carte est acquise. « Faux » : elle revient dans la file jusqu'à ce que tu la réussisses. À la moitié, un quiz t'est proposé. À 100 %, le contrôle se débloque." },
     resume: { i: "sum", n: "Résumé", s: "L'essentiel du chapitre", ia: 0, a: "Le but du chapitre, les définitions et les notions clés, tirés de ton cours. Tu peux le raccourcir, le détailler ou le corriger à la main." },
-    apprendre: { i: "learn", n: "Apprendre", s: "Donne la réponse toi-même", ia: 0, a: "Les questions de tes cartes une par une, mais c'est toi qui dois donner la réponse au lieu de seulement la reconnaître. Plus exigeant, donc plus efficace." },
     quiz: { i: "quiz", n: "Quiz", s: "QCM ou réponse rédigée", ia: 1, a: "Un quiz d'entraînement écrit à partir de ton cours : QCM ou réponses rédigées, avec la correction et l'explication." },
     controle: { i: "lock", n: "Contrôle", s: "À 100 % de maîtrise", ia: 1, a: "Un contrôle complet, noté, comme en classe. Il se débloque quand tu maîtrises 100 % des cartes du chapitre." },
-    questions: { i: "ask", n: "Professeur IA", s: "Pose tes questions sur le cours", ia: 2, a: "Tu poses une question, il répond uniquement avec ce qui est écrit dans ton cours. Il peut ensuite l'illustrer avec un exemple concret (sport, mangas, vie quotidienne)." },
-    libre: { i: "spark", n: "Demande libre", s: "Demande ce que tu veux à l'IA", ia: 2, a: "Tu écris exactement ce que tu veux : un plan, dix questions pièges, une histoire pour retenir, un classement des notions… L'IA le fabrique à partir de ton cours, sans rien inventer." },
     blurting: { i: "blank", n: "Feuille blanche", s: "Écris tout de mémoire", ia: 2, a: "Tu écris tout ce dont tu te souviens, sans regarder. L'IA te montre ce qui est juste, faux ou oublié, et ajoute 3 cartes sur tes trous." },
     feynman: { i: "bulb", n: "Méthode Feynman", s: "Explique comme à un enfant", ia: 2, a: "Tu expliques une notion comme à un enfant de 10 ans. L'IA te dit si tu as vraiment compris ou seulement récité, et ce qui manque." },
     pieges: { i: "trap", n: "Chasse aux pièges", s: "Deviens le correcteur", ia: 1, a: "Une copie d'élève contient des erreurs classiques. À toi de les repérer. Tu apprends en corrigeant." },
     faceaface: { i: "vs", n: "Face-à-face", s: "Les notions qu'on confond", ia: 1, a: "Les notions qui se ressemblent, comparées côte à côte, puis un mini quiz pour ne plus les mélanger." },
-    exos: { i: "ask", n: "Exercices et questions", s: "Chat avec ton cours", ia: 2, a: "Pose tes questions sur le chapitre, demande un exercice, ou envoie la photo de ta copie : l'IA te dit ce qui est juste et où ça coince. Aussi dans l'onglet Exercices." },
     exercices: { i: "steps", n: "Exercices guidés", s: "Indices pas à pas", ia: 1, a: "Trois exercices de difficulté croissante. Deux indices si tu bloques, puis la solution rédigée comme sur une copie." },
-    difficiles: { i: "bolt", n: "Cartes difficiles", s: "Seulement celles que tu rates", ia: 0, a: "Une séance avec uniquement les cartes que tu rates le plus souvent ou que tu ne maîtrises pas encore." },
-    blanc: { i: "clock", n: "Examen blanc", s: "Chronométré, comme le jour J", ia: 0, a: "Des questions de tes cartes à rédiger, avec une minute par question. Tu vois ta note à la fin, comme à un vrai contrôle." },
     interro: { i: "learn", n: "Interro écrite", s: "Tape ta réponse, correction immédiate", ia: 1, a: "Une question à la fois, comme une interro sur feuille. Tu tapes ta réponse : un nombre, un mot ou une phrase est corrigé tout de suite par Merge, une justification est corrigée par l'IA (1 appel par justification). « Refaire » prépare une nouvelle interro." },
     trous: { i: "cloze", n: "Texte à trous", s: "Complète les phrases clés", ia: 1, a: "Les phrases importantes du cours avec des mots manquants. Tu complètes, Merge corrige." },
     carte: { i: "map", n: "Carte mentale", s: "Le chapitre en un schéma", ia: 1, a: "Tout le chapitre en arbre : les grandes idées, puis les notions. Tu peux zoomer et replier les branches." },
     boss: { i: "shield", n: "Combat de boss", s: "Bats le boss du chapitre", ia: 0, a: "Chaque bonne réponse retire des points de vie au boss, chaque erreur t'en coûte. À faire quand tu te sens prêt." },
     flash: { i: "bolt", n: "Flash 60 secondes", s: "Vrai ou faux contre la montre", ia: 0, a: "60 secondes, un maximum de bonnes réponses, des combos si tu enchaînes." },
     associer: { i: "match", n: "Associer", s: "Relie questions et réponses", ia: 0, a: "Retrouve les paires question-réponse le plus vite possible." },
-    vraifaux: { i: "quiz", n: "Vrai ou faux", s: "Réponse juste ou piégée ?", ia: 0, a: "Une question et une réponse : à toi de dire si elles vont ensemble." },
     khole: { i: "mic", n: "Khôlle", s: "Réponds à l'oral, au micro", ia: 2, a: "Merge pose une question, tu réponds à voix haute. L'IA note la précision de ta réponse et ton aisance à l'oral." },
-    bus: { i: "bus", n: "Mains libres", s: "Écoute et réponds dans ta tête", ia: 0, a: "Question, pause, réponse, sans toucher l'écran. Fait pour le bus ou la marche." },
     ecouter: { i: "listen", n: "Écouter", s: "Tes cartes lues à voix haute", ia: 0, a: "Tes cartes ou ton résumé lus à voix haute, à la vitesse que tu veux." },
     synthese: { i: "sum", n: "Fiche de synthèse", s: "Une page A4 à imprimer", ia: 1, a: "L'essentiel, les définitions, les formules, les pièges et des astuces pour retenir, sur une seule page." },
-    planche: { i: "grid", n: "Planche de cartes", s: "Cartes à découper", ia: 0, a: "Tes cartes mises en page pour l'impression recto verso, à découper." },
     schema: { i: "grid", n: "Schémas à légender", s: "Cache les légendes et retrouve-les", ia: 0, a: "Tu prends une page de ton cours avec un schéma, tu caches les légendes avec ton doigt, puis tu t'entraînes à les retrouver. Tu peux aussi ajouter ta propre photo." },
-    stats: { i: "chart", n: "Statistiques", s: "Ta progression sur ce chapitre", ia: 0, a: "Ta maîtrise dans le temps, les cartes que tu rates le plus et le temps passé sur ce chapitre." },
     erreurs: { i: "book", n: "Carnet d'erreurs", s: "Tes erreurs, expliquées", ia: 0, a: "Toutes les questions que tu as ratées dans ce chapitre. Le bouton « Pourquoi ? » t'explique chaque erreur (1 appel IA)." },
   };
-  const MODE_CATS = [["Réviser", ["cartes", "resume", "apprendre", "interro", "quiz", "controle", "blanc", "difficiles", "ecouter"]], ["Comprendre", ["exos", "questions", "libre", "blurting", "feynman", "pieges", "faceaface", "exercices", "trous", "carte", "schema"]], ["Jouer", ["boss", "flash", "associer", "vraifaux"]], ["Oral et audio", ["khole", "bus"]], ["Fiches", ["synthese", "planche", "erreurs", "stats"]]];
+  const MODE_MAIN = ["cartes", "resume", "quiz", "interro", "controle", "prof"];
+  // Variante d'un mode, en petit bouton dans sa tuile : [clé, libellé, adresse].
+  const MODE_VAR = { cartes: ["difficiles", "Seulement les difficiles"], interro: ["blanc", "Chronométrée"], ecouter: ["bus", "Mains libres"] };
+  const MODE_CATS = [["Comprendre", ["blurting", "feynman", "trous", "faceaface", "pieges", "exercices", "carte"]], ["Fiches", ["synthese", "erreurs"]], ["Oral et audio", ["khole", "ecouter"]], ["Jouer", ["boss", "flash", "associer"]]];
   const IA_NOTE = ["Sans IA : gratuit et illimité.", "1 appel IA la première fois, puis c'est gardé : tu le rouvres autant que tu veux.", "1 appel IA à chaque utilisation."];
   const favs = () => { try { const f = JSON.parse(safeGet("merge.fav") || "[]"); return Array.isArray(f) ? f.filter(k => MODES[k]) : []; } catch (e) { return []; } };
 
@@ -1461,24 +1461,45 @@
     if (sr.error) sr = { data: safeGet("merge.sum." + id) ? { chapter_id: id } : null };
     if (location.hash !== here) return;
     const cards = cr.data || [], meta = cardsOf(id), m = mastery(meta), due = dueCards(meta).length, hasSum = !!(sr.data);
+    // Cartes difficiles : celles déjà ratées au moins une fois (comme la séance « difficiles »).
+    const hard = meta.filter(c => (c.wrong_count || 0) > 0).length;
+    // Schémas à légender : en avant seulement si le chapitre a un schéma (carte recadrée ou schéma déjà préparé).
+    const hasSchema = meta.some(c => c.image_box) || Object.keys(jget("merge.occl." + id, {})).length > 0;
     const tile = (k) => {
-      const M = MODES[k], fav = favs().includes(k); let sub = M.s, icon = I[M.i], href = "#" + k + "-" + id;
+      const M = MODES[k], fav = favs().includes(k), V = MODE_VAR[k]; let sub = M.s, icon = I[M.i], href = k === "prof" ? "#exos-" + id : "#" + k + "-" + id;
       if (k === "cartes") sub = m + " % de maîtrise"; if (k === "resume" && !hasSum) { href = "#import-" + id; sub = "Importe ton cours"; }
       if (k === "controle") { icon = m >= 100 ? I.check : I.lock; sub = m >= 100 ? "Débloqué" : "À 100 % de maîtrise"; } if (k === "boss" && safeGet("merge.boss." + id)) sub = "Vaincu";
-      return `<div class="mtile${fav ? " isfav" : ""}"><a class="mmain" href="${href}"><span class="mico">${icon}</span><span class="mtxt"><b>${M.n}</b><span class="small">${sub}</span></span></a><button class="mbtn" data-info="${k}" aria-label="Comment marche ${M.n} ?">${I.info}</button><button class="mbtn star" data-fav="${k}" aria-pressed="${fav}" aria-label="${fav ? "Retirer des favoris" : "Mettre en favori"} : ${M.n}">${I.star}</button></div>`;
+      return `<div class="mtile${fav ? " isfav" : ""}"><a class="mmain" href="${href}"><span class="mico">${icon}</span><span class="mtxt"><b>${M.n}</b><span class="small">${sub}</span></span></a><button class="mbtn" data-info="${k}" aria-label="Comment marche ${M.n} ?">${I.info}</button><button class="mbtn star" data-fav="${k}" aria-pressed="${fav}" aria-label="${fav ? "Retirer des favoris" : "Mettre en favori"} : ${M.n}">${I.star}</button>${V && (V[0] !== "difficiles" || hard) ? `<a class="mvar" href="#${V[0]}-${id}">${V[0] === "difficiles" ? I.bolt : V[0] === "blanc" ? I.clock : I.bus}${V[1]}${V[0] === "difficiles" ? " · " + hard : ""}</a>` : ""}</div>`;
     };
     const sect = (t, keys, cls) => `<div class="stack${cls ? " " + cls : ""}"><h2>${t}</h2><div class="mgrid">${keys.map(tile).join("")}</div></div>`;
-    const modesHtml = () => (favs().length ? sect("Tes favoris", favs(), "favsect") : `<p class="note favhint">Touche l'étoile d'un mode pour le garder en haut de la page. Le « i » explique à quoi il sert.</p>`) + MODE_CATS.map(c => sect(c[0], c[1])).join("");
+    // Design A (16 nov.) : en-tête avec l'anneau de maîtrise, un gros bouton « Réviser maintenant », 4 à 6 raccourcis,
+    // puis « Plus d'outils » replié. Toujours le « i » et l'étoile dans « Plus d'outils » ; les favoris rejoignent les raccourcis.
+    const nc = nextCtrl(s), ctl = nc && (!nc.ch || !nc.ch.length || nc.ch.includes(id));
+    const chHead = () => `<div class="chhead" style="--c:${esc(s.color)}"><div class="chring" style="--p:${m}" role="img" aria-label="Maîtrise ${m} %"><b>${m}%</b></div><div class="grow"><h1>${esc(ch.name)}</h1><p class="small muted">${cards.length ? plural(cards.length, "carte", "cartes") + (due ? " · " + plural(due, "à revoir", "à revoir") : "") : "Pas encore de cartes"}${ctl ? " · contrôle " + (jx(nc.d) === "Auj." ? "aujourd'hui" : jx(nc.d)) : ""}</p></div></div>`;
+    const short = (k) => {
+      const M = MODES[k]; let sub = M.s, icon = I[M.i], href = k === "prof" ? "#exos-" + id : "#" + k + "-" + id;
+      if (k === "resume" && !hasSum) { href = "#import-" + id; sub = "Importe ton cours"; }
+      if (k === "resume" && hasSum) sub = "L'essentiel";
+      if (k === "quiz") sub = "QCM"; if (k === "interro") sub = "Tu écris, il corrige"; if (k === "prof") sub = "Une question, un exercice, un quiz… ce que tu veux";
+      if (k === "controle") { icon = m >= 100 ? I.check : I.lock; sub = m >= 100 ? "Débloqué" : "À 100 %"; }
+      return `<a class="short${k === "prof" ? " wide" : ""}" href="${href}"><span class="mico">${icon}</span><span class="mtxt"><b>${M.n}</b><span class="small">${sub}</span></span></a>`;
+    };
+    const revMin = Math.max(1, Math.round((due || Math.min(20, meta.length)) * 0.5));
+    const modesHtml = () => `<a class="revbig" href="#cartes-${id}">${I.play}<span class="grow"><b>Réviser maintenant</b><span class="small">${due ? plural(due, "carte à revoir", "cartes à revoir") : "Entraînement sur tes cartes"}, environ ${revMin} min</span></span></a>`
+      + (hard ? `<a class="mvar solo" href="#difficiles-${id}">${I.bolt}Seulement les difficiles · ${hard}</a>` : "")
+      + `<div class="shorts">${["resume", "quiz", "interro", "controle"].concat(hasSchema ? ["schema"] : [], favs().filter(k => !MODE_MAIN.includes(k) && k !== "schema"), ["prof"]).map(short).join("")}</div>`
+      + `<a class="mvar solo" href="#blanc-${id}">${I.clock}Interro chronométrée, comme le jour J</a>`
+      + `<details class="moremodes"${safeGet("merge.moremodes") === "1" ? " open" : ""}><summary><span class="grow">Plus d'outils</span><span class="small muted">${MODE_CATS.reduce((a, c) => a + c[1].length, 0)} outils</span></summary><div class="stack modesbox">${MODE_CATS.map(c => sect(c[0], c[1])).join("")}</div></details>`;
     function wireModes() {
+      const mm = app.querySelector(".moremodes"); if (mm) mm.ontoggle = () => safeSet("merge.moremodes", mm.open ? "1" : "0");
       app.querySelectorAll("[data-fav]").forEach(b => b.onclick = () => { const k = b.dataset.fav, f = favs(), i = f.indexOf(k); if (i >= 0) f.splice(i, 1); else f.unshift(k); safeSet("merge.fav", JSON.stringify(f.slice(0, 12))); $("modesbox").innerHTML = modesHtml(); wireModes(); toast(i >= 0 ? "Retiré des favoris." : MODES[k].n + " ajouté à tes favoris."); });
       app.querySelectorAll("[data-info]").forEach(b => b.onclick = () => { const k = b.dataset.info, M = MODES[k], t = b.parentElement.querySelector(".mmain");
         sheet(`<div class="row"><span class="mico big">${I[M.i]}</span><h1>${M.n}</h1></div><p>${M.a}</p><p class="note">${IA_NOTE[M.ia]} Tout vient uniquement de ton cours.</p><div class="row"><a class="btn grow" href="${t.getAttribute("href")}" data-close>Commencer</a><button class="btn ghost" data-close>Fermer</button></div>`); });
     }
     app.innerHTML = `<div class="row"><a class="iconbtn" href="${grp ? "#dossier-" + grp.id : "#matiere-" + s.id}" aria-label="${grp ? "Retour au dossier" : "Retour à la matière"}">${I.back}</a><span class="row small muted" style="--c:${esc(s.color)}"><span class="dot"></span>${esc(s.name)}${grp ? " · " + esc(grp.name) : ""}</span></div>
-      <div class="stack"><h1>${esc(ch.name)}</h1>
-      ${cards.length ? `<div class="row"><span class="pill">${plural(cards.length, "carte", "cartes")}</span><span class="small muted">Maîtrise ${m} %${due ? " · " + plural(due, "carte à revoir", "cartes à revoir") : ""}</span></div><div><div class="jalons">${[true, hasSum, m >= 50, m >= 100, false].map((on, i, a) => `<span class="${on ? "on" : ""}"></span>${i < a.length - 1 ? `<i class="${a[i + 1] ? "on" : ""}"></i>` : ""}`).join("")}</div><div class="jalabels"><span>Importé</span><span>Résumé</span><span>50 %</span><span>100 %</span><span>Contrôle</span></div></div>` : ""}</div>
+      ${chHead()}
       ${cards.length ? `<div id="modesbox" class="stack modesbox">${modesHtml()}</div>` : ""}
-      <div class="banner"><div><h2>${cards.length ? "Ajouter un cours" : "Importe ton cours"}</h2><p class="small">PDF, photos, PowerPoint ou texte, autant de fichiers que tu veux. Merge prépare le résumé et les cartes à partir de ton cours, sans rien inventer.</p></div><a class="btn sm" href="#import-${id}">Importer</a></div>
+      ${cards.length ? `<a class="card pad addcourse" href="#import-${id}"><span class="mico">${I.up}</span><b class="grow">Ajouter un cours</b><span class="small muted">PDF, photos…</span></a>` : `<div class="banner"><div><h2>Importe ton cours</h2><p class="small">PDF, photos, PowerPoint ou texte, autant de fichiers que tu veux. Merge prépare le résumé et les cartes à partir de ton cours, sans rien inventer.</p></div><a class="btn sm" href="#import-${id}">Importer</a></div>`}
       ${chapterToolsHtml(id)}
       <details class="card pad drop" id="cardsdrop"><summary><span class="mico">${I.cards}</span><b class="grow">${cards.length ? "Les " + plural(cards.length, "carte", "cartes") + " du chapitre" : "Cartes du chapitre"}</b></summary><div class="stack"><div class="row" style="flex-wrap:wrap"><button class="btn sm" id="tMore">Créer d'autres cartes avec l'IA</button><button class="btn sm ghost" id="tAdd">Ajouter une carte</button></div><div id="addbox"></div><div class="stack" id="list"></div></div></details>`;
     wireChapterTools(id, ch, cards); wireModes();
@@ -2058,7 +2079,7 @@
         ${typed() ? `<div class="field typedbox"><label for="mine">Ta réponse, avant de retourner la carte</label><textarea id="mine" style="min-height:70px" placeholder="Écris ce que tu répondrais">${esc(S.mine)}</textarea></div>` : ""}
         <div class="answers"><button class="btn bad" id="no" aria-label="Faux, pas compris">${I.x}Faux</button><button class="btn good" id="yes">${I.check}Juste</button></div>
         <div class="row rate2"><button class="chip sm grow" id="hard">Juste, mais à revoir bientôt</button><button class="chip sm grow" id="easy">Trop facile</button></div>
-        <details class="cmore"${safeGet("merge.cmore") === "1" ? " open" : ""}><summary>Plus d'options</summary><div class="row" style="justify-content:center;flex-wrap:wrap"><button class="switch" id="typedsw" role="switch" aria-checked="${typed()}"><i></i>Écrire ma réponse</button><button class="linkbtn" id="huh">Je ne comprends pas</button><button class="linkbtn" id="editc">Modifier la carte</button><button class="linkbtn" id="noteb">${noteOf(c) ? "Modifier ma note" : "Ajouter une note"}</button><button class="linkbtn" data-pomo>Pomodoro</button>${"speechSynthesis" in window ? '<button class="linkbtn" id="say">Lire à voix haute</button>' : ""}${c.image_path && !state.offline ? '<button class="linkbtn" id="see">Voir la page du cours</button>' : ""}</div></details><div id="pageimg"></div></div>
+        <details class="cmore"${S.cmoreFor === c.id ? " open" : ""}><summary>Plus d'options</summary><div class="row" style="justify-content:center;flex-wrap:wrap"><button class="switch" id="typedsw" role="switch" aria-checked="${typed()}"><i></i>Écrire ma réponse</button><button class="linkbtn" id="huh">Je ne comprends pas</button><button class="linkbtn" id="editc">Modifier la carte</button><button class="linkbtn" id="noteb">${noteOf(c) ? "Modifier ma note" : "Ajouter une note"}</button><button class="linkbtn" data-pomo>Pomodoro</button>${"speechSynthesis" in window ? '<button class="linkbtn" id="say">Lire à voix haute</button>' : ""}${c.image_path && !state.offline ? '<button class="linkbtn" id="see">Voir la page du cours</button>' : ""}</div></details><div id="pageimg"></div></div>
         <aside class="sside"><div class="card pad stack"><div class="ring" style="--p:${pct}"><b>${pct} %</b></div><div class="srow"><span>Réussies</span><b class="g">${S.known}</b></div><div class="srow"><span>À revoir</span><b class="r">${S.again.size}</b></div><div class="srow"><span>Restantes</span><b>${S.queue.length}</b></div></div>
           <div class="card pad stack"><h2>Raccourcis clavier</h2><div class="srow"><span>Retourner la carte</span><kbd>Espace</kbd></div><div class="srow"><span>Juste</span><kbd>→</kbd></div><div class="srow"><span>Faux</span><kbd>←</kbd></div><div class="srow"><span>Annuler ma réponse</span><kbd>Ctrl Z</kbd></div><div class="srow"><span>Trop facile</span><kbd>↑</kbd></div><div class="srow"><span>À revoir bientôt</span><kbd>↓</kbd></div></div>
           <p class="note">Une carte ratée revient jusqu'à ce que tu la réussisses.</p></aside></div>`;
@@ -2073,7 +2094,8 @@
         el.querySelector("#eok").disabled = true; const { error } = await sb.from("cards").update({ front, back, edited_by_user: true, needs_check: false, flagged: false }).eq("id", c.id);
         if (error) { el.querySelector("#eok").disabled = false; return showErr(el.querySelector("#emsg"), error); }
         Object.assign(c, { front, back, needs_check: false, flagged: false }); const row = state.cards.find(x => x.id === c.id); if (row) Object.assign(row, { front, back }); closeSheet(); toast("Carte modifiée."); render(); }; });
-      app.querySelector(".cmore").ontoggle = e => safeSet("merge.cmore", e.target.open ? "1" : "0");
+      // « Plus d'options » reste ouvert sur la carte en cours (ex. après avoir activé « Écrire ma réponse »), puis se referme à la carte suivante et à chaque nouvelle session.
+      app.querySelector(".cmore").ontoggle = e => { S.cmoreFor = e.target.open ? c.id : null; };
       $("huh").onclick = async () => {
         sheet(`<h1>Je ne comprends pas</h1><p class="muted small">${cfront(c)}</p><div id="huhbox" class="md"><div class="row"><div class="spin" aria-hidden="true"></div><p class="muted" role="status">L'IA t'explique à partir de ton cours…</p></div></div><button class="btn ghost" data-close>Fermer</button>`);
         try { const text = await courseText(c.chapter_id); const r = await ai({ action: "pourquoi", text, question: c.front, attendu: c.back, donne: "" }); const b = $("huhbox"); if (b) b.innerHTML = md(r.answer || ""); }
@@ -2184,22 +2206,34 @@
     drawTabs("reglages");
     const p = state.profile;
     const chips = (name, list, cur) => `<div class="chips">${list.map(t => `<button class="chip" data-${name}="${t[0]}" aria-pressed="${cur === t[0]}">${t[1]}</button>`).join("")}</div>`;
-    app.innerHTML = `<h1>Réglages</h1>
-      <div class="card pad stack"><h2>Ton profil</h2>
+    // Design A (16 nov.) : liste façon iPhone. Chaque ligne ouvre sa section (les sections restent dans la page, une seule
+    // est montrée à la fois, avec « ‹ Réglages » pour revenir à la liste).
+    const goalTxt = p.daily_goal_kind === "cards" ? p.daily_goal_value + " cartes/jour" : p.daily_goal_value + " min/jour";
+    const row = (sec, ic, col, label, val, href) => `<${href ? `a href="${href}"` : `button type="button" data-open="${sec}"`} class="setrow"><span class="setico" style="background:${col}">${I[ic]}</span><span class="grow">${label}</span>${val ? `<span class="setval">${val}</span>` : ""}<span class="chev">${I.back}</span></${href ? "a" : "button"}>`;
+    const menu = `<div class="setmenu stack">
+      <button type="button" class="setprof" data-open="profil"><span class="setav">${esc((p.display_name || "?").trim().slice(0, 1).toUpperCase())}</span><span class="grow"><b>${esc(p.display_name || "Ton profil")}</b><span class="small muted">${esc(p.classe || "Classe")} · objectif ${goalTxt}</span></span><span class="chev">${I.back}</span></button>
+      <p class="setgrp">Révision</p><div class="setlist">${row("revision", "cards", "#7f77dd", "Révision et voix", "")}${row("rappels", "bell", "#1d9e75", "Rappels", p.reminders_enabled === false ? "Coupés" : esc((p.reminder_time || "").slice(0, 5)))}${row("", "cal", "#378add", "Emploi du temps", "", "#edt")}</div>
+      <p class="setgrp">Appli</p><div class="setlist">${row("apparence", "moon", "#5f5e5a", "Apparence", { light: "Clair", dark: "Sombre", system: "Auto" }[p.theme] || "")}${row("ia", "spark", "#d4537e", "IA", "")}${row("partage", "duo", "#0ea5a4", "Ce qui est partagé", "")}</div>
+      <p class="setgrp">Compte</p><div class="setlist">${row("archives", "folder", "#a16207", "Archives", "")}${row("donnees", "trash", "#e5484d", "Supprimer mes données", "")}</div>
+      <button class="btn ghost" id="logout">Se déconnecter</button>
+      <p class="note">${esc(state.user.email || "")}</p></div>
+      <button type="button" class="linkbtn setback" id="setback">${I.back}Réglages</button>`;
+    app.innerHTML = `<h1>Réglages</h1>${menu}
+      <div class="card pad stack" data-sec-card="profil"><h2>Ton profil</h2>
         <div class="field"><label for="prenom">Prénom</label><input id="prenom" type="text" value="${esc(p.display_name || "")}"></div>
         <div class="field"><label for="classe">Classe</label><select id="classe">${classOpts(p.classe)}</select>${classeFree()}</div>
         <div class="field"><span class="label">Objectif par jour</span>${chips("k", [["minutes", "En minutes"], ["cards", "En cartes"]], p.daily_goal_kind)}<input id="val" type="number" inputmode="numeric" min="1" max="500" value="${p.daily_goal_value}" aria-label="Valeur de l'objectif"></div>
         <button class="btn" id="saveP">Enregistrer</button></div>
-      <div class="card pad stack"><h2>Apparence</h2>
+      <div class="card pad stack" data-sec-card="apparence"><h2>Apparence</h2>
         <div class="field"><span class="label">Thème</span>${chips("t", [["light", "Clair"], ["dark", "Sombre"], ["system", "Comme mon téléphone"]], p.theme)}</div>
         <div class="field"><span class="label">Taille du texte</span>${chips("s", [["small", "Petit"], ["normal", "Normal"], ["large", "Grand"]], p.text_size)}</div></div>
-      <div class="card pad stack"><h2>Révision</h2>
+      <div class="card pad stack" data-sec-card="revision"><h2>Révision</h2>
         <div class="field"><span class="label">Avant un contrôle, revoir les cartes de ses chapitres tous les jours</span>${chips("boost", [["0", "Jamais"], ["3", "3 jours avant"], ["7", "7 jours avant"], ["14", "14 jours avant"]], String(boostDays()))}<p class="small muted">Ces cartes reviennent chaque jour, même réussies, jusqu'au contrôle. Les autres suivent la répétition espacée normale.</p></div>
         <div class="field"><span class="label">Sons et vibrations</span>${chips("snd", [["1", "Activés"], ["0", "Coupés"]], p.sounds === false ? "0" : "1")}</div>
         <div class="field"><span class="label">Voix qui lit tes cartes</span><div class="chips"><button class="chip" data-ve="merge" aria-pressed="${neuralWanted()}">Voix Merge (Laomedeia)</button><button class="chip" data-ve="appareil" aria-pressed="${!neuralWanted()}">Voix de mon appareil</button></div><div class="row"><button class="btn sm ghost" id="vtry">Écouter un exemple</button></div><p class="note">La voix Merge est plus naturelle. Sans réseau, c'est la voix de ton appareil qui prend le relais.</p></div>
         ${"speechSynthesis" in window ? `<div class="field"><label for="voice">Voix de l'appareil</label><select id="voice"><option value="">Chargement des voix…</option></select><div class="row"><label class="small muted" for="vrate">Vitesse</label><input id="vrate" class="grow" type="range" min="0.5" max="2" step="0.05" value="${voiceRate()}"><button class="btn sm ghost" id="vtest">Écouter</button></div><p class="note">Les voix viennent de ton appareil et de ton navigateur. Merge choisit la plus naturelle. Sur PC, Microsoft Edge en propose de bien meilleures que Chrome.</p></div>` : ""}
         <button class="btn sm ghost" id="tuto">Revoir le tutoriel</button></div>
-      <div class="card pad stack" id="rappels"><h2>Rappels</h2>
+      <div class="card pad stack" data-sec-card="rappels" id="rappels"><h2>Rappels</h2>
         <button type="button" class="switch" role="switch" id="remOn" aria-checked="${p.reminders_enabled !== false}"><i></i><span>Recevoir les rappels</span></button>
         <div class="stack" id="remOpts"${p.reminders_enabled === false ? ' style="display:none"' : ""}>
           <div class="field"><label for="rem">Heure du rappel quotidien</label><input id="rem" type="time" value="${esc((p.reminder_time || "").slice(0, 5))}"><p class="note">Seulement si tu n'as pas encore révisé ce jour-là. À 21 h, un dernier rappel si ta série est en danger.</p></div>
@@ -2210,12 +2244,16 @@
           <button class="btn sm" id="pushon">Activer les rappels sur cet appareil</button><p class="note" id="pushmsg">Sur iPhone, ajoute d'abord Merge à l'écran d'accueil (Partager, puis « Sur l'écran d'accueil »).</p>
         </div>
         <p class="note">Ces réglages sont les mêmes sur ton téléphone et ton ordinateur.</p></div>
-      <div class="card pad stack"><h2>IA</h2><p class="muted" id="quota">Appels IA aujourd'hui : …</p><p class="note">Tout ce que l'IA prépare (résumés, quiz, fiches, cartes mentales…) est gardé : rouvrir un contenu ne coûte aucun appel.</p><a class="btn sm ghost" href="${esc(C.CONTACT_CREATEUR)}" target="_blank" rel="noopener" style="align-self:flex-start">${I.mail}Contacter le créateur</a></div>
-      <div class="card pad stack"><h2>Ce qui est partagé</h2><p class="muted">Tes cours, résumés et cartes restent toujours privés. Le partage de statistiques à deux se règle dans l'onglet Duo.</p><a class="btn sm ghost" href="#duo">Ouvrir Duo</a></div>
-      <div class="card pad stack"><h2>Archives</h2><p class="muted">En fin d'année, range tes anciennes matières. Elles restent consultables et tu peux les restaurer.</p><div class="row" style="flex-wrap:wrap"><button class="btn sm ghost" id="archShow">Voir mes archives</button><a class="btn sm ghost" href="#corbeille">Corbeille</a><button class="btn sm ghost" id="archAll">Archiver toutes mes matières</button></div><div id="archBox" class="stack"></div></div>
-      <div class="card pad stack"><h2>Supprimer mes données</h2><p class="muted">Efface définitivement tes matières, chapitres, cartes, résumés, notes et statistiques. Impossible à annuler.</p><div class="field"><label for="delw">Écris SUPPRIMER pour confirmer</label><input id="delw" type="text" autocomplete="off"></div><button class="btn sm peach" id="delall">Supprimer toutes mes données</button></div>
-      <button class="btn ghost" id="logout">Se déconnecter</button>
-      <p class="note">${esc(state.user.email || "")}</p>`;
+      <div class="card pad stack" data-sec-card="ia"><h2>IA</h2><p class="muted" id="quota">Appels IA aujourd'hui : …</p><p class="note">Tout ce que l'IA prépare (résumés, quiz, fiches, cartes mentales…) est gardé : rouvrir un contenu ne coûte aucun appel.</p><a class="btn sm ghost" href="${esc(C.CONTACT_CREATEUR)}" target="_blank" rel="noopener" style="align-self:flex-start">${I.mail}Contacter le créateur</a></div>
+      <div class="card pad stack" data-sec-card="partage"><h2>Ce qui est partagé</h2><p class="muted">Tes cours, résumés et cartes restent toujours privés. Le partage de statistiques à deux se règle dans l'onglet Duo.</p><a class="btn sm ghost" href="#duo">Ouvrir Duo</a></div>
+      <div class="card pad stack" data-sec-card="archives"><h2>Archives</h2><p class="muted">En fin d'année, range tes anciennes matières. Elles restent consultables et tu peux les restaurer.</p><div class="row" style="flex-wrap:wrap"><button class="btn sm ghost" id="archShow">Voir mes archives</button><a class="btn sm ghost" href="#corbeille">Corbeille</a><button class="btn sm ghost" id="archAll">Archiver toutes mes matières</button></div><div id="archBox" class="stack"></div></div>
+      <div class="card pad stack" data-sec-card="donnees"><h2>Supprimer mes données</h2><p class="muted">Efface définitivement tes matières, chapitres, cartes, résumés, notes et statistiques. Impossible à annuler.</p><div class="field"><label for="delw">Écris SUPPRIMER pour confirmer</label><input id="delw" type="text" autocomplete="off"></div><button class="btn sm peach" id="delall">Supprimer toutes mes données</button></div>
+`;
+    const openSec = (k, keep) => { if (k) app.dataset.sec = k; else app.removeAttribute("data-sec"); app.querySelectorAll("[data-sec-card]").forEach(c => c.classList.toggle("on", c.dataset.secCard === k)); if (!keep) window.scrollTo(0, 0); };
+    // Un réglage changé redessine l'écran : la section ouverte reste ouverte, à la même hauteur.
+    if (app.dataset.sec) openSec(app.dataset.sec, true);
+    app.querySelectorAll("[data-open]").forEach(b => b.onclick = () => openSec(b.dataset.open));
+    $("setback").onclick = () => openSec(null);
     let kind = p.daily_goal_kind;
     const patch = async (o, msg) => { const { error } = await sb.from("profiles").update(o).eq("user_id", state.user.id); if (error) return fail(error, "Réglage non enregistré"); Object.assign(state.profile, o); applyLook(state.profile); screenSettings(); if (msg) toast(msg); };
     app.querySelectorAll("[data-k]").forEach(b => b.onclick = () => { kind = b.dataset.k; app.querySelectorAll("[data-k]").forEach(x => x.setAttribute("aria-pressed", x === b)); });
@@ -2768,10 +2806,17 @@
   }
 
   // ---------- matières ----------
+  // Matières, design A (16 nov.) : grille de tuiles. Pastille de couleur avec les initiales, nom, chapitres et cartes,
+  // prochain contrôle, barre de maîtrise. Une tuile en pointillés pour ajouter une matière.
+  const subjInitials = n => { const t = String(n || "").trim(); if (t.length <= 4 && /^[A-Z0-9]+$/.test(t)) return t; const w = t.split(/[\s\-–]+/).filter(Boolean); return w.length > 1 ? (w[0][0] + w[1][0]).toUpperCase() : t.slice(0, 2).replace(/^./, c => c.toUpperCase()); };
   function screenSubjects() {
     drawTabs("matieres");
-    app.innerHTML = `<div class="row between" style="flex-wrap:wrap"><h1>Matières</h1><div class="row" style="flex-wrap:wrap"><button class="iconbtn flat" data-qs aria-label="Recherche rapide">${I.search}</button><a class="btn sm" href="#nouvelle-matiere">${I.plus}Ajouter</a></div></div>
-      <div class="grid">${state.subjects.length ? state.subjects.map(s => { const chs = state.chapters.filter(c => c.subject_id === s.id); const cs = state.cards.filter(k => chs.some(c => c.id === k.chapter_id)); const m = mastery(cs), j = daysUntil(s.exam_date); return `<a class="card subject" style="--c:${esc(s.color)}" href="#matiere-${s.id}"><div class="row between"><div class="row"><span class="dot"></span><b>${esc(s.name)}</b></div>${j != null && j >= 0 ? `<span class="pill">J-${j}</span>` : ""}</div><p class="small muted">${plural(chs.length, "chapitre", "chapitres")} · ${plural(cs.length, "carte", "cartes")}</p><div class="row"><div class="bar grow"><i style="width:${m}%"></i></div><span class="small muted">${m} %</span></div></a>`; }).join("") : `<div class="card empty"><svg viewBox="0 0 120 90" aria-hidden="true"><rect x="14" y="22" width="58" height="50" rx="8" fill="var(--accent-soft)"/><rect x="34" y="12" width="58" height="50" rx="8" fill="var(--btn-bg)"/><path d="M48 30h30M48 40h22M48 50h26" stroke="#fff" stroke-width="4" stroke-linecap="round"/><circle cx="98" cy="68" r="10" fill="var(--accent)"/><path d="M98 63v10M93 68h10" stroke="var(--accent-fg)" stroke-width="3" stroke-linecap="round"/></svg><b>Aucune matière. Ajoute ta première matière.</b><p class="small muted">Crée une matière, ajoute un chapitre, importe ton cours : tes cartes et ton résumé arrivent tout seuls.</p></div>`}</div>`;
+    const tile = s => {
+      const chs = state.chapters.filter(c => c.subject_id === s.id), cs = state.cards.filter(k => chs.some(c => c.id === k.chapter_id)), m = mastery(cs), nc = nextCtrl(s);
+      return `<a class="stile" style="--c:${esc(s.color)}" href="#matiere-${s.id}"><span class="sico">${esc(subjInitials(s.name))}</span><b>${esc(s.name)}</b><span class="small muted">${chs.length} chap. · ${plural(cs.length, "carte", "cartes")}</span>${nc ? `<span class="spill">${jx(nc.d) === "Auj." ? "Contrôle aujourd'hui" : "Contrôle " + jx(nc.d)}</span>` : ""}<span class="srow"><span class="bar grow"><i style="width:${m}%"></i></span><span class="small muted">${m} %</span></span></a>`;
+    };
+    app.innerHTML = `<div class="row between"><h1>Matières</h1><div class="row"><button class="iconbtn flat" data-qs aria-label="Recherche rapide">${I.search}</button><a class="iconbtn addround" href="#nouvelle-matiere" aria-label="Ajouter une matière">${I.plus}</a></div></div>
+      ${state.subjects.length ? `<div class="stiles">${state.subjects.map(tile).join("")}<a class="stile sadd" href="#nouvelle-matiere"><span>${I.plus}Matière</span></a></div>` : `<div class="card empty"><svg viewBox="0 0 120 90" aria-hidden="true"><rect x="14" y="22" width="58" height="50" rx="8" fill="var(--accent-soft)"/><rect x="34" y="12" width="58" height="50" rx="8" fill="var(--btn-bg)"/><path d="M48 30h30M48 40h22M48 50h26" stroke="#fff" stroke-width="4" stroke-linecap="round"/><circle cx="98" cy="68" r="10" fill="var(--accent)"/><path d="M98 63v10M93 68h10" stroke="var(--accent-fg)" stroke-width="3" stroke-linecap="round"/></svg><b>Aucune matière. Ajoute ta première matière.</b><p class="small muted">Crée une matière, ajoute un chapitre, importe ton cours : tes cartes et ton résumé arrivent tout seuls.</p><a class="btn" href="#nouvelle-matiere">${I.plus}Ajouter une matière</a></div>`}`;
   }
 
   // ---------- calendrier ----------
@@ -2850,12 +2895,17 @@
       <div class="card pad stack prohero"><div class="level"><span class="lvl">Niveau ${lv.level}</span><div class="bar grow"><i style="width:${lv.pct}%"></i></div><span class="small muted">encore ${lv.left} pts</span></div>
         <a class="pshop" href="#boutique"><span class="mico">${I.coin}</span><span class="grow"><b>Boutique</b><span class="small">${plural(coins, "pièce", "pièces")} à dépenser</span></span><span class="pshopgo">Ouvrir</span></a>
         <p class="note">${lv.xp} points au total. 10 points par bonne réponse, 2 par erreur, 100 par chapitre maîtrisé à 100 %. ${streakInfo().left ? "Gel de série disponible : un jour raté cette semaine ne cassera pas ta série." : "Ton gel de série a déjà servi cette semaine."}</p></div>
-      <div class="prgrid">${go("recompenses", "star", "Récompenses", "Coffres, cadeaux")}${go("bilan", "chart", "Bilan", "Ta semaine")}${go("erreurs", "trap", "Erreurs", "Cartes ratées")}</div>
-      <div class="tiles"><div class="card tile"><b>${streak()}</b><span>jours d'affilée</span></div><div class="card tile"><b>${cards7}</b><span>cartes en 7 jours</span></div><div class="card tile"><b>${mins}</b><span>minutes en 7 jours</span></div><div class="card tile"><b>${mastery(state.cards)} %</b><span>maîtrise moyenne</span></div></div>
+      <div class="prgrid">${go("recompenses", "star", "Récompenses", "Coffres, cadeaux")}${go("bilan", "chart", "Bilan", "Ta semaine")}${go("erreurs", "trap", "Erreurs", "Cartes ratées")}<button class="card ptile" id="pstats"><span class="mico">${I.chart}</span><span class="grow" style="min-width:0"><b>Par chapitre</b><span class="small muted">Statistiques détaillées</span></span></button></div>
+      <div class="tiles"><div class="card tile"><b>${streak()}</b><span>${streak() === 0 ? "révise aujourd'hui pour lancer ta série" : streak() === 1 ? "jour d'affilée" : "jours d'affilée"}</span></div><div class="card tile"><b>${cards7}</b><span>cartes en 7 jours</span></div><div class="card tile"><b>${mins}</b><span>minutes en 7 jours</span></div><div class="card tile"><b>${mastery(state.cards)} %</b><span>maîtrise moyenne</span></div></div>
       <div class="card pad stack"><h2>Cartes révisées, 14 derniers jours</h2><div class="bars" role="img" aria-label="Cartes révisées par jour sur 14 jours">${d14.map(d => `<div><i style="height:${Math.max(3, d.cards_reviewed / max * 100)}%" class="${d.cards_reviewed ? "" : "zero"}" title="${d.cards_reviewed}"></i><span>${d.label}</span></div>`).join("")}</div></div>
       <div class="stack"><h2>Par matière</h2><div class="grid">${state.subjects.map(s => { const chs = state.chapters.filter(c => c.subject_id === s.id), cs = state.cards.filter(k => chs.some(c => c.id === k.chapter_id)), m = mastery(cs); return `<a class="card subject" style="--c:${esc(s.color)}" href="#matiere-${s.id}"><div class="row between"><div class="row"><span class="dot"></span><b>${esc(s.name)}</b></div><span class="small muted">${m} %</span></div><div class="bar"><i style="width:${m}%"></i></div></a>`; }).join("") || '<p class="muted">Aucune matière.</p>'}</div></div>
       <div class="card pad stack"><h2>Badges</h2><div class="chips">${badges().map(b => `<span class="badge ${b[1] ? "on" : ""}">${b[0]}</span>`).join("")}</div></div>
       <div class="card pad stack"><h2>Mes notes</h2><div id="notes"><p class="muted">Chargement…</p></div></div>`;
+    // Statistiques d'un chapitre (avant dans chaque chapitre, maintenant ici) : on choisit le chapitre.
+    if ($("pstats")) $("pstats").onclick = () => {
+      const list = state.chapters.filter(c => cardsOf(c.id).length).map(c => { const su = state.subjects.find(x => x.id === c.subject_id) || {}; return `<a class="ctxrow" href="#stats-${c.id}" data-close style="--c:${esc(su.color || "#9483ff")}"><span class="dot"></span><span class="grow"><b>${esc(c.name)}</b><span class="small muted">${esc(su.name || "")} · ${mastery(cardsOf(c.id))} %</span></span><span class="chev">${I.back}</span></a>`; }).join("");
+      sheet(`<h1>Statistiques par chapitre</h1>${list || '<p class="muted">Importe un cours pour voir ses statistiques.</p>'}`);
+    };
     Promise.all([sb.from("quiz_results").select("score,created_at").eq("user_id", state.user.id).order("created_at"), sb.from("exams").select("chapter_id,best_score").eq("user_id", state.user.id)]).then(([q, e]) => {
       if (!$("notes")) return; const qs = (q.data || []).slice(-12), ex = (e.data || []).filter(x => x.best_score != null);
       $("notes").innerHTML = (qs.length ? `<p class="label">Quiz (sur 20), du plus ancien au plus récent</p><div class="bars" style="height:110px" role="img" aria-label="Notes des derniers quiz">${qs.map(x => `<div><i style="height:${Math.max(4, x.score / 20 * 100)}%"></i><span>${String(x.score).replace(".", ",")}</span></div>`).join("")}</div>` : '<p class="muted">Aucun quiz pour l\'instant.</p>')
@@ -3058,9 +3108,9 @@
     const dots = k => { const bs = blocksOn(j, k).filter(b => b.act !== "pause").slice(0, 4); return bs.map(b => `<i style="background:${esc(colorOf(b))}"></i>`).join(""); };
     app.innerHTML = `<div class="jnav"><button class="linkbtn" id="jup">${I.back}Calendrier</button><span class="grow"></span>${jDay !== today ? `<button class="btn sm" id="jback">Aujourd'hui</button>` : ""}<button class="btn sm ghost" id="jhours" aria-pressed="${hours}">${I.clock}${hours ? "Frise" : "Heures"}</button></div><div class="jhead"><button class="jtitle" id="jtoday"><b>${sel.getDate()} ${esc(month)}</b> <span>${sel.getFullYear()}</span></button>${edtGet().ab && ab ? `<span class="pill">Sem. ${ab}</span>` : ""}</div>
       <div class="jweek"><button class="iconbtn flat" id="jprev" aria-label="Semaine précédente">${I.back}</button>${week.map(k => { const d = dayOf(k); return `<button class="jd${k === jDay ? " on" : ""}${k === today ? " now" : ""}" data-day="${k}"><span>${d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "")}</span><b>${d.getDate()}</b><span class="jdots">${dots(k)}</span></button>`; }).join("")}<button class="iconbtn flat" id="jnext" aria-label="Semaine suivante" style="transform:scaleX(-1)">${I.back}</button></div>
+      <div class="jacts" role="group" aria-label="Actions du jour"><button class="jact${j.off[jDay] ? " on" : ""}" id="joff" aria-pressed="${!!j.off[jDay]}">${I.home}Pas cours</button><button class="jact" id="jai">${I.spark}IA</button><button class="jact" id="jctl">${I.plus}Contrôle</button></div>
       ${ctrlToday.length ? `<div class="jctls">${ctrlToday.map(x => `<a class="jctl" href="#matiere-${x.s.id}" style="--c:${esc(x.s.color)}"><span class="dot"></span><b>Contrôle de ${esc(x.s.name)}</b>${x.c.ch && x.c.ch.length ? `<span class="small muted">${plural(x.c.ch.length, "chapitre", "chapitres")}</span>` : ""}</a>`).join("")}</div>` : ""}
-      ${hours ? hoursHtml(j, jDay, school, list, colorOf) : ""}<div class="jline"${hours ? " hidden" : ""}>${rows.join("") || `<div class="card pad stack jempty"><b>Rien de prévu ${jDay === today ? "aujourd'hui" : "ce jour-là"}.</b><p class="small muted">Touche + pour ajouter une révision (par exemple « Maths, 30 min »), « Remplir ma journée » pour un plan tout fait, ou « IA » pour le demander avec tes mots.</p></div>`}</div>
-      <div class="jall after"><button class="jround${j.off[jDay] ? " on" : ""}" id="joff" aria-pressed="${!!j.off[jDay]}"><span>${I.home}</span>Pas cours</button><button class="jround" id="jauto"><span>${I.bolt}</span>Remplir ma journée</button><button class="jround" id="jai"><span>${I.spark}</span>Demander à l'IA</button><button class="jround" id="jctl"><span>${I.plus}</span>Ajouter un contrôle</button></div>
+      ${hours ? hoursHtml(j, jDay, school, list, colorOf) : ""}<div class="jline"${hours ? " hidden" : ""}>${rows.join("") || `<div class="card pad stack jempty"><b>Rien de prévu ${jDay === today ? "aujourd'hui" : "ce jour-là"}.</b><p class="small muted">Touche + pour ajouter une révision (par exemple « Maths, 30 min »), ou « IA » pour la demander avec tes mots.</p></div>`}</div>
       ${edtGet().slots.length ? "" : `<button class="linkbtn" id="jedt">${I.cal}Ajouter mon emploi du temps</button>`}
       <button class="jfab" id="jadd" aria-label="Ajouter une révision">${I.plus}</button>`;
     const re = () => screenJournee();
@@ -3082,10 +3132,6 @@
     app.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => blockSheet(list.find(x => x.id === b.dataset.edit)));
     app.querySelectorAll("[data-done]").forEach(b => b.onclick = () => { const x = jGet(), key = jDay + "|" + b.dataset.done; if (x.done[key]) delete x.done[key]; else { x.done[key] = true; ping(true); } jSave(x); re(); });
     app.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { const bl = list.find(x => x.id === b.dataset.go); if (!(bl && goBlock(bl))) blockSheet(bl); });
-    $("jauto").onclick = () => {
-      const plan = autoPlan(jGet(), jDay); if (!plan.length) return toast(state.cards.length ? "Plus de place libre ce jour-là." : "Importe d'abord un cours pour avoir quelque chose à réviser.");
-      previewSheet(plan, "Voici une proposition pour " + (jDay === today ? "aujourd'hui" : esc(fmtDate(jDay))) + ".");
-    };
     $("jai").onclick = () => aiSheet();
   }
   // Ajouter ou modifier un bloc : activité, matière, chapitre (choisi par Merge par défaut), heure, durée, répétition.
@@ -3349,7 +3395,7 @@
     // Sur grand écran (PC) : historique toujours visible à gauche, conversation sur tout le reste.
     app.innerHTML = `<aside class="pside" aria-label="Mes discussions"><button class="btn" id="psnew">${I.plus}Nouvelle discussion</button><div class="pdlist">${histRows(p)}</div></aside><div class="pmain"><div class="row profhead"><button class="iconbtn flat" id="phist" aria-label="Mes discussions" title="Mes discussions">${I.menu}</button><h1 class="grow ptitle">${esc(conv.t || "Prof")}</h1><button class="iconbtn flat" id="pnew" aria-label="Nouvelle discussion" title="Nouvelle discussion">${I.edit}</button></div>
       <div class="pctx">${ctxChips(conv.ctx)}<button class="pchip add" id="pctx">${I.book}${linked ? "Modifier" : "Lier un cours"}</button></div>
-      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") : md(m.t) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.prof}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur les cours liés en haut. " : "Pour que je m'appuie sur ton cours, touche « Lier un cours » : un ou plusieurs chapitres, ou des matières entières. "}Demande un exercice, une explication, ou envoie la photo de ta copie avec le bouton +.</p><div class="chips exquick">${EXO_QUICK.map((q, i) => `<button class="chip" data-q="${i}">${q[0]}</button>`).join("")}</div><p class="small muted">${linked ? "Le prof s'appuie sur les cours liés" : "Sans cours lié, le prof répond avec ses connaissances de lycée"} ; il peut se tromper sur un calcul. 1 message = 1 appel IA.</p></div>`}</div>
+      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") : md(m.t) + qcmHtml(m, i) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.prof}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur les cours liés en haut. " : "Pour que je m'appuie sur ton cours, touche « Lier un cours » : un ou plusieurs chapitres, ou des matières entières. "}Demande un exercice, une explication, ou envoie la photo de ta copie avec le bouton +.</p><div class="chips exquick">${EXO_QUICK.map((q, i) => `<button class="chip" data-q="${i}">${q[0]}</button>`).join("")}</div><p class="small muted">${linked ? "Le prof s'appuie sur les cours liés" : "Sans cours lié, le prof répond avec ses connaissances de lycée"} ; il peut se tromper sur un calcul. 1 message = 1 appel IA.</p></div>`}</div>
       <div class="pcomp"><div id="eximg" class="pimg" hidden></div><div class="pbar"><button class="iconbtn flat" id="pplus" aria-label="Ajouter une photo, un cours ou une demande rapide">${I.plus}</button><textarea id="exq" rows="1" maxlength="2000" placeholder="Écris ton message…"></textarea>${canDictate() ? `<button class="iconbtn flat" id="exmic" aria-label="Dicter">${I.mic}</button>` : ""}<button class="iconbtn psend" id="exsend" aria-label="Envoyer">${I.send}</button></div>
       <input id="exphoto" type="file" accept="image/*" capture="environment" hidden><input id="exfile" type="file" accept="image/*" hidden></div></div>`;
     const save = () => { conv.at = Date.now(); profSave(p); };
@@ -3360,6 +3406,14 @@
     $("phist").onclick = () => histDrawer(p);
     $("psnew").onclick = () => $("pnew").click();
     histBind(app.querySelector(".pside"), p, what => { if (what === "del") screenExos(); });
+    // Quiz interactif dans la bulle : on touche une réponse, elle est corrigée tout de suite avec l'explication.
+    // (on ne redessine que le quiz, pour ne pas faire sauter la conversation).
+    const wireQcm = () => app.querySelectorAll("[data-qa]").forEach(b => b.onclick = () => {
+      const [i, k, c] = b.dataset.qa.split("-").map(Number), m = msgs[i]; if (!m || !m.q || !m.q[k] || m.q[k].a != null) return;
+      m.q[k].a = c; save(); ping(c === m.q[k].b);
+      const box = app.querySelector(`[data-qbox="${i}"]`); if (box) { box.outerHTML = qcmHtml(m, i); renderMath(app); wireQcm(); }
+    });
+    wireQcm();
     // Réponses dans la bulle : l'IA donne un exercice avec des champs à remplir.
     app.querySelectorAll("[data-fsend]").forEach(b => b.onclick = () => {
       const i = +b.dataset.fsend, m = msgs[i]; if (!m || !m.f) return;
@@ -3407,7 +3461,8 @@
         const subjNames = conv.ctx.s.map(id => (state.subjects.find(x => x.id === id) || {}).name).filter(Boolean);
         const r = await ai({ action: "exochat", want_title: !conv.named, chapter_ids: ctxChapters(conv.ctx), matieres: subjNames, messages: msgs.slice(-12).map(m => ({ r: m.r, t: m.t })), image: photo }, "studio");
         if (!conv.named && r.title) { conv.t = String(r.title).slice(0, 60); conv.named = true; }
-        msgs.push(Object.assign({ r: "a", t: String(r.answer || "").slice(0, 8000) }, Array.isArray(r.fields) && r.fields.length ? { f: r.fields.map(x => String(x).slice(0, 120)).slice(0, 6) } : {})); save();
+        const qcm = cleanQcm(r.qcm);
+        msgs.push(Object.assign({ r: "a", t: String(r.answer || "").slice(0, 8000) }, qcm.length ? { q: qcm } : Array.isArray(r.fields) && r.fields.length ? { f: r.fields.map(x => String(x).slice(0, 120)).slice(0, 6) } : {})); save();
         profJustAnswered = true; if (location.hash.startsWith("#exos")) screenExos();
       } catch (e) { const w = th.querySelector(".wait"); if (w) { w.classList.remove("wait"); w.textContent = e.message || "L'IA n'a pas répondu. Réessaie."; } $("exsend").disabled = false; }
     }
@@ -3480,6 +3535,15 @@
     });
   }
   // Champs de réponse d'un message de l'IA : choix de la façon de répondre, cases à remplir, ou réponses déjà envoyées.
+  // Quiz rendu par le prof : [{ q, c: [choix], b: index de la bonne, e: explication, a: choix de l'élève }].
+  function cleanQcm(x) {
+    return (Array.isArray(x) ? x : []).map(o => ({ q: String(o && o.q || "").slice(0, 400), c: (Array.isArray(o && o.choix) ? o.choix : []).map(v => String(v).slice(0, 200)).slice(0, 5), b: Number(o && o.bonne), e: String(o && o.explication || "").slice(0, 600) })).filter(o => o.q && o.c.length >= 2 && o.b >= 0 && o.b < o.c.length).slice(0, 10);
+  }
+  function qcmHtml(m, i) {
+    if (!Array.isArray(m.q) || !m.q.length) return "";
+    const done = m.q.filter(o => o.a != null), ok = done.filter(o => o.a === o.b).length;
+    return `<div class="pqcm" data-qbox="${i}">${m.q.map((o, k) => `<div class="pq${o.a != null ? (o.a === o.b ? " ok" : " ko") : ""}"><b>${k + 1}. ${mx(o.q)}</b><div class="pqc">${o.c.map((c, j) => `<button class="pqo${o.a != null && j === o.b ? " good" : ""}${o.a === j && j !== o.b ? " bad" : ""}" data-qa="${i}-${k}-${j}"${o.a != null ? " disabled" : ""}>${mx(c)}</button>`).join("")}</div>${o.a != null && o.e ? `<p class="small pqe">${mx(o.e)}</p>` : ""}</div>`).join("")}${done.length === m.q.length ? `<p class="pqscore"><b>${ok} / ${m.q.length}</b> ${ok === m.q.length ? "Parfait !" : ok >= m.q.length / 2 ? "Bien joué." : "Relis les explications, puis demande-moi un autre quiz."}</p>` : ""}</div>`;
+  }
   function fieldsHtml(m, i) {
     if (!Array.isArray(m.f) || !m.f.length) return "";
     if (m.rep) return `<div class="exform done">${m.f.map((l, k) => `<div class="exf"><span class="small muted">${esc(l)}</span><b>${esc(m.rep[k] || "—")}</b></div>`).join("")}</div>`;
@@ -3550,13 +3614,14 @@
     const top = (t) => `<div class="row"><a class="iconbtn" href="${back}" aria-label="Fermer">${I.x}</a><div class="grow" style="text-align:center;font-weight:800">${t}</div><span style="width:44px"></span></div>`;
     if (kind === "controle" && mastery(cardsOf(id)) < 100) { app.innerHTML = top("Contrôle") + `<div class="card done"><div class="tutoicon">${I.lock}</div><h1>Pas encore débloqué</h1><p class="muted">Le contrôle s'ouvre quand tu atteins 100 % de maîtrise sur ce chapitre. Tu en es à ${mastery(cardsOf(id))} %.</p><div class="bar" style="width:100%"><i style="width:${mastery(cardsOf(id))}%"></i></div><a class="btn" href="#cartes-${id}">Réviser les cartes</a></div>`; return; }
     if (all.length < 4) { app.innerHTML = top(ch.name) + `<div class="card done"><p class="muted">Il faut au moins 4 cartes dans ce chapitre pour ce mode.</p><a class="btn" href="${back}">Retour</a></div>`; return; }
-    const title = kind === "apprendre" ? "Apprendre" : kind === "quiz" ? "Quiz" : kind === "blanc" ? "Examen blanc" : "Contrôle";
+    const title = kind === "apprendre" ? "Apprendre" : kind === "quiz" ? "Quiz" : kind === "blanc" ? "Interro chronométrée" : "Contrôle";
     const S = { written: kind === "blanc", queue: [], total: 0, good: 0, missed: [], asked: [] };
     const okQ = q => q && q.q && (Array.isArray(q.choix) ? q.choix.length >= 2 && q.choix[+q.bonne] != null : !!q.ideal);
     const fromAi = (list, n, tag) => (list || []).filter(okQ).slice(0, n).map((q, k) => Array.isArray(q.choix) ? { id: tag + k, front: String(q.q), back: String(q.choix[+q.bonne]), opts: q.choix.map(String), expl: q.explication || "", ia: true } : { id: tag + k, front: String(q.q), back: String(q.ideal), ia: true });
+    const leftS = () => Math.max(0, Math.round((S.deadline - Date.now()) / 1000)), leftTxt = () => "Temps restant : " + Math.floor(leftS() / 60) + " min " + String(leftS() % 60).padStart(2, "0") + " s";
     function begin(items) {
       S.queue = items || shuffle(all).slice(0, kind === "apprendre" ? 12 : kind === "quiz" ? 8 : 10); S.total = S.queue.length;
-      if (kind === "blanc") { S.deadline = Date.now() + S.total * 60000; clearInterval(timerInt); timerInt = setInterval(() => { const el = $("qtimer"); if (!el) { if (!S.queue.length || !location.hash.startsWith("#blanc-")) clearInterval(timerInt); return; } const left = Math.max(0, Math.round((S.deadline - Date.now()) / 1000)); el.textContent = "Temps restant : " + Math.floor(left / 60) + " min " + String(left % 60).padStart(2, "0") + " s"; if (left <= 0) { clearInterval(timerInt); S.total = Math.max(1, S.asked.length + S.queue.length); S.queue.forEach(c => S.asked.push({ q: c.front, a: c.back, ok: false })); S.queue = []; end(); } }, 1000); }
+      if (kind === "blanc") { S.deadline = Date.now() + S.total * 60000; clearInterval(timerInt); timerInt = setInterval(() => { const el = $("qtimer"); if (!el) { if (!S.queue.length || !location.hash.startsWith("#blanc-")) clearInterval(timerInt); return; } const left = leftS(); el.textContent = leftTxt(); if (left <= 0) { clearInterval(timerInt); S.total = Math.max(1, S.asked.length + S.queue.length); S.queue.forEach(c => S.asked.push({ q: c.front, a: c.back, ok: false })); S.queue = []; end(); } }, 1000); }
       ask();
     }
     // Prépare (ou relit) le contenu IA puis lance ; en cas d'échec, propose la version avec les cartes.
@@ -3586,7 +3651,7 @@
       S.queue.shift(); S.queue.length ? ask() : end();
     }
     function ask() {
-      const c = S.queue[0], done = S.total - new Set(S.queue).size, head = top(title) + `<div class="bar"><i style="width:${done / S.total * 100}%"></i></div>${S.deadline ? '<p class="small muted" id="qtimer" role="timer"></p>' : ""}`;
+      const c = S.queue[0], done = S.total - new Set(S.queue).size, head = top(title) + `<div class="bar"><i style="width:${done / S.total * 100}%"></i></div>${S.deadline ? '<p class="small muted" id="qtimer" role="timer">' + leftTxt() + '</p>' : ""}`;
       if (!c.opts && (S.written || c.ia)) {
         screenSession.key = null;
         app.innerHTML = head + `<div class="card pad stack"><p class="small muted">Question ${Math.min(S.asked.length + 1, S.total)} sur ${S.total} · réponse rédigée</p><h2 class="qtxt">${cfront(c)}</h2><div class="field"><label for="ans">Ta réponse</label><textarea id="ans" style="min-height:110px"></textarea></div><button class="btn" id="check">Voir la réponse attendue</button><div id="fb"></div></div>`;
@@ -3629,22 +3694,43 @@
   }
 
   // ---------- mode associer ----------
-  async function screenMatch(id) {
+  // Séries de 6 paires question-réponse. Chrono en direct, record du chapitre, et à la fin : « Nouvelle série » (d'autres
+  // cartes, celles déjà vues passent en dernier) ou « Rejouer la même ». Une erreur fait trembler les deux cases.
+  const matchSeen = {};
+  async function screenMatch(id, same) {
     tabs.hidden = true; app.innerHTML = `<p class="muted">Chargement…</p>`;
-    const all = await chapterCards(id), back = "#chapitre-" + id;
+    const all = await chapterCards(id), back = "#chapitre-" + id, bestKey = "merge.match." + id;
     const head = `<div class="row"><a class="iconbtn" href="${back}" aria-label="Fermer">${I.x}</a><div class="grow" style="text-align:center;font-weight:800">Associer</div><span style="width:44px"></span></div>`;
     if (all.length < 3) { app.innerHTML = head + `<div class="card done"><p class="muted">Il faut au moins 3 cartes pour ce jeu.</p><a class="btn" href="${back}">Retour</a></div>`; return; }
-    const pairs = shuffle(all).slice(0, 6), tiles = shuffle(pairs.flatMap(c => [{ k: c.id, t: c.front }, { k: c.id, t: c.back }])), t0 = Date.now();
-    let first = null, left = pairs.length, errors = 0;
-    app.innerHTML = head + `<p class="muted">Touche une question puis sa réponse.</p><div class="match">${tiles.map((t, i) => `<button class="card tilebtn" data-i="${i}">${mx(t.t)}</button>`).join("")}</div>`;
+    const seen = matchSeen[id] = matchSeen[id] || { ids: [], last: [] };
+    let pairs;
+    if (same && seen.last.length) pairs = seen.last.map(k => all.find(c => c.id === k)).filter(Boolean);
+    else {
+      const fresh = shuffle(all.filter(c => !seen.ids.includes(c.id))), old = shuffle(all.filter(c => seen.ids.includes(c.id)));
+      pairs = fresh.concat(old).slice(0, 6);
+      if (fresh.length < 6) seen.ids = []; // tout le chapitre a été vu : on repart de zéro
+      seen.ids.push(...pairs.map(c => c.id)); seen.last = pairs.map(c => c.id);
+    }
+    const tiles = shuffle(pairs.flatMap(c => [{ k: c.id, t: c.front, q: 1 }, { k: c.id, t: c.back, q: 0 }])), t0 = Date.now(), best = +(safeGet(bestKey) || 0);
+    let first = null, left = pairs.length, errors = 0, tick;
+    app.innerHTML = head + `<div class="row between"><span class="small muted">Touche une question puis sa réponse.</span><span class="pill" id="mclock" role="timer">0 s</span></div>
+      <div class="bar"><i id="mbar" style="width:0%"></i></div><div class="match">${tiles.map((t, i) => `<button class="card tilebtn${t.q ? " isq" : ""}" data-i="${i}">${mx(t.t)}</button>`).join("")}</div>`;
+    tick = setInterval(() => { const el = $("mclock"); if (!el) return clearInterval(tick); el.textContent = Math.round((Date.now() - t0) / 1000) + " s"; }, 500);
     app.querySelectorAll(".tilebtn").forEach(b => b.onclick = () => {
       if (b.classList.contains("sel")) { b.classList.remove("sel"); first = null; return; }
       if (!first) { first = b; b.classList.add("sel"); return; }
       const a = first; first = null; a.classList.remove("sel");
-      if (tiles[+a.dataset.i].k === tiles[+b.dataset.i].k) {
-        [a, b].forEach(x => { x.classList.add("gone"); x.disabled = true; });
-        if (--left === 0) { const s = Math.round((Date.now() - t0) / 1000); app.innerHTML = head + `<div class="card done"><h1>Bon travail !</h1><div class="big">${s} s</div><p class="muted">${plural(pairs.length, "paire trouvée", "paires trouvées")}, ${plural(errors, "erreur", "erreurs")}.</p><button class="btn" id="again">Rejouer</button><a class="btn ghost" href="${back}">Retour au chapitre</a></div>`; $("again").onclick = () => screenMatch(id); }
-      } else { errors++; [a, b].forEach(x => { x.classList.add("miss"); setTimeout(() => x.classList.remove("miss"), 500); }); }
+      if (tiles[+a.dataset.i].k === tiles[+b.dataset.i].k && a !== b) {
+        [a, b].forEach(x => { x.classList.add("gone"); x.disabled = true; }); ping(true);
+        $("mbar").style.width = ((pairs.length - left + 1) / pairs.length * 100) + "%";
+        if (--left === 0) {
+          clearInterval(tick);
+          const sec = Math.round((Date.now() - t0) / 1000), rec = !errors && (!best || sec < best), stars = errors === 0 ? 3 : errors <= 2 ? 2 : 1;
+          if (rec) safeSet(bestKey, String(sec));
+          app.innerHTML = head + `<div class="card done"><h1>${rec ? "Nouveau record !" : stars === 3 ? "Parfait !" : "Bien joué !"}</h1><div class="mstars" aria-label="${stars} étoiles sur 3">${[1, 2, 3].map(n => `<span class="${n <= stars ? "on" : ""}">${I.star}</span>`).join("")}</div><div class="big">${sec} s</div><p class="muted">${plural(pairs.length, "paire trouvée", "paires trouvées")}, ${plural(errors, "erreur", "erreurs")}.${best || rec ? ` Record sans erreur : ${rec ? sec : best} s.` : ""}</p><button class="btn" id="again">Nouvelle série</button><button class="btn ghost" id="same">Rejouer la même série</button><a class="btn ghost" href="${back}">Retour au chapitre</a></div>`;
+          $("again").onclick = () => screenMatch(id); $("same").onclick = () => screenMatch(id, true);
+        }
+      } else { errors++; ping(false); [a, b].forEach(x => { x.classList.add("miss"); setTimeout(() => x.classList.remove("miss"), 500); }); }
     });
   }
 
@@ -3652,7 +3738,8 @@
   async function screenListen(id) {
     const ch = state.chapters.find(c => c.id === id); if (!ch) { location.hash = "#accueil"; return; }
     tabs.hidden = true; app.innerHTML = `<p class="muted">Chargement…</p>`;
-    const back = "#chapitre-" + id, head = `<div class="row"><a class="iconbtn" href="${back}" aria-label="Fermer">${I.x}</a><div class="grow" style="text-align:center;font-weight:800">Écouter</div><span style="width:44px"></span></div>`;
+    // Écouter et Mains libres réunis : deux façons d'écouter, on passe de l'une à l'autre en haut de l'écran.
+    const back = "#chapitre-" + id, head = `<div class="row"><a class="iconbtn" href="${back}" aria-label="Fermer">${I.x}</a><div class="grow" style="text-align:center;font-weight:800">Écouter</div><span style="width:44px"></span></div><div class="seg" role="tablist"><button role="tab" aria-selected="true">Lecture</button><a role="tab" aria-selected="false" href="#bus-${id}">Mains libres</a></div>`;
     if (!("speechSynthesis" in window) && !neuralWanted()) { app.innerHTML = head + `<div class="card done"><p class="muted">Ton navigateur ne sait pas lire à voix haute.</p><a class="btn" href="${back}">Retour</a></div>`; return; }
     const [cards, sum, src] = await Promise.all([chapterCards(id), sb.from("summaries").select("markdown").eq("chapter_id", id).maybeSingle(), sb.from("sources").select("extracted_text").eq("chapter_id", id)]);
     const clean = s => String(s || "").replace(/[#*_>`]/g, "").replace(/\s+/g, " ").trim();
@@ -4133,16 +4220,19 @@
     if (all.length < 4) return emptyTool(id, T, "Il faut au moins 4 cartes dans ce chapitre pour ce mode.");
     const S = { score: 0, combo: 0, good: 0, n: 0, end: 0, q: null, int: null, best: +(safeGet(bestKey) || 0) };
     const mult = () => Math.min(5, 1 + Math.floor(S.combo / 3));
-    function nextQ() { const c = all[Math.floor(Math.random() * all.length)], truth = Math.random() < 0.5, other = lookalikes(c.back, shuffle(all.filter(x => x.id !== c.id && x.back !== c.back)), 2, x => x.back)[Math.random() < 0.7 ? 0 : 1] || all.find(x => x.id !== c.id && x.back !== c.back); S.q = { c, truth: truth || !other, shown: truth || !other ? c.back : other.back }; draw(); }
+    // De plus en plus vite : chaque question a son propre temps (6 s au début, puis 0,25 s de moins à chaque réponse,
+    // 1,5 s au minimum). Trop lent = compté faux et le combo retombe.
+    const qTime = () => Math.max(1500, 6000 - S.n * 250);
+    function nextQ() { S.qEnd = Date.now() + qTime(); S.qLen = qTime(); const c = all[Math.floor(Math.random() * all.length)], truth = Math.random() < 0.5, other = lookalikes(c.back, shuffle(all.filter(x => x.id !== c.id && x.back !== c.back)), 2, x => x.back)[Math.random() < 0.7 ? 0 : 1] || all.find(x => x.id !== c.id && x.back !== c.back); S.q = { c, truth: truth || !other, shown: truth || !other ? c.back : other.back }; draw(); }
     function draw(flash) {
       const left = Math.max(0, Math.ceil((S.end - Date.now()) / 1000));
       app.innerHTML = toolHead(id, T) + `<div class="row between"><span class="big" id="fclock" role="timer">${left} s</span><div style="text-align:right"><div class="big">${S.score}</div><span class="pill ${mult() > 1 ? "" : "ghostpill"}">x${mult()}</span></div></div><div class="bar"><i id="fbar" style="width:${left / 60 * 100}%"></i></div>
-        <div class="card pad stack flashq ${flash || ""}"><h2 class="qtxt">${mx(S.q.c.front)}</h2><p class="expected neutral">${mx(S.q.shown)}</p></div>
+        <div class="card pad stack flashq ${flash || ""}"><div class="qbar" aria-hidden="true"><i id="qbar"></i></div><span class="small muted" id="qspeed">${(S.qLen / 1000).toFixed(1).replace(".", ",")} s par question</span><h2 class="qtxt">${mx(S.q.c.front)}</h2><p class="expected neutral">${mx(S.q.shown)}</p></div>
         <div class="answers"><button class="btn bad" id="faux">${I.x}Faux</button><button class="btn good" id="vrai">${I.check}Vrai</button></div><p class="note" style="text-align:center">La réponse affichée est-elle la bonne ? Au clavier : flèche gauche = faux, flèche droite = vrai.</p>`;
       $("vrai").onclick = () => pick(true); $("faux").onclick = () => pick(false);
     }
-    function pick(v) {
-      if (Date.now() >= S.end) return; const ok = v === S.q.truth; S.n++;
+    function pick(v, late) {
+      if (Date.now() >= S.end) return; const ok = !late && v === S.q.truth; S.n++;
       if (ok) { S.score += 10 * mult(); S.combo++; S.good++; } else { S.combo = 0; logMistake(id, S.q.c.front, S.q.c.back, S.q.truth ? "" : S.q.shown, "flash", S.q.c.id); }
       ping(ok); const prev = ok ? "okflash" : "koflash"; nextQ(); const el = app.querySelector(".flashq"); if (el) el.classList.add(prev);
     }
@@ -4151,10 +4241,10 @@
       app.innerHTML = toolHead(id, T) + `<div class="card done"><h1>${rec ? "Nouveau record !" : "Temps écoulé"}</h1><div class="big">${S.score} points</div><p class="muted">${S.good} bonnes réponses sur ${S.n}. Record : ${Math.max(S.best, S.score)} points.</p><button class="btn" id="again">Rejouer</button><a class="btn ghost" href="#chapitre-${id}">Retour au chapitre</a></div>`;
       $("again").onclick = () => screenFlash(id);
     }
-    app.innerHTML = toolHead(id, T) + `<div class="card done"><div class="tutoicon">${I.bolt}</div><h1>60 secondes chrono</h1><p class="muted">Une question, une réponse affichée : vrai ou faux ? Réponds le plus vite possible. Toutes les 3 bonnes réponses d'affilée, ton multiplicateur monte (jusqu'à x5). Une erreur le remet à x1.</p>${S.best ? `<p class="small muted">Ton record : ${S.best} points.</p>` : ""}<button class="btn" id="go">C'est parti</button></div>`;
+    app.innerHTML = toolHead(id, T) + `<div class="card done"><div class="tutoicon">${I.bolt}</div><h1>60 secondes chrono</h1><p class="muted">Une question, une réponse affichée : vrai ou faux ? Ça va de plus en plus vite : 6 secondes pour la première, puis un peu moins à chaque réponse. Trop lent, c'est compté faux. Toutes les 3 bonnes réponses d'affilée, ton multiplicateur monte (jusqu'à x5). Une erreur le remet à x1.</p>${S.best ? `<p class="small muted">Ton record : ${S.best} points.</p>` : ""}<button class="btn" id="go">C'est parti</button></div>`;
     $("go").onclick = () => {
       S.end = Date.now() + 60000;
-      S.int = setInterval(() => { const el = $("fclock"); if (!el) return clearInterval(S.int); const left = Math.max(0, Math.ceil((S.end - Date.now()) / 1000)); el.textContent = left + " s"; $("fbar").style.width = left / 60 * 100 + "%"; if (left <= 0) finish(); }, 250);
+      S.int = setInterval(() => { const el = $("fclock"); if (!el) return clearInterval(S.int); const now = Date.now(), left = Math.max(0, Math.ceil((S.end - now) / 1000)); el.textContent = left + " s"; $("fbar").style.width = left / 60 * 100 + "%"; const qb = $("qbar"); if (qb) qb.style.width = Math.max(0, (S.qEnd - now) / S.qLen * 100) + "%"; if (left <= 0) return finish(); if (now > S.qEnd) pick(null, true); }, 100);
       screenSession.key = (e) => { if (e.key === "ArrowRight" || e.key.toLowerCase() === "v") pick(true); if (e.key === "ArrowLeft" || e.key.toLowerCase() === "f") pick(false); };
       nextQ();
     };
@@ -4211,7 +4301,7 @@
     function move(d) { const was = B.playing; pause(); B.i = (B.i + d + B.list.length) % B.list.length; B.phase = "q"; was ? play() : draw(); }
     function draw() {
       if (!location.hash.startsWith("#bus-")) return; const c = B.list[B.i];
-      app.innerHTML = toolHead(id, T) + `<h1>${mx(ch.name)}</h1><div class="card pad stack player"><p class="small muted">Carte ${B.i + 1} sur ${B.list.length} · ${B.phase === "q" ? "Question" : B.phase === "p" ? "Réfléchis…" : "Réponse"}</p><p class="qtxt" aria-live="polite">${cfront(c)}</p><p class="expected${B.phase === "a" ? "" : " veiled"}">${B.phase === "a" ? esc(c.back) : "La réponse arrive après la pause."}</p><div class="bar"><i style="width:${(B.i + (B.phase === "a" ? 0.7 : 0.2)) / B.list.length * 100}%"></i></div>
+      app.innerHTML = toolHead(id, "Écouter") + `<div class="seg" role="tablist"><a role="tab" aria-selected="false" href="#ecouter-${id}">Lecture</a><button role="tab" aria-selected="true">Mains libres</button></div><h1>${mx(ch.name)}</h1><div class="card pad stack player"><p class="small muted">Carte ${B.i + 1} sur ${B.list.length} · ${B.phase === "q" ? "Question" : B.phase === "p" ? "Réfléchis…" : "Réponse"}</p><p class="qtxt" aria-live="polite">${cfront(c)}</p><p class="expected${B.phase === "a" ? "" : " veiled"}">${B.phase === "a" ? esc(c.back) : "La réponse arrive après la pause."}</p><div class="bar"><i style="width:${(B.i + (B.phase === "a" ? 0.7 : 0.2)) / B.list.length * 100}%"></i></div>
         <div class="row" style="justify-content:center"><button class="iconbtn" id="bprev" aria-label="Carte précédente">${I.back}</button><button class="btn" id="bplay" style="min-width:140px">${B.playing ? "Pause" : "Lecture"}</button><button class="iconbtn" id="bnext" aria-label="Carte suivante" style="transform:scaleX(-1)">${I.back}</button></div></div>
         <div class="field"><span class="label">Temps de réflexion avant la réponse</span><div class="chips">${[2, 4, 6, 10].map(s => `<button class="chip" data-ps="${s}" aria-pressed="${B.pause === s}">${s} s</button>`).join("")}</div></div>
         <div class="row"><button class="chip" id="bshuf">Mélanger les cartes</button></div>
@@ -4510,11 +4600,13 @@
   }
 
   // ---------- navigation ----------
-  let enterT = null;
+  let enterT = null, lastHash = null;
   function route() {
     app.classList.remove("enter"); void app.offsetWidth; app.classList.add("enter"); clearTimeout(enterT); enterT = setTimeout(() => app.classList.remove("enter"), 700);
     document.body.classList.remove("nav"); app.classList.toggle("profmode", /^#exos/.test(location.hash));
     const pd = document.getElementById("pdrawer"); if (pd) pd.remove(); document.body.classList.remove("typing");
+    // Section de Réglages ouverte : refermée quand on change d'écran, gardée quand le même écran est redessiné (réglage enregistré, synchro).
+    if (location.hash !== lastHash) app.removeAttribute("data-sec"); lastHash = location.hash;
     if (location.hash.startsWith("#partage-")) return screenShared(location.hash.slice(9));
     // Lien d'invitation Duo (#duo-CODE) : on garde le code, même s'il faut d'abord se connecter, puis on ouvre l'onglet Duo.
     if (/^#duo-./.test(location.hash)) { const c = decodeURIComponent(location.hash.slice(5)).trim().slice(0, 64); if (c) safeSet("merge.duoin", c); history.replaceState(null, "", location.pathname + location.search + "#duo"); }

@@ -1350,7 +1350,8 @@ html:has(.app.profmode),body:has(.app.profmode){overflow:hidden;overscroll-behav
 .btn.danger{background:#ef4444;color:#fff}
 @media (hover:hover) and (pointer:fine){.btn.danger:hover{filter:brightness(1.08)}}
 /* Progrès : 3 raccourcis côte à côte */
-.prgrid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+.prgrid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+@media (min-width:900px){.prgrid{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
 .ptile{flex-direction:column;align-items:flex-start;gap:8px}
 .bicons{display:flex;flex-wrap:wrap;gap:6px}
 .bic{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--muted);display:grid;place-items:center;cursor:pointer}
@@ -1397,3 +1398,95 @@ body[data-flame="bonbon"] .streak,[data-flameprev="bonbon"]{background:linear-gr
 .jctls{flex-direction:row;flex-wrap:wrap;gap:6px}
 .jctl{min-height:36px;padding:4px 12px;border-radius:99px;font-size:.88rem;flex:none}
 .jctl b{flex:none}
+
+/* Chapitre : variante d'un mode (Seulement les difficiles, Chronométrée, Mains libres) sous sa tuile ; « Plus d'outils » repliable. */
+.mtile{flex-wrap:wrap}
+.mvar{flex-basis:100%;display:flex;align-items:center;gap:8px;margin:-6px 0 4px 60px;min-height:40px;padding:0 12px;border-radius:12px;font-size:.86rem;font-weight:700;color:var(--accent2,#9483ff);text-decoration:none;width:fit-content;max-width:calc(100% - 60px)}
+.mvar svg{width:16px;height:16px}
+@media (hover:hover) and (pointer:fine){.mvar:hover{background:var(--card2)}}
+.moremodes{border:1px solid var(--line);border-radius:18px;background:var(--card);padding:0 14px}
+.moremodes>summary{list-style:none;display:flex;align-items:center;gap:10px;min-height:56px;font-weight:800;cursor:pointer}
+.moremodes>summary::-webkit-details-marker{display:none}
+.moremodes>summary::after{content:"";width:9px;height:9px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg) translateY(-3px);transition:transform .2s}
+.moremodes[open]>summary::after{transform:rotate(225deg) translateY(-1px)}
+.moremodes>.modesbox{padding:4px 0 16px}
+/* Chapitre, design A : en-tête avec anneau de maîtrise, gros bouton Réviser, raccourcis en 2 colonnes. */
+.chhead{display:flex;align-items:center;gap:14px}
+.chhead h1{margin:0;font-size:1.5rem;line-height:1.2}
+.chhead p{margin:4px 0 0}
+.chring{flex:none;width:62px;height:62px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--c,var(--accent)) calc(var(--p) * 1%),var(--line) 0)}
+.chring b{display:grid;place-items:center;width:50px;height:50px;border-radius:50%;background:var(--bg);font-size:.9rem}
+.revbig{display:flex;align-items:center;gap:14px;min-height:64px;padding:12px 18px;border-radius:20px;background:var(--btn-bg);color:#fff;text-decoration:none}
+.revbig svg{width:26px;height:26px;flex:none}
+.revbig b{display:block;font-size:1.1rem}
+.revbig .small{display:block;opacity:.85}
+.shorts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.short{display:flex;align-items:center;gap:10px;min-height:60px;padding:8px 10px;border-radius:16px;background:var(--card);border:1px solid var(--line);color:var(--fg);text-decoration:none;min-width:0}
+.short .mico{flex:none}
+.short .mtxt{min-width:0}
+.short b{display:block;font-size:.95rem;line-height:1.25}
+.short .small{display:block;color:var(--muted);line-height:1.3}
+.short.wide{grid-column:1/-1}
+@media (hover:hover) and (pointer:fine){.short:hover{border-color:var(--accent)}}
+.mvar.solo{margin:0;max-width:100%}
+.addcourse{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--fg)}
+@media (min-width:900px){.shorts{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.qbar{height:5px;border-radius:5px;background:var(--line);overflow:hidden}.qbar i{display:block;height:100%;width:100%;background:var(--accent);transition:width .1s linear}
+.match .tilebtn.isq{font-weight:700}
+.mstars{display:flex;gap:6px;justify-content:center}.mstars span{color:var(--line)}.mstars span.on{color:#f5b400}.mstars span.on svg{fill:currentColor}.mstars svg{width:30px;height:30px}
+.chev{display:inline-flex;transform:rotate(180deg);color:var(--muted)}
+.ctxrow{text-decoration:none}
+/* Quiz interactif dans le Prof */
+.pqcm{display:flex;flex-direction:column;gap:14px;margin-top:12px}
+.pq{display:flex;flex-direction:column;gap:8px}
+.pqc{display:flex;flex-direction:column;gap:6px}
+.pqo{min-height:44px;padding:10px 14px;border-radius:14px;border:1px solid var(--line);background:var(--card2,rgba(255,255,255,.04));color:var(--fg);font:inherit;text-align:left;cursor:pointer}
+.pqo:disabled{cursor:default;opacity:.75}
+.pqo.good{border-color:var(--mint-solid);background:color-mix(in srgb,var(--mint-solid) 18%,transparent);opacity:1}
+.pqo.bad{border-color:var(--red-solid);background:color-mix(in srgb,var(--red-solid) 16%,transparent);opacity:1}
+.pqe{margin:0;color:var(--muted)}
+.pqscore{margin:0;padding:10px 14px;border-radius:14px;background:var(--card2,rgba(255,255,255,.04))}
+/* Matières, design A : grille de tuiles */
+.stiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.stile{display:flex;flex-direction:column;gap:4px;padding:14px;border-radius:20px;background:color-mix(in srgb,var(--c) 10%,var(--card));border:1px solid color-mix(in srgb,var(--c) 30%,var(--line));color:var(--fg);text-decoration:none;min-width:0;min-height:150px}
+.stile b{font-size:1.05rem;line-height:1.25;overflow-wrap:anywhere}
+.sico{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:var(--c);color:#fff;font-weight:900;font-size:.9rem;margin-bottom:6px;letter-spacing:.02em}
+.spill{align-self:flex-start;font-size:.75rem;font-weight:800;padding:3px 9px;border-radius:99px;background:color-mix(in srgb,var(--c) 26%,transparent);color:var(--fg)}
+.srow{display:flex;align-items:center;gap:8px;margin-top:auto;padding-top:6px}
+.srow .bar i{background:var(--c)}
+.sadd{border-style:dashed;background:none;align-items:center;justify-content:center;color:var(--muted);font-weight:700}
+.sadd span{display:flex;align-items:center;gap:6px}
+.addround{background:var(--btn-bg);color:#fff;border-radius:50%}
+@media (hover:hover) and (pointer:fine){.stile:hover{border-color:var(--c);transform:translateY(-2px)}}
+@media (min-width:900px){.stiles{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}}
+/* Réglages, design A : liste façon iPhone */
+.setprof{display:flex;align-items:center;gap:14px;width:100%;padding:14px;border-radius:20px;background:var(--card);border:1px solid var(--line);color:var(--fg);font:inherit;text-align:left;cursor:pointer}
+.setprof b{display:block;font-size:1.05rem}
+.setav{flex:none;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 25%,var(--card));color:var(--accent2,#c8c1ff);font-weight:900;font-size:1.2rem}
+.setgrp{margin:8px 4px -4px;font-size:.82rem;font-weight:700;color:var(--muted)}
+.setlist{border-radius:18px;background:var(--card);border:1px solid var(--line);overflow:hidden}
+.setrow{display:flex;align-items:center;gap:12px;width:100%;min-height:54px;padding:8px 14px;background:none;border:0;border-top:1px solid var(--line);color:var(--fg);font:inherit;font-weight:700;text-align:left;text-decoration:none;cursor:pointer}
+.setlist>.setrow:first-child{border-top:0}
+.setico{flex:none;width:32px;height:32px;border-radius:9px;display:grid;place-items:center;color:#fff}
+.setico svg{width:18px;height:18px}
+.setval{color:var(--muted);font-weight:600;font-size:.9rem}
+@media (hover:hover) and (pointer:fine){.setrow:hover,.setprof:hover{background:var(--card2)}}
+.setback{display:none}
+.app[data-sec] .setmenu{display:none}
+.app[data-sec] .setback{display:inline-flex}
+.app:not([data-sec]) [data-sec-card]{display:none}
+.app[data-sec] [data-sec-card]:not(.on){display:none}
+
+/* Réglages sur PC : la liste garde une largeur lisible au lieu de s'étirer sur tout l'écran. */
+@media (min-width:900px){.setmenu,.app[data-sec] [data-sec-card],#setback{max-width:760px}}
+
+/* Planning : les 4 actions du jour en une ligne de pastilles sous la semaine (visibles sans descendre, jamais sous le bouton +). */
+.jacts{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;margin:2px 0 4px}
+.jacts::-webkit-scrollbar{display:none}
+.jact{flex:1 1 auto;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:44px;padding:0 9px;border-radius:22px;background:var(--card);border:1px solid var(--line);color:var(--fg);font:inherit;font-size:.8rem;font-weight:700;white-space:nowrap;cursor:pointer}
+.jact svg{width:16px;height:16px;color:var(--muted);flex:none}
+.jact.on{background:var(--accent);border-color:transparent;color:#fff}
+.jact.on svg{color:#fff}
+@media (hover:hover) and (pointer:fine){.jact:hover{background:var(--card2)}}
+@media (min-width:900px){.jacts{justify-content:flex-start}.jact{flex:0 0 auto;padding:0 18px}}
+.jline{padding-bottom:0}.jline:has(.jrow){padding-bottom:78px}
