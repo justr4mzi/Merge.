@@ -1313,7 +1313,7 @@
 
   function screenSubject(id, openPicker) {
     const s = state.subjects.find(x => x.id === id); if (!s) { location.hash = "#accueil"; return; }
-    tabs.hidden = true;
+    drawTabs("matieres"); // barre du bas visible : on peut revenir à l'accueil d'un geste
     const chs = state.chapters.filter(c => c.subject_id === id), groups = state.groups.filter(g => g.subject_id === id), loose = chs.filter(c => !groups.some(g => g.id === c.group_id));
     app.innerHTML = `<div class="row"><a class="iconbtn" href="#matieres" aria-label="Retour aux matières">${I.back}</a><span class="grow"></span><button class="iconbtn flat" id="sSet" aria-label="Réglages de la matière" title="Réglages">${I.gear}</button></div>
       <div class="stack" style="--c:${esc(s.color)}"><div class="row"><span class="dot"></span><h1>${esc(s.name)}</h1></div>
@@ -1356,7 +1356,7 @@
   let groupTab = "chapitres"; // onglet ouvert en arrivant dans un dossier : la liste des chapitres
   async function screenGroup(id) {
     const g = state.groups.find(x => x.id === id); if (!g) { location.hash = "#matieres"; return; }
-    tabs.hidden = true;
+    drawTabs("matieres"); // barre du bas visible : on peut revenir à l'accueil d'un geste
     const s = state.subjects.find(x => x.id === g.subject_id) || { id: "", name: "", color: "#888" }, here = location.hash;
     const chs = state.chapters.filter(c => c.group_id === id), sums = new Set();
     if (chs.length && !state.offline) { try { const r = await sb.from("summaries").select("chapter_id").in("chapter_id", chs.map(c => c.id)); (r.data || []).forEach(x => sums.add(x.chapter_id)); } catch (e) { /* liste sans résumés */ } }
@@ -1446,7 +1446,7 @@
 
   async function screenChapter(id) {
     const ch = state.chapters.find(c => c.id === id); if (!ch) { location.hash = "#accueil"; return; }
-    tabs.hidden = true;
+    drawTabs("matieres"); // barre du bas visible : on peut revenir à l'accueil d'un geste
     const s = state.subjects.find(x => x.id === ch.subject_id) || { name: "", color: "#888", id: "" }, grp = state.groups.find(x => x.id === ch.group_id), here = location.hash;
     app.innerHTML = `<p class="muted">Chargement…</p>`;
     let [cr, sr] = state.offline ? [{ error: { message: "hors ligne" } }, { error: true }] : await Promise.all([
@@ -1616,7 +1616,12 @@
   }
   async function applyJob(chId, j, quiet) {
     const d = IMPORTS[chId]; if (!d || d.jobId !== j.id) return;
-    const stale = j.status === "running" && Date.now() - Date.parse(j.updated_at) > 240000;
+    const stale = j.status === "running" && Date.now() - Date.parse(j.updated_at) > 200000;
+    // Import qui n'avance plus (étape coupée côté serveur) : on le relance tout seul, sans afficher d'erreur (2 fois au plus).
+    if (stale && (d.autoRes || 0) < 2) {
+      d.autoRes = (d.autoRes || 0) + 1; d.msg = "Reprise de l'import…"; impPaint(d);
+      try { await ai({ action: "import_resume", job_id: d.jobId }, "studio"); return; } catch (e) { /* on affiche l'arrêt ci-dessous */ }
+    }
     if (j.status === "running" && !stale) { d.stage = STAGES.some(x => x[0] === j.stage) ? j.stage : "gen"; d.target = Math.max(d.target || 0, j.progress || 0); d.msg = j.message || d.msg; return impPaint(d); }
     clearTimeout(d.poll); d.pollTok = null; clearInterval(d.timer); d.busy = false; d.local = false;
     if (j.status === "done") {

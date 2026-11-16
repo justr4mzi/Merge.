@@ -56,7 +56,12 @@
   }
   async function applyJob(chId, j, quiet) {
     const d = IMPORTS[chId]; if (!d || d.jobId !== j.id) return;
-    const stale = j.status === "running" && Date.now() - Date.parse(j.updated_at) > 240000;
+    const stale = j.status === "running" && Date.now() - Date.parse(j.updated_at) > 200000;
+    // Import qui n'avance plus (étape coupée côté serveur) : on le relance tout seul, sans afficher d'erreur (2 fois au plus).
+    if (stale && (d.autoRes || 0) < 2) {
+      d.autoRes = (d.autoRes || 0) + 1; d.msg = "Reprise de l'import…"; impPaint(d);
+      try { await ai({ action: "import_resume", job_id: d.jobId }, "studio"); return; } catch (e) { /* on affiche l'arrêt ci-dessous */ }
+    }
     if (j.status === "running" && !stale) { d.stage = STAGES.some(x => x[0] === j.stage) ? j.stage : "gen"; d.target = Math.max(d.target || 0, j.progress || 0); d.msg = j.message || d.msg; return impPaint(d); }
     clearTimeout(d.poll); d.pollTok = null; clearInterval(d.timer); d.busy = false; d.local = false;
     if (j.status === "done") {

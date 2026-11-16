@@ -539,3 +539,11 @@ Liste retenue (sur 20 proposées) : plan de révision automatique, rappel la vei
 
 ## Rayons de la boutique espacés (16 nov.)
 - Sur téléphone, une règle prévue pour faire tenir 5 onglets sur une ligne (écart 0) s'appliquait aussi aux rayons de la boutique, qui sont trop nombreux et défilent : les mots se collaient. La boutique est exclue de cette règle ; ses rayons ont 22 px d'écart et un fondu à droite indique qu'on peut faire défiler. Test dans la suite `boutique`.
+
+## Imports qui ne restent plus bloqués, barre du bas dans les matières, pastille d'import (16 nov.)
+- **Cause du blocage à 59 %** (logs Supabase) : une étape d'import est coupée net au bout d'environ 150 s. Un lot de 4 photos manuscrites fait jusqu'à 3 appels à l'IA (lecture, relecture, déchiffrage en réflexion poussée) : il dépassait, l'étape était coupée avant de lancer la suivante, et l'import ne bougeait plus. Le « Import échoué » vu plus tôt venait du même problème : l'appli voyait l'import immobile et affichait l'arrêt.
+- **Correctifs serveur (studio v13)** : chaque étape a une heure limite (105 s pour les photos, 130 s sinon) ; chaque appel à l'IA s'arrête à temps (AbortSignal, limite rangée par appel avec AsyncLocalStorage pour ne pas toucher les autres demandes). Un lot pas fini est repris à l'étape suivante ; s'il bloque encore, il passe en version allégée (sans déchiffrage, puis sans relecture). Après 4 étapes sans aucun progrès : message clair. Nouvelle action `sweep` (secret cron) qui relance les imports immobiles depuis plus de 3 min.
+- **Côté appli** : un import immobile depuis plus de 200 s est relancé tout seul (2 fois au plus) au lieu d'afficher « interrompu ».
+- **Barre du bas** visible sur les écrans Matière, Dossier et Chapitre (onglet Matières allumé) : on revient à l'accueil d'un geste. Les écrans de révision (cartes, quiz…) restent en plein écran.
+- **Pastille d'import** translucide (fond flouté), placée plus haut : au-dessus de la barre de message dans le Prof, sur téléphone comme sur PC.
+- Suite de tests `importRelance`.

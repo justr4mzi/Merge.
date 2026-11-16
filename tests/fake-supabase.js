@@ -130,6 +130,9 @@
     let job;
     if (b.action === "import_resume") { job = DB.import_jobs.find(j => j.id === b.job_id); if (!job) return fail(400, { error: "requete", detail: "Cet import ne peut pas être repris. Relance-le." }); Object.assign(job, { status: "running", error: null, error_code: null }); }
     else { job = defaults("import_jobs", { chapter_id: b.chapter_id, status: "running", stage: b.segs.some(x => x.path) ? "img" : "gen", progress: 10, message: "L'IA lit les photos et les schémas…", result: null, error: null, error_code: null, updated_at: now(), n: b.n, label: b.label, full: b.segs.map(x => x.path ? COURS : x.text).join("\n\n[[PAGE]]\n\n") }); DB.import_jobs.push(job); }
+    // fake.stall = 1 : l'étape serveur est « coupée » (le job ne bouge plus, mis à jour il y a 5 min) jusqu'à une reprise.
+    if (b.action === "import_resume") window.__fake.resumed = (window.__fake.resumed || 0) + 1;
+    if (opt("stall") === "1" && b.action === "import_start") { Object.assign(job, { updated_at: new Date(Date.now() - 300000).toISOString(), progress: 45, message: "Photos et schémas lus : 9 sur 13…" }); return { data: { job_id: job.id }, error: null }; }
     (async () => {
       const wait = () => new Promise(r => setTimeout(r, delay));
       await wait(); if (opt("jobfail") === "1" && !job.retried) { job.retried = true; return Object.assign(job, { status: "error", error: "vertex: panne simulée", error_code: "erreur", updated_at: now() }); }

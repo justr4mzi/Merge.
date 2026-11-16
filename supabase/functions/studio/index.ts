@@ -4,6 +4,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 import { autoTitle } from "./titre.mjs";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -59,13 +60,18 @@ async function accessToken(sa: Any) {
 }
 
 type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
+// Heure limite de l'étape en cours : un appel serveur est coupé net au bout de ~150 s (l'import resterait bloqué).
+// Chaque appel à l'IA s'arrête donc à temps, et l'étape relance la suivante avant d'être coupée.
+// Rangée par appel (AsyncLocalStorage) : une autre demande traitée en même temps n'est pas concernée.
+const LIMIT = new AsyncLocalStorage<{ dl: number }>();
+const timedOut = (e: unknown) => /abort|timeout/i.test(String((e as Any)?.name) + String((e as Any)?.message));
 async function gemini(sa: Any, system: string, parts: Part[], wantJson: boolean, temperature: number, thinking: string) {
   const token = await accessToken(sa);
   const host = LOCATION === "global" ? "aiplatform.googleapis.com" : `${LOCATION}-aiplatform.googleapis.com`;
   const url = `https://${host}/v1/projects/${sa.project_id}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
   const body: Any = { systemInstruction: { parts: [{ text: system }] }, contents: [{ role: "user", parts }], generationConfig: { temperature, thinkingConfig: { thinkingLevel: thinking } } };
   if (wantJson) body.generationConfig.responseMimeType = "application/json";
-  const send = () => fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const send = () => fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: LIMIT.getStore()?.dl ? AbortSignal.timeout(Math.max(3000, LIMIT.getStore()!.dl - Date.now())) : undefined });
   let res = await send();
   let data = await res.json();
   if (res.status === 400 && /thinking/i.test(JSON.stringify(data))) { delete body.generationConfig.thinkingConfig; res = await send(); data = await res.json(); }
@@ -150,7 +156,7 @@ async function kick(id: string) {
 }
 
 // Contrôle gratuit d'une carte : sa citation doit se retrouver dans le cours (sans accents, ponctuation ni casse).
-const normQ = (t: unknown) => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const normQ = (t: unknown) => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 function quoteFits(q: unknown, partNorm: string) {
   const w = normQ(q).split(" ").filter(Boolean);
   if (w.length < 3) return false;
@@ -170,7 +176,8 @@ function chunksOf(texts: string[]) {
 const plural = (n: number, un: string, des: string) => n + " " + (n > 1 ? des : un);
 
 // Une étape d'import. Étapes : img (lecture des photos) → gen (résumé et cartes) → save → verify (après « prêt »).
-async function step(id: string) {
+function step(id: string) { return LIMIT.run({ dl: 0 }, () => stepRun(id)); }
+async function stepRun(id: string) {
   const { data: job } = await admin.from("import_jobs").select("*").eq("id", id).maybeSingle();
   if (!job || !(job.status === "running" || (job.status === "done" && job.stage === "verify"))) return;
   const uid = job.user_id as string, P = job.payload ?? {}, st: Any = job.state ?? {}, segs: Any[] = P.segs ?? [];
@@ -180,15 +187,19 @@ async function step(id: string) {
   let ready = job.status === "done";
   try {
     const sa = serviceAccount(), sys = await systemFor(uid), t0 = Date.now();
+    const lim = LIMIT.getStore(); if (lim) lim.dl = t0 + (job.stage === "img" ? 105000 : 130000);
     if (job.stage === "img") {
+      // Lot qui n'a pas eu le temps de finir à l'étape précédente : on allège (sans relecture fine) pour qu'il passe.
+      const stall = Number(st.stall ?? 0), before = Object.keys(st.texts).length;
       const pending = segs.map((s, i) => (s.path && st.texts[i] == null ? i : -1)).filter((i) => i >= 0);
       const total = segs.filter((s) => s.path).length, batches: number[][] = [];
       // Lots de 4 pages : assez petits pour que la lecture reste précise (cahiers manuscrits).
       for (let i = 0; i < pending.length; i += 4) batches.push(pending.slice(i, i + 4));
       let next = 0;
       const worker = async () => {
-        while (next < batches.length && Date.now() - t0 < 25000) {
+        while (next < batches.length && Date.now() - t0 < 30000) {
           const batch = batches[next++];
+          try {
           const imgs: Part[] = [];
           for (const i of batch) {
             const dl = await admin.storage.from("cours").download(segs[i].path);
@@ -198,16 +209,16 @@ async function step(id: string) {
           // 1) Lecture. Les photos peuvent être des pages imprimées OU un cahier écrit à la main : on lit, on ne devine jamais.
           const LECTURE = "Transcris fidèlement et INTÉGRALEMENT le contenu de ces pages de cours, dans l'ordre, en texte : chaque titre, paragraphe, encadré, légende, note de bas de page et tableau, sans sauter aucune page ni aucune section. Décris en une ou deux phrases chaque schéma, graphique ou tableau à partir de ce qui est visible (légendes, axes, flèches). Écris les formules en LaTeX entre $…$ (voir FORMULES). N'ajoute rien, ne résume pas, ne corrige pas le contenu. " + REGLE +
             "\nCAHIER ÉCRIT À LA MAIN : lis lettre par lettre. Ne complète JAMAIS un mot, un nombre, une unité ou une formule à partir de ce que tu sais du sujet : écris seulement ce qui est réellement écrit sur la page. Fais très attention aux chiffres, virgules, puissances de 10, signes (+, −, =), indices, exposants et unités. Un mot ou un passage que tu ne lis pas avec certitude : écris [illisible] à sa place (jamais une supposition). Ignore les ratures barrées. Sépare les pages par une ligne [[PAGE]].";
-          let txt = await ask(uid, sa, sys, [{ text: LECTURE }, ...imgs], false, 0, "low");
+          let txt = await ask(uid, sa, sys, [{ text: LECTURE }, ...imgs], false, 0, stall >= 2 ? "minimal" : "low");
           // 2) Relecture : on compare la transcription aux photos, mot à mot, et on corrige ce qui ne correspond pas (surtout pour l'écriture à la main).
-          try {
+          if (stall < 2) try {
             // Ne compte pas dans la limite du jour : c'est une vérification de la même lecture, pas une nouvelle demande.
             const rel: string = (await gemini(sa, sys, [{ text: "Voici des photos de pages de cours et leur transcription. Relis la transcription mot à mot en la comparant aux photos. Corrige : mot ou nombre mal lu, chiffre, signe, exposant, indice ou unité faux, mot ajouté qui n'est PAS sur la photo, passage oublié. Pour chaque [illisible] déjà présent, regarde cet endroit de très près et remplace-le par le texte exact si tu peux le lire avec certitude. Ce qui ne se lit vraiment pas avec certitude reste [illisible]. N'ajoute aucune connaissance extérieure et ne corrige pas les erreurs de l'auteur du cours. Renvoie UNIQUEMENT la transcription corrigée complète, dans le même format, pages séparées par [[PAGE]].\n\nTranscription :\n<<<\n" + txt + "\n>>>" }, ...imgs], false, 0, "low")).text;
             const a = txt.split("[[PAGE]]").filter((x) => x.trim()).length, b = rel.split("[[PAGE]]").filter((x: string) => x.trim()).length;
             if (rel.trim().length > txt.trim().length * 0.6 && b === a) txt = rel;
           } catch (e) { console.error("relecture", e); }
           // 3) Déchiffrage : s'il reste des [illisible], un passage dédié uniquement à ces endroits (ne compte pas non plus dans la limite).
-          if (/\[illisible\]/i.test(txt)) {
+          if (stall < 1 && /\[illisible\]/i.test(txt)) {
             try {
               const dec: string = (await gemini(sa, sys, [{ text: "Cette transcription de pages de cours contient des passages marqués [illisible]. Concentre-toi UNIQUEMENT sur eux : pour chacun, retrouve l'endroit sur la photo et regarde-le de très près. Aide-toi de la façon dont l'auteur forme les mêmes lettres et chiffres ailleurs sur la page, des mots autour et de la grammaire de la phrase, et du même mot écrit plus clairement ailleurs dans ces pages. Remplace [illisible] par le texte exact quand tu peux le lire avec certitude ; si un seul mot reste douteux dans un passage, garde [illisible] juste pour ce mot. N'invente jamais un mot, un nombre ou une formule qui n'est pas écrit, n'utilise pas tes connaissances du sujet pour combler un trou, et ne change RIEN d'autre dans le texte. Renvoie UNIQUEMENT la transcription complète, même format, pages séparées par [[PAGE]].\n\nTranscription :\n<<<\n" + txt + "\n>>>" }, ...imgs], false, 0, "high")).text;
               const a = txt.split("[[PAGE]]").filter((x) => x.trim()).length, b = dec.split("[[PAGE]]").filter((x: string) => x.trim()).length;
@@ -219,10 +230,17 @@ async function step(id: string) {
           batch.forEach((i, k) => { st.texts[i] = pages.length === batch.length ? pages[k] : (k === 0 ? txt : ""); });
           const done = Object.keys(st.texts).length;
           await setJob(id, { state: st, progress: Math.round(10 + 50 * done / Math.max(1, total)), message: `Photos et schémas lus : ${done} sur ${total}…` });
+          } catch (e) { if (timedOut(e)) { console.error("lot trop long, repris à l'étape suivante", batch); return; } throw e; }
         }
       };
       await Promise.all(Array.from({ length: Math.min(5, batches.length) }, worker));
-      if (next >= batches.length) await setJob(id, { stage: "gen", state: st, progress: 60, message: "L'IA prépare le résumé et les cartes…" });
+      const left = segs.filter((s, i) => s.path && st.texts[i] == null).length;
+      if (!left) await setJob(id, { stage: "gen", state: { ...st, stall: 0 }, progress: 60, message: "L'IA prépare le résumé et les cartes…" });
+      else {
+        st.stall = Object.keys(st.texts).length > before ? 0 : stall + 1;
+        if (st.stall >= 4) throw new Error("La lecture de certaines photos prend trop de temps. Réessaie avec moins de photos à la fois.");
+        await setJob(id, { state: st });
+      }
       return await kick(id);
     }
     const texts = segs.map((s, i) => (s.path ? st.texts[i] : s.text)).filter(Boolean) as string[];
@@ -287,7 +305,7 @@ async function step(id: string) {
     console.error(e);
     const code = (e as Any).code ?? "erreur";
     if (ready) return void await setJob(id, { stage: "end", payload: null, state: null });
-    const msg = code === "quota" ? "quota" : String((e as Error).message).slice(0, 400);
+    const msg = code === "quota" ? "quota" : timedOut(e) ? "L'IA a mis trop de temps à répondre. Relance l'import." : String((e as Error).message).slice(0, 400);
     await setJob(id, { status: "error", error: msg, error_code: code, state: st });
     await push(uid, code === "quota" ? `L'import de « ${name} » est en pause : limite d'IA du jour atteinte. Reprends-le demain.` : `L'import de « ${name} » s'est arrêté. Ouvre Merge pour le relancer.`, "./#import-" + job.chapter_id);
   }
@@ -301,6 +319,15 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "methode" }, 405);
   try {
     const body = await req.json();
+    // Relance automatique (tâche planifiée toutes les 2 min) : un import qui n'a pas avancé depuis 3 min a été coupé, on le reprend.
+    if (body.action === "sweep") {
+      const S = await secrets();
+      if (!S.cron || req.headers.get("x-cron-secret") !== S.cron) return json({ error: "interdit" }, 401);
+      const old = new Date(Date.now() - 180000).toISOString();
+      const { data: jobs } = await admin.from("import_jobs").select("id,status,stage").lt("updated_at", old).gt("updated_at", new Date(Date.now() - 864e5).toISOString()).or("status.eq.running,and(status.eq.done,stage.eq.verify)").limit(20);
+      for (const j of (jobs ?? []) as Any[]) { await setJob(j.id, {}); background(step(j.id)); }
+      return json({ relances: (jobs ?? []).length });
+    }
     if (body.action === "import_step") {
       const S = await secrets();
       if (!S.cron || req.headers.get("x-cron-secret") !== S.cron) return json({ error: "interdit" }, 401);

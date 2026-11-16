@@ -1250,6 +1250,31 @@ async function profPc(browser) {
     ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
   }
 }
+// Import bloqué côté serveur (étape coupée) : l'appli le relance toute seule, sans afficher « interrompu ».
+// Pastille d'import : au-dessus de la barre de message du Prof. Matière et chapitre : barre du bas visible.
+async function importRelance(browser) {
+  for (const [w, h] of [[390, 844], [1440, 900]]) {
+    const page = await open(browser, { w, h, theme: "dark" }), tag = "import relancé " + w;
+    await go(page, "#matiere-s1", 300);
+    ok(await page.locator("#tabs:not([hidden])").isVisible() && await page.locator('#tabs a[aria-current="page"][href="#matieres"]').count() === 1, tag + " : matière avec la barre du bas (onglet Matières actif)");
+    await page.click('#tabs a[href="#accueil"]'); await page.waitForTimeout(250);
+    ok(await page.evaluate(() => location.hash) === "#accueil", tag + " : retour à l'accueil depuis une matière");
+    await go(page, "#chapitre-c1", 300);
+    ok(await page.locator("#tabs:not([hidden])").isVisible(), tag + " : chapitre avec la barre du bas");
+    const o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
+    await page.evaluate(() => { localStorage.setItem("fake.stall", "1"); localStorage.setItem("fake.delay", "400"); });
+    await go(page, "#import-c1"); await page.click('[data-tab="text"]'); await page.fill("#txt", "La mitose est une division cellulaire qui donne deux cellules identiques. ".repeat(4));
+    await page.click("#go"); await page.waitForTimeout(400);
+    await go(page, "#exos", 300);
+    const chip = await page.locator("#jobchip").boundingBox(), comp = await page.locator(".pcomp").boundingBox();
+    ok(chip && comp && chip.y + chip.height <= comp.y - 4, tag + " : pastille d'import au-dessus de la barre de message", JSON.stringify({ chip, comp }));
+    ok(await page.evaluate(() => getComputedStyle(document.getElementById("jobchip")).backgroundColor.includes("0.")), tag + " : pastille translucide");
+    await page.waitForFunction(() => /Cours prêt/.test((document.getElementById("jobchip") || {}).innerText || ""), null, { timeout: 15000 }).catch(() => {});
+    ok(await page.evaluate(() => (window.__fake.resumed || 0) >= 1) && /Cours prêt/.test(await page.locator("#jobchip").innerText()), tag + " : import bloqué relancé tout seul jusqu'au bout");
+    await page.screenshot({ path: path.join(SHOTS, "import-pastille-prof-" + w + ".png") });
+    ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+  }
+}
 async function exos(browser) {
   // 1100 px : PC moyen, l'historique s'ouvre avec ☰ (au-delà de 1200 px il est en colonne fixe, voir profPc).
   for (const [w, h] of [[390, 844], [1100, 800]]) {
@@ -1512,7 +1537,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => only ? only.includes(n) : n !== "chasse";
     if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
-    const SUITES = { majSw, profPc, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
+    const SUITES = { majSw, profPc, importRelance, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
     for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();

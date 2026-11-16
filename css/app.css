@@ -545,6 +545,10 @@ kbd{font:inherit;font-size:.82em;font-weight:800;padding:4px 10px;border-radius:
 .backsoon{display:flex;flex-direction:column;gap:8px;align-items:flex-start;background:var(--card2);border-color:transparent}
 .jobchip{position:fixed;right:12px;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:30;min-height:44px;padding:0 16px;border-radius:99px;background:var(--btn-bg);color:#fff;font-weight:800;font-size:.9em;display:inline-flex;align-items:center;gap:10px;text-decoration:none;box-shadow:0 8px 24px rgba(0,0,0,.3);animation:rise .3s both}
 .jobchip.ok{background:var(--mint-solid)}.jobchip.ko{background:var(--red-solid)}
+/* Pastille d'import : translucide (on voit ce qu'il y a dessous) et placée au-dessus de la barre de message du Prof. */
+.jobchip{background:rgba(75,57,200,.62);-webkit-backdrop-filter:blur(14px) saturate(1.3);backdrop-filter:blur(14px) saturate(1.3);border:1px solid rgba(255,255,255,.14);box-shadow:0 6px 18px rgba(0,0,0,.25);bottom:calc(92px + env(safe-area-inset-bottom,0px))}
+.jobchip.ok{background:rgba(22,150,110,.7)}.jobchip.ko{background:rgba(200,50,70,.7)}
+body:has(.app.profmode) .jobchip{bottom:calc(176px + env(safe-area-inset-bottom,0px))}
 .jobchip .spin{width:16px;height:16px;border-width:3px;border-color:rgba(255,255,255,.35);border-top-color:#fff}
 .confetti{position:fixed;inset:0;pointer-events:none;z-index:70;overflow:hidden}
 .confetti i{position:absolute;top:-16px;width:9px;height:14px;border-radius:2px;animation:fall 2s ease-in forwards}
@@ -590,6 +594,7 @@ kbd{font:inherit;font-size:.82em;font-weight:800;padding:4px 10px;border-radius:
   .app:has(>.center){justify-content:center;min-height:100dvh}
   .steps{grid-template-columns:repeat(4,minmax(0,1fr))}
   .jobchip{right:28px;bottom:28px}
+  body:has(.app.profmode) .jobchip{bottom:118px}
   .session,.swrap .session{max-width:none;margin-inline:0}
   .flipwrap{min-height:440px}
   .face .txt{font-size:1.9em;padding:32px 48px}
