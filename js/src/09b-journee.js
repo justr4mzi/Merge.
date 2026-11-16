@@ -115,13 +115,13 @@
   let jDay = null;
   function screenJournee() {
     drawTabs("calendrier"); nowTaskTick();
-    const j = jGet(); jDay = jView().day; const hours = jView().hours;
+    const j = jGet(); jDay = jView().day;
     // Première ouverture : on demande l'emploi du temps (PDF ou photo), puis la semaine A ou B.
     if (!j.setup && !edtGet().slots.length) { j.setup = true; jSave(j); setTimeout(() => edtSetupSheet(), 300); }
     const sel = dayOf(jDay), mon = mondayOf(sel), week = [...Array(7)].map((_, i) => { const d = new Date(mon); d.setDate(d.getDate() + i); return localDay(d); });
     const today = localDay(), list = blocksOn(j, jDay), school = schoolOn(j, jDay), ab = weekAB(sel);
     const subj = id => state.subjects.find(x => x.id === id), colorOf = blockColor;
-    const ctrlToday = upCtrls().filter(x => x.c.d === jDay);
+    const ctrlToday = upCtrls().filter(x => x.c.d === jDay), ctrlShown = new Set();
     const month = sel.toLocaleDateString("fr-FR", { month: "long" });
     // Frise : cours du lycée (gris) et blocs (couleur de la matière), avec les trous libres.
     const items = school.map(x => ({ school: true, start: x.start, dur: mins(x.end) - mins(x.start), x })).concat(list.map(b => ({ b, start: b.start, dur: b.dur }))).sort((a, b) => mins(a.start) - mins(b.start));
@@ -129,7 +129,7 @@
     items.forEach(it => {
       const st = mins(it.start);
       if (prevEnd != null && st - prevEnd >= 30) rows.push(`<button class="jgap" data-gap="${hm(prevEnd)}"><span>${durTxt(st - prevEnd)} de libre</span>${I.plus}</button>`);
-      if (it.school) { const sj = subjOfName(it.x.subject); rows.push(`<div class="jrow school"><span class="jpill" style="--c:${esc(sj ? sj.color : "#475569")};--h:${Math.min(96, Math.max(48, it.dur * .9))}px">${I.subj}</span><div class="jtxt"><span class="small muted">${esc(it.x.start)}–${esc(it.x.end)} (${durTxt(it.dur)})</span><b>Cours${sj ? " de " + esc(sj.name) : " : " + esc(it.x.subject)}</b>${it.x.room ? `<span class="small muted">Salle ${esc(it.x.room)}</span>` : ""}</div></div>`); }
+      if (it.school) { const sj = subjOfName(it.x.subject), ct = sj && ctrlToday.find(x => x.s.id === sj.id && !ctrlShown.has(x)); if (ct) ctrlShown.add(ct); rows.push(`<div class="jrow school${ct ? " hasctl" : ""}"><span class="jpill" style="--c:${esc(sj ? sj.color : "#475569")};--h:${Math.min(96, Math.max(48, it.dur * .9))}px">${ct ? I.check : I.subj}</span><div class="jtxt"><span class="small muted">${esc(it.x.start)}–${esc(it.x.end)} (${durTxt(it.dur)})</span><b>${ct ? "Contrôle de " + esc(sj.name) : "Cours" + (sj ? " de " + esc(sj.name) : " : " + esc(it.x.subject))}</b>${ct ? `<a class="jctlink" href="#matiere-${sj.id}">${ct.c.ch && ct.c.ch.length ? plural(ct.c.ch.length, "chapitre", "chapitres") + " · " : ""}Réviser</a>` : ""}${it.x.room ? `<span class="small muted">Salle ${esc(it.x.room)}</span>` : ""}</div></div>`); }
       else { const b = it.b, done = isDone(j, jDay, b), s = subj(b.s), a = actOf(b.act), ch = b.ch && state.chapters.find(c => c.id === b.ch), auto = !b.ch && b.auto && b.s && bestChapter(b.s);
         const live = jDay === today && !done && mins(b.start) <= nowMin() && nowMin() < mins(b.start) + b.dur;
         rows.push(`<div class="jrow${done ? " done" : ""}${live ? " live" : ""}" ${live ? liveAttrs(b) + ` ` : ""}style="--c:${esc(colorOf(b))}${live ? ";--p:" + ((nowMin() - mins(b.start)) / b.dur * 100).toFixed(1) + "%" : ""}"><button class="jpill" data-go="${b.id}" style="--h:${Math.min(120, Math.max(48, b.dur * 1.1))}px" aria-label="Lancer : ${esc(b.title || a[1])}">${bIcon(b)}</button>
@@ -137,17 +137,21 @@
           <button class="jcheck" data-done="${b.id}" role="checkbox" aria-checked="${done}" aria-label="Fait"><span>${done ? I.check : ""}</span></button></div>`); }
       prevEnd = Math.max(prevEnd || 0, st + it.dur);
     });
+    // Contrôle d'une matière qui n'a pas d'heure de cours ce jour-là (ou pas d'emploi du temps) : une ligne en fin de journée.
+    ctrlToday.filter(x => !ctrlShown.has(x)).forEach(x => rows.push(`<div class="jrow school hasctl"><span class="jpill" style="--c:${esc(x.s.color)};--h:48px">${I.check}</span><div class="jtxt"><b>Contrôle de ${esc(x.s.name)}</b><a class="jctlink" href="#matiere-${x.s.id}">${x.c.ch && x.c.ch.length ? plural(x.c.ch.length, "chapitre", "chapitres") + " · " : ""}Réviser</a></div></div>`));
     const dots = k => { const bs = blocksOn(j, k).filter(b => b.act !== "pause").slice(0, 4); return bs.map(b => `<i style="background:${esc(colorOf(b))}"></i>`).join(""); };
-    app.innerHTML = `<div class="jnav"><button class="linkbtn" id="jup">${I.back}Calendrier</button><span class="grow"></span>${jDay !== today ? `<button class="btn sm" id="jback">Aujourd'hui</button>` : ""}<button class="btn sm ghost" id="jhours" aria-pressed="${hours}">${I.clock}${hours ? "Frise" : "Heures"}</button></div><div class="jhead"><button class="jtitle" id="jtoday"><b>${sel.getDate()} ${esc(month)}</b> <span>${sel.getFullYear()}</span></button>${edtGet().ab && ab ? `<span class="pill">Sem. ${ab}</span>` : ""}</div>
+    app.innerHTML = `<div class="jnav"><button class="linkbtn" id="jup">${I.back}Calendrier</button><span class="grow"></span>${jDay !== today ? `<button class="btn sm" id="jback">Aujourd'hui</button>` : ""}<div class="jmwrap"><button class="iconbtn jmbtn" id="jmenu" aria-label="Actions du jour" aria-haspopup="menu" aria-expanded="false">${I.plus}</button><div class="jmenu" id="jmenubox" role="menu" hidden><button role="menuitem" id="jai">${I.spark}<span>Demander à l'IA</span></button><button role="menuitem" id="jctl">${I.check}<span>Ajouter un contrôle</span></button><button role="menuitem" id="joff" aria-pressed="${!!j.off[jDay]}">${I.home}<span>${j.off[jDay] ? "Remettre les cours" : "Pas cours ce jour-là"}</span></button></div></div></div><div class="jhead"><button class="jtitle" id="jtoday"><b>${sel.getDate()} ${esc(month)}</b> <span>${sel.getFullYear()}</span></button>${edtGet().ab && ab ? `<span class="pill">Sem. ${ab}</span>` : ""}</div>
       <div class="jweek"><button class="iconbtn flat" id="jprev" aria-label="Semaine précédente">${I.back}</button>${week.map(k => { const d = dayOf(k); return `<button class="jd${k === jDay ? " on" : ""}${k === today ? " now" : ""}" data-day="${k}"><span>${d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "")}</span><b>${d.getDate()}</b><span class="jdots">${dots(k)}</span></button>`; }).join("")}<button class="iconbtn flat" id="jnext" aria-label="Semaine suivante" style="transform:scaleX(-1)">${I.back}</button></div>
-      <div class="jacts" role="group" aria-label="Actions du jour"><button class="jact${j.off[jDay] ? " on" : ""}" id="joff" aria-pressed="${!!j.off[jDay]}">${I.home}Pas cours</button><button class="jact" id="jai">${I.spark}IA</button><button class="jact" id="jctl">${I.plus}Contrôle</button></div>
-      ${ctrlToday.length ? `<div class="jctls">${ctrlToday.map(x => `<a class="jctl" href="#matiere-${x.s.id}" style="--c:${esc(x.s.color)}"><span class="dot"></span><b>Contrôle de ${esc(x.s.name)}</b>${x.c.ch && x.c.ch.length ? `<span class="small muted">${plural(x.c.ch.length, "chapitre", "chapitres")}</span>` : ""}</a>`).join("")}</div>` : ""}
-      ${hours ? hoursHtml(j, jDay, school, list, colorOf) : ""}<div class="jline"${hours ? " hidden" : ""}>${rows.join("") || `<div class="card pad stack jempty"><b>Rien de prévu ${jDay === today ? "aujourd'hui" : "ce jour-là"}.</b><p class="small muted">Touche + pour ajouter une révision (par exemple « Maths, 30 min »), ou « IA » pour la demander avec tes mots.</p></div>`}</div>
+      <div class="jline">${rows.join("") || `<div class="card pad stack jempty"><b>Rien de prévu ${jDay === today ? "aujourd'hui" : "ce jour-là"}.</b><p class="small muted">Touche + pour ajouter une révision (par exemple « Maths, 30 min »), ou « IA » pour la demander avec tes mots.</p></div>`}</div>
       ${edtGet().slots.length ? "" : `<button class="linkbtn" id="jedt">${I.cal}Ajouter mon emploi du temps</button>`}
       <button class="jfab" id="jadd" aria-label="Ajouter une révision">${I.plus}</button>`;
     const re = () => screenJournee();
     $("jup").onclick = () => jGo("mois");
-    $("jhours").onclick = () => jGo("jour", jDay, !hours);
+    // Menu « + » en haut à droite : les actions du jour (Demander à l'IA, Ajouter un contrôle, Pas cours).
+    const mb = $("jmenubox"), closeM = () => { mb.hidden = true; $("jmenu").setAttribute("aria-expanded", "false"); document.removeEventListener("pointerdown", outM, true); };
+    const outM = e => { if (!e.target.closest(".jmwrap")) closeM(); };
+    $("jmenu").onclick = () => { if (!mb.hidden) return closeM(); mb.hidden = false; $("jmenu").setAttribute("aria-expanded", "true"); document.addEventListener("pointerdown", outM, true); };
+    mb.querySelectorAll("button").forEach(b => b.addEventListener("click", closeM));
     app.querySelectorAll(".jweek [data-day]").forEach(b => b.onclick = () => jGo("jour", b.dataset.day));
     // Semaine précédente / suivante : on se place sur le lundi (ou sur aujourd'hui si c'est la semaine en cours).
     const weekJump = n => { const d = mondayOf(dayOf(jDay)); d.setDate(d.getDate() + 7 * n); const k = localDay(d); jGo("jour", localDay(mondayOf(new Date())) === k ? today : k); };
@@ -156,7 +160,6 @@
     $("jtoday").onclick = () => jGo("jour", today);
     if ($("jback")) $("jback").onclick = () => jGo("jour", today);
     $("jctl").onclick = () => ctrlDaySheet(jDay, re);
-    app.querySelectorAll("[data-hour]").forEach(b => b.onclick = () => blockSheet(null, b.dataset.hour));
     $("joff").onclick = () => { const x = jGet(); if (x.off[jDay]) delete x.off[jDay]; else x.off[jDay] = true; jSave(x); toast(x.off[jDay] ? "Pas cours ce jour-là : toute la journée est libre." : "Cours remis."); re(); };
     $("jadd").onclick = () => blockSheet(null);
     if ($("jedt")) $("jedt").onclick = () => edtSetupSheet();
@@ -352,14 +355,6 @@
     });
   }
 
-  // Vue heure par heure (le « zoom » maximum) : de 6 h à 23 h, chaque bloc à sa place ; toucher une heure vide pour y ajouter une révision.
-  function hoursHtml(j, k, school, list, colorOf) {
-    const H0 = 6 * 60, PX = 1.3, y = t => Math.max(0, (mins(t) - H0) * PX), now = new Date(), nowM = now.getHours() * 60 + now.getMinutes();
-    const grid = [...Array(18)].map((_, i) => `<button class="hrow" data-hour="${hm(H0 + i * 60)}" style="top:${i * 60 * PX}px" aria-label="Ajouter à ${6 + i} h"><span>${String(6 + i).padStart(2, "0")}:00</span></button>`).join("");
-    const sc = school.map(x => `<div class="hblk school" style="--c:${esc((subjOfName(x.subject) || {}).color || "#475569")};top:${y(x.start)}px;height:${Math.max(22, (mins(x.end) - mins(x.start)) * PX - 3)}px"><b>Cours · ${esc(x.subject)}</b><span>${esc(x.start)}–${esc(x.end)}</span></div>`).join("");
-    const bl = list.map(b => `<div class="hblk hb${isDone(j, k, b) ? " done" : ""}" style="top:${y(b.start)}px;height:${Math.max(44, b.dur * PX - 3)}px;--c:${esc(colorOf(b))}"><button class="hedit" data-edit="${b.id}"><b>${esc(b.title || (b.act === "pause" ? "Pause" : actOf(b.act)[1] + ((state.subjects.find(x => x.id === b.s) || {}).name ? " · " + state.subjects.find(x => x.id === b.s).name : "")))}</b><span>${b.start}–${hm(mins(b.start) + b.dur)}</span></button><button class="jcheck hcheck" data-done="${b.id}" role="checkbox" aria-checked="${isDone(j, k, b)}" aria-label="Fait"><span>${isDone(j, k, b) ? I.check : ""}</span></button></div>`).join("");
-    return `<div class="hgrid" style="height:${18 * 60 * PX}px">${grid}${sc}${bl}${k === localDay() && nowM >= H0 ? `<i class="hnow" style="top:${(nowM - H0) * PX}px"></i>` : ""}</div><div style="height:80px"></div>`;
-  }
   // Contrôles d'un jour, depuis la frise : toucher une ou plusieurs matières, puis choisir les chapitres.
   function ctrlDaySheet(k, after) {
     const draw = el => {

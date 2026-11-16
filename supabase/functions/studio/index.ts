@@ -66,12 +66,14 @@ type Part = { text: string } | { inlineData: { mimeType: string; data: string } 
 // Rangée par appel (AsyncLocalStorage) : une autre demande traitée en même temps n'est pas concernée.
 const LIMIT = new AsyncLocalStorage<{ dl: number }>();
 const timedOut = (e: unknown) => /abort|timeout/i.test(String((e as Any)?.name) + String((e as Any)?.message));
-async function gemini(sa: Any, system: string, parts: Part[], wantJson: boolean, temperature: number, thinking: string) {
+async function gemini(sa: Any, system: string, parts: Part[], wantJson: boolean, temperature: number, thinking: string, search = false) {
   const token = await accessToken(sa);
   const host = LOCATION === "global" ? "aiplatform.googleapis.com" : `${LOCATION}-aiplatform.googleapis.com`;
   const url = `https://${host}/v1/projects/${sa.project_id}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
   const body: Any = { systemInstruction: { parts: [{ text: system }] }, contents: [{ role: "user", parts }], generationConfig: { temperature, thinkingConfig: { thinkingLevel: thinking } } };
   if (wantJson) body.generationConfig.responseMimeType = "application/json";
+  // Recherche Google (vrais sujets d'examen) : incompatible avec la sortie JSON imposée, le JSON est alors demandé dans le texte.
+  if (search) body.tools = [{ googleSearch: {} }];
   const send = () => fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: LIMIT.getStore()?.dl ? AbortSignal.timeout(Math.max(3000, LIMIT.getStore()!.dl - Date.now())) : undefined });
   let res = await send();
   let data = await res.json();
@@ -82,7 +84,8 @@ async function gemini(sa: Any, system: string, parts: Part[], wantJson: boolean,
     throw err;
   }
   const text = (data.candidates?.[0]?.content?.parts ?? []).map((p: Any) => p.text ?? "").join("");
-  return { text, tin: data.usageMetadata?.promptTokenCount ?? 0, tout: data.usageMetadata?.candidatesTokenCount ?? 0 };
+  const sources = (data.candidates?.[0]?.groundingMetadata?.groundingChunks ?? []).map((c: Any) => c.web).filter((w: Any) => w && w.uri).map((w: Any) => ({ uri: String(w.uri), title: String(w.title ?? "") }));
+  return { text, sources, tin: data.usageMetadata?.promptTokenCount ?? 0, tout: data.usageMetadata?.candidatesTokenCount ?? 0 };
 }
 // Répare le LaTeX mal échappé dans le JSON de l'IA : « \frac » écrit avec une seule barre deviendrait un saut de page + « rac ».
 const TEXCMD = /^(frac|dfrac|tfrac|times|theta|tau|tan|text|textrm|textbf|mathrm|mathbf|mathbb|rho|right|left|rightarrow|Rightarrow|leftrightarrow|nu|neq|nabla|beta|bar|vec|sqrt|sum|int|infty|approx|cdot|Delta|delta|Omega|omega|alpha|lambda|mu|pi|sigma|phi|varphi|leq|geq|le|ge|pm|cos|sin|log|ln|exp|lim|partial|overline|underline|hat|dot|circ|quad|epsilon|varepsilon|gamma|Gamma|eta|kappa|xi|chi|psi|Phi|Psi|Sigma|Pi|Lambda|Theta|div|ll|gg|equiv|propto|in|notin|forall|exists|cup|cap|subset|operatorname|ce|degree|to|mapsto|ldots|cdots|prime|perp|parallel|angle|triangle|Leftrightarrow|iff|implies|newline|displaystyle|binom|over|lfloor|rfloor|lceil|rceil|langle|rangle|vee|wedge|neg|not|sim|simeq|cong|oplus|otimes|hbar|ell|Re|Im)(?![a-zA-Z])/;
@@ -349,6 +352,46 @@ async function stepRun(id: string) {
   }
 }
 
+// Vrai sujet d'examen, en 2 étapes. 1) Recherche Google : trouver le sujet officiel et recopier son énoncé (jusqu'à 3 essais,
+// de plus en plus larges). 2) Sans recherche, en JSON imposé : découper en exercices et questions, écrire corrections et barème.
+// Rien n'est inventé : sans page trouvée, on répond « introuvable ».
+const EPREUVES = `Noms officiels des épreuves à connaître (le nom de la matière de l'élève n'est souvent PAS le nom de l'épreuve) :
+- STI2D : les spécialités SIN, ITEC, AC et EE n'ont pas d'épreuve à leur nom. L'épreuve écrite s'appelle « Ingénierie, innovation et développement durable » (2I2D), avec une partie commune et une partie spécifique (SIN, ITEC, AC ou EE). Cherche par exemple « sujet bac STI2D 2I2D SIN 2024 » ou « bac STI2D spécialité 2I2D SIN sujet ». Pour « Physique-chimie » en STI2D, l'épreuve est « Physique-chimie et mathématiques ».
+- STMG : « Management, sciences de gestion et numérique » (avec l'enseignement spécifique : mercatique, RHC, GF, SIG) et « Droit et économie ».
+- Voie générale : épreuves de spécialité (Mathématiques, Physique-chimie, SVT, SES, HGGSP, HLP, LLCER, NSI, SI…), philosophie, grand oral ; en Première, épreuve anticipée de français (et de mathématiques à partir de 2026).
+- Brevet (3e) : français, mathématiques, histoire-géographie-EMC, sciences.
+- BTS et autres formations : l'épreuve écrite qui correspond à la matière.`;
+function bacFind(sa: Any, classe: string, matiere: string, annee: string) { return LIMIT.run({ dl: Date.now() + 140000 }, () => bacRun(sa, classe, matiere, annee)); }
+async function bacRun(sa: Any, classe: string, matiere: string, annee: string) {
+  const sys = "Tu aides un élève français à trouver de vrais sujets d'examen officiels des années précédentes. Tu ne recopies que ce que tu as trouvé sur le web, tu n'inventes jamais un sujet.";
+  const tries = [
+    annee ? `de l'année ${annee}` : "le plus récent possible (session de juin en métropole de préférence)",
+    "d'une année récente (n'importe quelle session : métropole, Polynésie, Antilles, Amérique du Nord, septembre…)",
+    "de n'importe quelle année depuis la réforme du bac (2021), ou à défaut un sujet zéro officiel publié par Eduscol",
+  ];
+  let tin = 0, tout = 0, found: Any = null, sources: Any[] = [];
+  const t0 = Date.now();
+  for (const when of tries) {
+    if (Date.now() - t0 > 75000) break; // garder le temps de la mise en forme (un appel serveur est coupé vers 150 s)
+    let r: Any;
+    try { r = await gemini(sa, sys, [{ text: `Élève de « ${classe || "Terminale"} », matière « ${matiere} ».\n${EPREUVES}\n\n1. Déduis le nom officiel de l'épreuve écrite qui correspond à cette matière et à cette classe.\n2. Cherche sur le web un VRAI sujet officiel de cette épreuve ${when}. Sources acceptées : sites officiels (education.gouv.fr, eduscol, académies) ou sites d'annales sérieux qui reproduisent le sujet officiel (sujetdebac.fr, APMEP, annabac, labolycee, etc.). Fais plusieurs recherches si besoin, avec des mots différents.\n3. Recopie l'énoncé : le contexte, chaque question avec sa numérotation et ses points s'ils sont indiqués, et les données utiles des documents (résume les documents trop longs en le signalant). 12 000 caractères au plus.\nRéponds UNIQUEMENT avec un objet JSON, sans texte autour :\n{"trouve":true,"epreuve":"nom officiel de l'épreuve","annee":"2024","session":"ex. Métropole, juin","filiere":"...","source_nom":"nom du site","source_url":"adresse exacte de la page du sujet","avertissement":"précision (documents résumés, partie seulement…) ou chaîne vide","enonce":"énoncé recopié"}\nSi tu ne trouves vraiment aucun sujet officiel de cette épreuve, réponds {"trouve":false,"message":"ce qui n'a pas été trouvé"}.` }], false, 0.2, "low", true); } catch (e) { if (timedOut(e)) break; throw e; }
+    tin += r.tin; tout += r.tout;
+    let c: Any = null;
+    try { const m = r.text.match(/\{[\s\S]*\}/); c = m ? parseJson(m[0]) : null; } catch { c = null; }
+    if (c?.trouve && String(c.enonce ?? "").trim().length > 200 && (r.sources.length || /^https?:\/\//.test(String(c.source_url ?? "")))) { found = c; sources = r.sources; break; }
+  }
+  if (!found) return { content: { trouve: false, message: `Je n'ai pas trouvé de sujet officiel pour « ${matiere} » en ${classe || "Terminale"}, même en élargissant la recherche. Je préfère ne rien inventer : réessaie sans année, ou vérifie le nom de la matière.` }, tin, tout };
+  // 2) Mise en forme interactive, sans recherche : la sortie JSON est alors garantie.
+  let r2: Any;
+  try { r2 = await gemini(sa, sys + "\n" + FORMULES, [{ text: `Voici l'énoncé d'un vrai sujet d'examen (${clip(found.epreuve, 120)}, ${clip(found.annee, 10)}) :\n<<<\n${clip(found.enonce, 14000)}\n>>>\nDécoupe-le en exercices et questions, sans changer les questions. Pour chaque question, écris une correction rédigée comme l'attend un correcteur, et des points (ceux du sujet s'ils sont indiqués, sinon un barème cohérent). JSON strict :\n{"exercices":[{"titre":"Exercice 1 ou Partie A…","enonce":"contexte et données de l'exercice","questions":[{"q":"question","points":2,"correction":"correction rédigée"}]}]}` }], true, 0.2, "low"); } catch (e) { if (timedOut(e)) return { content: { trouve: false, message: "La recherche a pris trop de temps. Réessaie." }, tin, tout }; throw e; }
+  tin += r2.tin; tout += r2.tout;
+  let ex: Any[] = [];
+  try { ex = (parseJson(r2.text).exercices ?? []).filter((e: Any) => e && (e.questions ?? []).length).slice(0, 12); } catch { ex = []; }
+  if (!ex.length) return { content: { trouve: false, message: "J'ai trouvé un sujet, mais je n'ai pas réussi à le mettre en forme. Réessaie." }, tin, tout };
+  const content = { trouve: true, epreuve: clip(found.epreuve, 160), annee: clip(found.annee, 10), session: clip(found.session, 80), filiere: clip(found.filiere, 80), source_nom: clip(found.source_nom, 120), source_url: clip(found.source_url, 500), avertissement: clip(found.avertissement, 300), exercices: ex, sources: sources.slice(0, 6) };
+  return { content, tin, tout };
+}
+
 // deno-lint-ignore no-explicit-any
 const background = (p: Promise<unknown>) => { const er = (globalThis as any).EdgeRuntime; if (er?.waitUntil) er.waitUntil(p); else p.catch(console.error); };
 
@@ -376,6 +419,13 @@ Deno.serve(async (req) => {
       const pages = txt.split("[[PAGE]]").map((x) => x.trim()).filter(Boolean);
       const ex = extractSchemas(pages.map((t, i) => ({ text: t, path: "test/page" + (i + 1) })));
       return json({ ms: Date.now() - t0, raw: txt, schemas: ex.schemas, texts: ex.texts });
+    }
+    // Diagnostic (secret cron) : recherche d'un vrai sujet sans compte d'élève, pour tester en réel.
+    if (body.action === "bac_test") {
+      const S = await secrets();
+      if (!S.cron || req.headers.get("x-cron-secret") !== S.cron) return json({ error: "interdit" }, 401);
+      const t0 = Date.now(), r = await bacFind(serviceAccount(), clip(body.classe, 60), clip(body.matiere, 60), /^\d{4}$/.test(String(body.annee ?? "")) ? String(body.annee) : "");
+      return json({ ms: Date.now() - t0, ...r });
     }
     if (body.action === "import_step") {
       const S = await secrets();
@@ -412,6 +462,17 @@ Deno.serve(async (req) => {
       await setJob(job.id, { status: "running", error: null, error_code: null, message: "Reprise de l'import…" });
       background(step(job.id));
       return json({ job_id: job.id });
+    }
+    // Vrais sujets d'examen (bouton « Vrais sujets d'examen » d'une matière). Compte pour 1 appel dans la limite du jour.
+    if (body.action === "bac") {
+      const matiere = clip(body.matiere, 60), annee = /^\d{4}$/.test(String(body.annee ?? "")) ? String(body.annee) : "";
+      if (matiere.trim().length < 2) return json({ error: "requete", detail: "Matière inconnue." }, 400);
+      const calls = await callsToday(uid);
+      if (calls >= QUOTA) return json({ error: "quota", calls, quota: QUOTA }, 429);
+      const { data: prof } = await admin.from("profiles").select("classe").eq("user_id", uid).maybeSingle();
+      const r = await bacFind(serviceAccount(), prof?.classe || "", matiere, annee);
+      await admin.rpc("ai_usage_bump", { p_user: uid, p_day: today(), p_in: r.tin, p_out: r.tout });
+      return json({ content: r.content, usage: { calls: calls + 1, quota: QUOTA } });
     }
     if (body.action === "libre") {
       const text = clip(body.text, 400000), demande = clip(body.demande, 1200);

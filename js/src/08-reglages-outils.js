@@ -346,9 +346,9 @@
       $("bgo").onclick = find; app.querySelectorAll("[data-bs]").forEach(b => b.onclick = () => { cur = list[+b.dataset.bs]; exam(); });
     }
     async function find() {
-      const y = $("by").value.trim(); $("bgo").disabled = true; $("bmsg").innerHTML = `<p class="muted" role="status">Recherche du sujet officiel… (jusqu'à une minute)</p>`;
+      const y = $("by").value.trim(); $("bgo").disabled = true; $("bmsg").innerHTML = `<p class="muted" role="status">Recherche du sujet officiel… (jusqu'à 2 minutes)</p>`;
       try {
-        const r = await ai({ action: "bac", matiere: s.name, annee: /^\d{4}$/.test(y) ? y : "" }); const c = (r && r.content) || {};
+        const r = await ai({ action: "bac", matiere: s.name, annee: /^\d{4}$/.test(y) ? y : "" }, "studio"); const c = (r && r.content) || {};
         if (!c.trouve || !(c.exercices || []).length) { home(`<p class="note" role="status">${esc(c.message || "Je n'ai pas trouvé de sujet officiel pour ta filière et ta matière. Je préfère ne rien inventer.")}</p>`); return; }
         list.unshift(c); list = list.slice(0, 10); jset(key, list); cur = c; exam();
       } catch (e) { $("bgo").disabled = false; showErr($("bmsg"), e); }
@@ -357,7 +357,7 @@
       const c = cur, open = new Set();
       const draw = () => {
         const tot = (c.exercices || []).reduce((a, ex) => a + (ex.questions || []).reduce((b, q) => b + (+q.points || 0), 0), 0);
-        app.innerHTML = head + `<div class="card pad stack"><h2>${esc(c.epreuve || s.name)}</h2><p class="small">${esc([c.session, c.annee, c.filiere].filter(Boolean).join(" · "))}${tot ? " · barème sur " + tot : ""}</p><p class="small">Source : ${c.source_url ? `<a href="${esc(c.source_url)}" target="_blank" rel="noopener">${esc(c.source_nom || c.source_url)}</a>` : esc(c.source_nom || "non précisée")}</p>${(c.sources || []).length ? `<p class="small muted">Pages consultées : ${c.sources.slice(0, 4).map(x => `<a href="${esc(x.uri)}" target="_blank" rel="noopener">${esc(x.title || "lien")}</a>`).join(" · ")}</p>` : ""}${c.avertissement ? `<p class="note">${esc(c.avertissement)}</p>` : ""}</div>
+        app.innerHTML = head + `<div class="card pad stack"><h2>${esc(c.epreuve || s.name)}</h2><p class="small">${esc([c.session, c.annee, c.filiere].filter(Boolean).join(" · "))}${tot ? " · barème sur " + tot : ""}</p>${c.avertissement ? `<p class="small muted">${esc(c.avertissement)}</p>` : ""}<p class="note">Énoncé officiel ; les corrections sont écrites par l'IA. Pour les questions sur les documents du sujet, ouvre la source pour les voir en entier.</p><p class="small">Source : ${c.source_url ? `<a href="${esc(c.source_url)}" target="_blank" rel="noopener">${esc(c.source_nom || c.source_url)}</a>` : esc(c.source_nom || "non précisée")}</p>${(c.sources || []).length ? `<p class="small muted">Pages consultées : ${c.sources.slice(0, 4).map(x => `<a href="${esc(x.uri)}" target="_blank" rel="noopener">${esc(x.title || "lien")}</a>`).join(" · ")}</p>` : ""}${c.avertissement ? `<p class="note">${esc(c.avertissement)}</p>` : ""}</div>
           ${(c.exercices || []).map((ex, i) => `<div class="card pad stack"><h2>${mx(ex.titre || "Exercice " + (i + 1))}</h2>${ex.enonce ? `<p class="enonce">${mx(ex.enonce)}</p>` : ""}${(ex.questions || []).map((q, j) => { const k = i + "-" + j; return `<div class="stack bacq"><p><b>${j + 1}.</b> ${mx(q.q)} <span class="pill">${q.points || "?"} pt</span></p><textarea aria-label="Ta réponse" placeholder="Ta réponse…" style="min-height:70px"></textarea>${open.has(k) ? `<div class="solution"><b>Correction</b><p>${mx(q.correction || "")}</p></div>` : `<button class="btn sm ghost" data-k="${k}" style="align-self:flex-start">Voir la correction</button>`}</div>`; }).join("")}</div>`).join("")}
           <button class="btn ghost" id="bback">Autres sujets</button>`;
         app.querySelectorAll("[data-k]").forEach(b => b.onclick = () => { const vals = [...app.querySelectorAll(".bacq textarea")].map(t => t.value); open.add(b.dataset.k); const y = scrollY; draw(); [...app.querySelectorAll(".bacq textarea")].forEach((t, n) => { t.value = vals[n] || ""; }); scrollTo(0, y); });

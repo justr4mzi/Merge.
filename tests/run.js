@@ -27,6 +27,8 @@ async function open(browser, { w, h, theme, seed = "plein", legacy, quota, maste
 const go = async (page, hash, wait) => { await page.evaluate(h => { if (location.hash === h) location.hash = "#accueil"; }, hash); await page.evaluate(h => { location.hash = h; }, hash); await page.waitForTimeout(wait || 220); };
 const overflow = page => page.evaluate(() => { const d = document.documentElement; const wide = [...document.querySelectorAll("#app *")].filter(e => e.getBoundingClientRect().right > innerWidth + 1 && !e.closest(".scrollx,.mindmap,.flipwrap")).slice(0, 3).map(e => e.tagName + "." + e.className); return { sw: d.scrollWidth, iw: innerWidth, wide }; });
 const small = page => page.evaluate(() => [...document.querySelectorAll("#app button, #app a.btn, #app a.chip, #app a.iconbtn, #app a.mini, .tabs a")].filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height < 43.5 && !e.closest(".mindmap") && !e.classList.contains("flip"); }).slice(0, 4).map(e => e.tagName + "." + e.className + ":" + Math.round(e.getBoundingClientRect().height) + ":" + e.textContent.trim().slice(0, 20)));
+// Planning : les actions du jour sont dans le menu « + » en haut à droite.
+const jm = async (page, sel) => { if (await page.locator("#jmenu").count() && await page.locator(sel).isHidden()) { await page.click("#jmenu"); await page.waitForTimeout(80); } await page.click(sel); };
 const txt = page => page.evaluate(() => document.getElementById("app").innerText);
 
 const ROUTES = ["methode-s1", "bac-s1", "edt", "recompenses", "melange", "interro-c1", "accueil", "matieres", "matiere-s1", "dossier-g1", "chapitre-c1", "calendrier", "progres", "duo", "reglages", "erreurs", "import-c1", "resume-c1", "cartes-c1", "apprendre-c1", "quiz-c1", "controle-c1", "associer-c1", "vraifaux-c1", "ecouter-c1", "questions-c1", "blurting-c1", "feynman-c1", "khole-c1", "boss-c1", "flash-c1", "bus-c1", "planche-c1", "erreurs-c1", "fiche-c1", "recherche", "minuteur", "blanc-c1", "difficiles-c1", "revision-s1", "perso", "revdossier-g1", "journee", "exos", "exos-c1"];
@@ -144,7 +146,7 @@ async function flows(browser) {
   await go(page, "#bus-c1"); await page.click("#bplay"); await page.waitForTimeout(200); ok((await page.locator("#bplay").innerText()).trim() === "Pause", "mains libres : lecture"); await page.click("#bplay");
   await go(page, "#planche-c1"); ok(await page.locator(".a4.planche").count() === 4 && await page.locator(".pc.q").count() === 11, "planche A4 : recto et verso de 8 cartes", String(await page.locator(".a4.planche").count()));
   await go(page, "#erreurs"); await page.click("[data-why] >> nth=0"); await page.waitForTimeout(300); ok((await txt(page)).includes("À retenir"), "carnet d'erreurs : Pourquoi ?");
-  await page.evaluate(() => localStorage.setItem("merge.jview", JSON.stringify({ lvl: "jour" }))); await go(page, "#mois"); await page.click(".cal button.day >> nth=-1"); await page.waitForTimeout(500); if (await page.locator("#sheet [data-close]").count()) { await page.click("#sheet [data-close]"); await page.waitForTimeout(150); } await page.click("#jctl"); await page.click('#sheet [data-sub="s2"]'); await page.waitForTimeout(300); ok(await page.evaluate(() => !!window.__fake.DB.subjects.find(s => s.id === "s2").exam_date), "calendrier : contrôle placé en touchant un jour");
+  await page.evaluate(() => localStorage.setItem("merge.jview", JSON.stringify({ lvl: "jour" }))); await go(page, "#mois"); await page.click(".cal button.day >> nth=-1"); await page.waitForTimeout(500); if (await page.locator("#sheet [data-close]").count()) { await page.click("#sheet [data-close]"); await page.waitForTimeout(150); } await jm(page, "#jctl"); await page.click('#sheet [data-sub="s2"]'); await page.waitForTimeout(300); ok(await page.evaluate(() => !!window.__fake.DB.subjects.find(s => s.id === "s2").exam_date), "calendrier : contrôle placé en touchant un jour");
   ok(!page.errors.length, "modes : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | "));
   await page.context().close();
 
@@ -519,7 +521,7 @@ async function methodeBac(browser) {
   await go(page, "#bac-s1", 300); await page.fill("#by", "1999"); await page.click("#bgo"); await page.waitForTimeout(400);
   ok((await txt(page)).includes("Pas de sujet officiel"), "sujets : rien d'inventé si introuvable");
   await page.fill("#by", ""); await page.click("#bgo"); await page.waitForTimeout(400);
-  ok((await txt(page)).includes("Source") && (await txt(page)).includes("2024"), "sujets : épreuve avec source et année");
+  ok((await txt(page)).includes("Source") && (await txt(page)).includes("2024") && await page.evaluate(() => window.__fake.bacStudio === 2), "sujets : épreuve avec source et année (recherche faite par la fonction studio)");
   await page.click("[data-k]"); await page.waitForTimeout(150); ok((await txt(page)).includes("Correction"), "sujets : correction affichée");
   let sm = await small(page); ok(!sm.length, "sujets : boutons de 44 px minimum", sm.join(" | ")); let o = await overflow(page); ok(o.sw <= o.iw, "sujets : pas de débordement", JSON.stringify(o));
   ok(!page.errors.length, "méthode et sujets : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
@@ -1080,9 +1082,9 @@ async function controleChapitres(browser) {
     // Calendrier : plusieurs matières le même jour.
     await page.evaluate(() => localStorage.setItem("merge.jview", JSON.stringify({ lvl: "jour" }))); await go(page, "#mois", 300); await page.click(".cal button.day >> nth=-2"); await page.waitForTimeout(500);
     if (await page.locator("#sheet [data-close]").count()) { await page.click("#sheet [data-close]"); await page.waitForTimeout(150); }
-    await page.click("#jctl"); await page.click('#sheet [data-sub="s1"]'); await page.waitForTimeout(250); await page.click("#ccok"); await page.waitForTimeout(150);
-    await page.click("#jctl"); await page.click('#sheet [data-sub="s2"]'); await page.waitForTimeout(250); await page.click("#ccok"); await page.waitForTimeout(150);
-    ok(await page.locator('.jctls a.jctl').count() === 2 && await page.locator('#jctl').count() === 1, tag + " : deux contrôles le même jour");
+    await jm(page, "#jctl"); await page.click('#sheet [data-sub="s1"]'); await page.waitForTimeout(250); await page.click("#ccok"); await page.waitForTimeout(150);
+    await jm(page, "#jctl"); await page.click('#sheet [data-sub="s2"]'); await page.waitForTimeout(250); await page.click("#ccok"); await page.waitForTimeout(150);
+    ok(await page.locator('.jrow.hasctl').count() === 2 && await page.locator('.jctls').count() === 0 && await page.locator('#jctl').count() === 1, tag + " : deux contrôles le même jour, chacun dans la journée (pas de bandeau en haut)");
     // Révision combinée : tout un dossier, puis plusieurs matières, dossiers ou chapitres au choix.
     await go(page, "#dossier-g1", 400); ok(await page.locator('a[href="#revdossier-g1"]').count() === 1, tag + " : bouton réviser tout le dossier");
     await page.click('a[href="#revdossier-g1"]'); await page.waitForTimeout(400); ok(await page.locator(".session").count() === 1, tag + " : session du dossier lancée");
@@ -1245,14 +1247,11 @@ async function journee(browser) {
     await page.click("#jup"); await page.waitForTimeout(300);
 
     await page.click(".cal .day.now"); await page.waitForTimeout(300); ok(await page.locator(".jline").count() === 1, tag + " : toucher un jour ouvre sa frise");
-    await page.click("#jhours"); await page.waitForTimeout(200); ok(await page.locator(".hgrid .hrow").count() === 18 && await page.locator(".hgrid .hblk").count() >= 1, tag + " : vue heure par heure");
-    await page.evaluate(() => location.reload()); await page.waitForSelector("#app > *"); await go(page, "#calendrier", 500);
-    ok(await page.locator(".hgrid").count() === 1, tag + " : niveau gardé après avoir quitté l'appli");
-    await page.click("#jhours"); await page.waitForTimeout(200);
+    ok(await page.locator("#jhours").count() === 0 && await page.locator(".hgrid").count() === 0 && await page.locator("#jmenu").count() === 1, tag + " : plus de vue Heures, bouton + en haut à droite");
     // Pas cours, IA.
-    await page.click("#joff"); await page.waitForTimeout(100); ok(await page.locator('#joff[aria-pressed="true"]').count() === 1, tag + " : pas cours");
-    ok(await page.locator("#jauto").count() === 0 && await page.locator(".jact").count() === 3, tag + " : 3 actions (Pas cours, IA, Contrôle), plus de « Remplir »");
-    await page.click("#jai"); await page.waitForTimeout(150); await page.fill("#aiq", "Ce soir 30 min de SVT et un quiz"); await page.click("#aigo"); await page.waitForTimeout(400);
+    await jm(page, "#joff"); await page.waitForTimeout(100); ok(await page.locator('#joff[aria-pressed="true"]').count() === 1, tag + " : pas cours");
+    ok(await page.locator("#jauto").count() === 0 && await page.locator("#jmenubox [role=menuitem]").count() === 3, tag + " : 3 actions dans le menu + (IA, Contrôle, Pas cours), plus de « Remplir »");
+    await jm(page, "#jai"); await page.waitForTimeout(150); await page.fill("#aiq", "Ce soir 30 min de SVT et un quiz"); await page.click("#aigo"); await page.waitForTimeout(400);
     ok(await page.locator("#pok").count() === 1 && (await page.locator("#sheet").innerText()).includes("Voilà ta soirée"), tag + " : l'IA propose un plan (blocs invalides retirés)");
     const n0 = await page.locator(".jrow:not(.school)").count(); await page.click("#pok"); await page.waitForTimeout(200);
     const n1 = await page.locator(".jrow:not(.school)").count(); ok(n1 === n0 + 3, tag + " : plan de l'IA ajouté", n0 + " → " + n1);
@@ -1264,7 +1263,7 @@ async function journee(browser) {
   }
 }
 
-// Prof sur PC : le chat occupe toute la place à droite du menu (pas une colonne étroite au milieu).
+// Prof sur PC : comme Claude ou ChatGPT, une colonne centrée (≈ 770 px) au milieu de l'espace à droite des menus.
 async function profPc(browser) {
   for (const [w, h] of [[1440, 900], [1920, 1080]]) {
     const page = await open(browser, { w, h, theme: "dark" }), tag = "prof PC " + w;
@@ -1274,8 +1273,9 @@ async function profPc(browser) {
     const m = await page.evaluate(() => { const r = s => document.querySelector(s).getBoundingClientRect(), tabs = r("#tabs"), app = r("#app"), side = r(".pside"), main = r(".pmain"), cp = r(".pcomp"), ai = r(".exmsg.ai"); return { free: innerWidth - tabs.right, app: app.width, side: side.width, main: main.width, cp: cp.width, ai: ai.width, H: innerHeight, cpBottom: cp.bottom, hist: getComputedStyle(document.getElementById("phist")).visibility }; });
     ok(m.app >= m.free - 2, tag + " : l'écran Prof prend toute la largeur libre", JSON.stringify(m));
     ok(m.side >= 240 && m.hist === "hidden" && await page.locator(".pside [data-conv]").count() >= 1, tag + " : historique affiché en colonne à gauche", JSON.stringify(m));
-    ok(m.main >= m.free - m.side - 90 && m.ai >= Math.min(m.main, 1180) - 12, tag + " : la conversation prend le reste de la largeur", JSON.stringify(m));
-    ok(m.cp >= Math.min(m.main, 1180) - 4 && m.cpBottom > m.H - 60, tag + " : la barre de message est large et en bas", JSON.stringify(m));
+    const ctr = await page.evaluate(() => { const a = document.querySelector(".pmain").getBoundingClientRect(), c = document.querySelector(".pcomp").getBoundingClientRect(); return Math.abs((a.left + a.right) / 2 - (c.left + c.right) / 2); });
+    ok(m.main >= m.free - m.side - 90 && m.cp <= 772 && m.cp >= 740 && ctr < 3, tag + " : conversation en colonne centrée de ≈ 770 px, comme Claude", JSON.stringify(m) + " écart " + ctr);
+    ok(m.ai >= 600 && m.cpBottom > m.H - 60, tag + " : réponses lisibles et barre de message en bas", JSON.stringify(m));
     await page.click("#psnew"); await page.waitForTimeout(150); ok(await page.locator(".exmsg").count() === 0, tag + " : nouvelle discussion depuis la colonne");
     await page.click(".pside [data-conv]"); await page.waitForTimeout(150); ok(await page.locator(".exmsg").count() >= 1, tag + " : rouvrir une discussion depuis la colonne");
     await page.click(".pside [data-cdel]"); await page.waitForTimeout(150); ok(await page.locator("#confirm").count() === 1, tag + " : suppression demande confirmation");
@@ -1410,7 +1410,7 @@ async function multiImport(browser) {
   // Planning : la frise de la journée commence dans le premier écran, juste sous la semaine ; les ronds d'action dessous.
   await page.evaluate(() => { const d = (new Date().getDay() + 6) % 7; localStorage.setItem("merge.edt", JSON.stringify({ slots: [{ day: d, start: "08:00", end: "10:00", subject: "SVT", room: "B12", week: "" }, { day: d, start: "13:00", end: "14:00", subject: "Maths", room: "", week: "" }], ref: null })); localStorage.setItem("merge.edtask", "1"); });
   await go(page, "#accueil", 200); await go(page, "#calendrier", 500);
-  ok(await page.evaluate(() => { const l = document.querySelector(".jline"), a = document.querySelector(".jacts"); return l && a && a.getBoundingClientRect().bottom <= l.getBoundingClientRect().top && a.getBoundingClientRect().bottom < innerHeight; }), tag + " : actions du jour en haut, visibles sans descendre, avant la journée");
+  ok(await page.evaluate(() => { const l = document.querySelector(".jline"), w = document.querySelector(".jweek"); return l && w && !document.querySelector(".jacts") && l.getBoundingClientRect().top - w.getBoundingClientRect().bottom < 40; }), tag + " : la journée commence juste sous la semaine (actions dans le menu +)");
   const top = await page.evaluate(() => { const l = document.querySelector(".jline"); return l ? l.getBoundingClientRect().top : 9999; });
   ok(top < 420, tag + " : journée visible tout de suite dans Planning (juste sous la semaine)", String(top));
   await page.screenshot({ path: path.join(SHOTS, "planning-journee-390.png") });
@@ -1569,12 +1569,7 @@ async function planningPlus(browser) {
   await page.fill("#bstart", "21:00"); await page.click("#bok"); await page.waitForTimeout(150); ok(await page.locator("#sheet").count() === 1, tag + " : Autre sans nom ni matière refusé");
   await page.fill("#btitle", "Coloriage"); await page.click("#bok"); await page.waitForTimeout(200);
   ok((await txt(page)).includes("Coloriage") && await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem("merge.journee")).blocks).flat().some(b => b.title === "Coloriage" && b.s === null && b.act === "libre")), tag + " : activité libre ajoutée");
-  // Vue heure par heure : on peut cocher.
-  await page.click("#jhours"); await page.waitForTimeout(200);
-  ok(await page.locator(".hblk .hcheck").count() === 2 && await page.locator(".hblk .hedit").count() === 2, tag + " : case à cocher dans la vue heures");
-  await page.click(".hcheck >> nth=0"); await page.waitForTimeout(150); ok(await page.locator(".hblk.done").count() === 1, tag + " : bloc coché dans la vue heures");
   const sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px", sm.join(" | "));
-  await page.click("#jhours"); await page.waitForTimeout(150);
   // Semaine suivante depuis un dimanche : on tombe sur le lundi ; bouton Aujourd'hui pour revenir.
   await page.evaluate(() => { const d = new Date(); d.setDate(d.getDate() + 14 + ((7 - d.getDay()) % 7)); const k = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); localStorage.setItem("merge.jview", JSON.stringify({ lvl: "jour", day: k, hours: false })); });
   await go(page, "#calendrier", 400); await page.click("#jnext"); await page.waitForTimeout(200);
@@ -1582,13 +1577,15 @@ async function planningPlus(browser) {
   ok(await page.locator("#jback").count() === 1, tag + " : bouton Aujourd'hui quand on n'est pas sur aujourd'hui");
   await page.click("#jback"); await page.waitForTimeout(200); ok(await page.locator("#jback").count() === 0 && await page.locator(".jd.on.now").count() === 1, tag + " : retour à aujourd'hui");
   await page.screenshot({ path: path.join(SHOTS, "planning-jour-390.png") });
-  ok(await page.evaluate(() => { const g = document.querySelector(".jacts"); return g.scrollWidth <= g.clientWidth + 1 && g.lastElementChild.id === "jctl"; }), tag + " : actions du jour sans glisser, « Contrôle » à droite");
+  await page.click("#jmenu"); await page.waitForTimeout(100);
+  ok(await page.evaluate(() => { const m = document.getElementById("jmenubox"), r = m.getBoundingClientRect(); return !m.hidden && r.left >= 0 && r.right <= innerWidth && m.querySelectorAll("[role=menuitem]").length === 3; }), tag + " : menu + ouvert, 3 actions, dans l'écran");
+  await page.mouse.click(10, 500); await page.waitForTimeout(100); ok(await page.locator("#jmenubox").isHidden(), tag + " : menu + refermé en touchant ailleurs");
   // Fenêtres : bouton Fermer.
   await page.click("#jadd"); await page.waitForTimeout(150); ok(await page.locator("#sheet .sheetx").count() === 1 && await page.locator("#sheet .actbtn").count() === 7, tag + " : fenêtre d'ajout avec bouton Fermer et activités alignées");
   if (true) await page.screenshot({ path: path.join(SHOTS, "ajout-bloc-390.png") });
   await page.click("#sheet .sheetx"); await page.waitForTimeout(150); ok(await page.locator("#sheet").count() === 0, tag + " : le bouton Fermer ferme la fenêtre");
   // Dictée sans reconnaissance vocale du téléphone : enregistrement, transcrit par l'IA.
-  await page.click("#jai"); await page.waitForTimeout(150); ok(await page.locator("#aimic").count() === 1, tag + " : micro présent même sans dictée du téléphone");
+  await jm(page, "#jai"); await page.waitForTimeout(150); ok(await page.locator("#aimic").count() === 1, tag + " : micro présent même sans dictée du téléphone");
   await page.click("#aimic"); await page.waitForTimeout(400); ok(await page.locator("#aimic.on").count() === 1, tag + " : micro rouge pendant l'écoute");
   await page.waitForTimeout(1100); await page.click("#aimic"); await page.waitForTimeout(800);
   ok(await page.locator("#aimic.on, #aimic.busy").count() === 0, tag + " : un 2e appui arrête bien le micro (jamais bloqué)");
@@ -1685,7 +1682,7 @@ async function audit(browser) {
     const sheets = [["#calendrier", "#jadd"], ["#calendrier", "#jai"], ["#calendrier", "#jctl"], ["#exos", "#pplus"], ["#exos", "#pctx"], ...(w < 1200 ? [["#exos", "#phist"]] : []), ["#edt", null], ["#reglages", null], ["#boutique", null], ["#recompenses", null]];
     for (const [hsh, sel] of sheets) {
       await go(page, hsh, 450); await page.evaluate(() => { const s = document.getElementById("sheet"); if (s) s.remove(); });
-      if (sel) { try { await page.click(sel, { timeout: 3000 }); } catch (e) { probs.push(hsh + " " + sel + " → introuvable"); continue; } await page.waitForTimeout(350); }
+      if (sel) { try { if (["#jai", "#jctl"].includes(sel)) await page.click("#jmenu", { timeout: 3000 }); await page.click(sel, { timeout: 3000 }); } catch (e) { probs.push(hsh + " " + sel + " → introuvable"); continue; } await page.waitForTimeout(350); }
       const res = await page.evaluate(() => {
         const out = [], root = document.getElementById("sheet") || document.getElementById("pdrawer") || document.getElementById("app"), R = root.querySelector(".sheet,.pdpanel") || root, rb = R.getBoundingClientRect();
         for (const el of R.querySelectorAll("*")) { const b = el.getBoundingClientRect(); if (!b.width) continue; if (b.right > rb.right + 1 && !el.closest(".chips,.pctx,.jweek,.seg")) out.push("dépasse : " + el.tagName + "." + String(el.className).split(" ")[0] + " « " + (el.innerText || "").slice(0, 25) + " »"); }

@@ -1239,11 +1239,11 @@ html:has(.app.profmode),body:has(.app.profmode){overflow:hidden;overscroll-behav
 .app.profmode .profhead h1{font-size:1.15rem}
 .pmain{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;min-width:0}
 .pside{display:none}
-/* PC : l'écran Prof prend toute la place à droite du menu. Conversation et barre de message sur toute la largeur
-   (texte limité à une largeur confortable à lire sur très grand écran). */
+/* PC : comme les applis de chat (Claude, ChatGPT) : une colonne centrée de largeur confortable (≈ 770 px) pour le titre,
+   les cours liés, la conversation et la barre de message, au milieu de l'espace à droite des menus. */
 @media (min-width:900px){
   .app.profmode{padding:20px 28px;max-width:none;width:100%;margin:0}
-  .app.profmode .pmain>*{width:100%;max-width:1180px;margin-inline:auto}
+  .app.profmode .pmain>*{width:100%;max-width:770px;margin-inline:auto}
   .app.profmode .exthread{padding-inline:4px}
 }
 /* Grand écran : historique des discussions toujours affiché dans une colonne à gauche (le bouton ☰ devient inutile). */
@@ -1490,3 +1490,15 @@ body[data-flame="bonbon"] .streak,[data-flameprev="bonbon"]{background:linear-gr
 @media (hover:hover) and (pointer:fine){.jact:hover{background:var(--card2)}}
 @media (min-width:900px){.jacts{justify-content:flex-start}.jact{flex:0 0 auto;padding:0 18px}}
 .jline{padding-bottom:0}.jline:has(.jrow){padding-bottom:78px}
+
+/* Planning : menu « + » en haut à droite (remplace « Heures » et la ligne d'actions), contrôle affiché dans l'heure de la matière. */
+.jmwrap{position:relative}
+.jmbtn{background:var(--accent);color:#fff;border-color:transparent}
+.jmenu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:230px;padding:6px;border-radius:16px;background:var(--card);border:1px solid var(--line);box-shadow:0 14px 34px rgba(0,0,0,.35);display:flex;flex-direction:column}
+.jmenu[hidden]{display:none}
+.jmenu button{display:flex;align-items:center;gap:10px;min-height:46px;padding:0 12px;border:0;border-radius:11px;background:none;color:var(--fg);font:inherit;font-weight:700;text-align:left;cursor:pointer}
+.jmenu button svg{width:19px;height:19px;color:var(--muted);flex:none}
+.jmenu button:focus-visible{background:var(--card2)}
+@media (hover:hover) and (pointer:fine){.jmenu button:hover{background:var(--card2)}}
+.jrow.hasctl .jpill{box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 45%,transparent)}
+.jctlink{display:inline-flex;align-items:center;min-height:32px;margin-top:2px;font-size:.84rem;font-weight:800;color:var(--accent2,#9483ff);text-decoration:none}
