@@ -1502,3 +1502,33 @@ body[data-flame="bonbon"] .streak,[data-flameprev="bonbon"]{background:linear-gr
 @media (hover:hover) and (pointer:fine){.jmenu button:hover{background:var(--card2)}}
 .jrow.hasctl .jpill{box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 45%,transparent)}
 .jctlink{display:inline-flex;align-items:center;min-height:32px;margin-top:2px;font-size:.84rem;font-weight:800;color:var(--accent2,#9483ff);text-decoration:none}
+
+/* Icônes de matières dans les pastilles. */
+.sico.ic svg{width:22px;height:22px}
+/* Accueil, design A « Mission du jour ». */
+.mission{display:flex;flex-direction:column;gap:12px;padding:16px}
+.mtop{display:flex;align-items:center;gap:14px}
+.mring{width:84px;height:84px;margin:0;flex:none}
+.mring::before{inset:9px}
+.mring b{font-size:1.05rem}
+.mission h2{margin:0;font-size:1.15rem}
+.mission p{margin:2px 0 0}
+.mstreak{display:flex;align-items:center;gap:6px;font-size:.88rem;font-weight:700;color:var(--muted);margin-top:6px!important}
+.mstreak svg{width:17px;height:17px}
+.mstreak.on{color:#f5a35c}
+.mgo{min-height:54px;font-size:1.02rem;gap:10px}
+.mgo .big{font:inherit}
+.mission .big{font-weight:800}
+.nexam{display:flex;align-items:center;gap:12px;color:var(--fg);text-decoration:none;min-height:48px}
+.nexam b{display:block;font-size:1.05rem}
+.hsico{flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 22%,var(--card));color:var(--c);font-weight:900;font-size:.85rem}
+.hsico svg{width:21px;height:21px}
+.hsubs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.hsub{display:flex;flex-direction:column;gap:6px;padding:14px;border-radius:18px;background:var(--card);border:1px solid var(--line);color:var(--fg);text-decoration:none;min-width:0}
+.hsub b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (hover:hover) and (pointer:fine){.hsub:hover{background:var(--card2)}}
+@media (min-width:900px){.hsubs{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.mission .mstreak{color:var(--today-muted)}
+.mission .mstreak.on{color:#ffd29a}
+.mission .big{font-size:inherit}
+@media (min-width:900px){.dash.dash2{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}.dash2 .mission{max-width:none}}

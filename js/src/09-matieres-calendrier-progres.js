@@ -109,14 +109,14 @@
   }
 
   // ---------- matières ----------
-  // Matières, design A (16 nov.) : grille de tuiles. Pastille de couleur avec les initiales, nom, chapitres et cartes,
+  // Matières, design A (16 nov.) : grille de tuiles. Pastille de couleur avec l'icône de la matière (ou ses initiales si elle est inconnue), nom, chapitres et cartes,
   // prochain contrôle, barre de maîtrise. Une tuile en pointillés pour ajouter une matière.
   const subjInitials = n => { const t = String(n || "").trim(); if (t.length <= 4 && /^[A-Z0-9]+$/.test(t)) return t; const w = t.split(/[\s\-–]+/).filter(Boolean); return w.length > 1 ? (w[0][0] + w[1][0]).toUpperCase() : t.slice(0, 2).replace(/^./, c => c.toUpperCase()); };
   function screenSubjects() {
     drawTabs("matieres");
     const tile = s => {
       const chs = state.chapters.filter(c => c.subject_id === s.id), cs = state.cards.filter(k => chs.some(c => c.id === k.chapter_id)), m = mastery(cs), nc = nextCtrl(s);
-      return `<a class="stile" style="--c:${esc(s.color)}" href="#matiere-${s.id}"><span class="sico">${esc(subjInitials(s.name))}</span><b>${esc(s.name)}</b><span class="small muted">${chs.length} chap. · ${plural(cs.length, "carte", "cartes")}</span>${nc ? `<span class="spill">${jx(nc.d) === "Auj." ? "Contrôle aujourd'hui" : "Contrôle " + jx(nc.d)}</span>` : ""}<span class="srow"><span class="bar grow"><i style="width:${m}%"></i></span><span class="small muted">${m} %</span></span></a>`;
+      return `<a class="stile" style="--c:${esc(s.color)}" href="#matiere-${s.id}"><span class="sico${subjIcon(s.name) ? " ic" : ""}">${subjIcon(s.name) || esc(subjInitials(s.name))}</span><b>${esc(s.name)}</b><span class="small muted">${chs.length} chap. · ${plural(cs.length, "carte", "cartes")}</span>${nc ? `<span class="spill">${jx(nc.d) === "Auj." ? "Contrôle aujourd'hui" : "Contrôle " + jx(nc.d)}</span>` : ""}<span class="srow"><span class="bar grow"><i style="width:${m}%"></i></span><span class="small muted">${m} %</span></span></a>`;
     };
     app.innerHTML = `<div class="row between"><h1>Matières</h1><div class="row"><button class="iconbtn flat" data-qs aria-label="Recherche rapide">${I.search}</button><a class="iconbtn addround" href="#nouvelle-matiere" aria-label="Ajouter une matière">${I.plus}</a></div></div>
       ${state.subjects.length ? `<div class="stiles">${state.subjects.map(tile).join("")}<a class="stile sadd" href="#nouvelle-matiere"><span>${I.plus}Matière</span></a></div>` : `<div class="card empty"><svg viewBox="0 0 120 90" aria-hidden="true"><rect x="14" y="22" width="58" height="50" rx="8" fill="var(--accent-soft)"/><rect x="34" y="12" width="58" height="50" rx="8" fill="var(--btn-bg)"/><path d="M48 30h30M48 40h22M48 50h26" stroke="#fff" stroke-width="4" stroke-linecap="round"/><circle cx="98" cy="68" r="10" fill="var(--accent)"/><path d="M98 63v10M93 68h10" stroke="var(--accent-fg)" stroke-width="3" stroke-linecap="round"/></svg><b>Aucune matière. Ajoute ta première matière.</b><p class="small muted">Crée une matière, ajoute un chapitre, importe ton cours : tes cartes et ton résumé arrivent tout seuls.</p><a class="btn" href="#nouvelle-matiere">${I.plus}Ajouter une matière</a></div>`}`;

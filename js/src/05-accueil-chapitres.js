@@ -6,8 +6,6 @@
     const today = state.sessions.find(s => s.day === localDay()) || { seconds: 0, cards_reviewed: 0 };
     const doneVal = p.daily_goal_kind === "minutes" ? Math.floor(today.seconds / 60) : today.cards_reviewed;
     const unit = p.daily_goal_kind === "minutes" ? "min" : "cartes";
-    const up0 = upCtrls()[0], next = up0 ? Object.assign({}, up0.s, { exam_date: up0.c.d }) : null;
-    const ready = state.chapters.filter(c => cardsOf(c.id).length).slice(-4).reverse();
     const lv = xpInfo();
     const week = lastDays(7, state.sessions);
     const ups = upCtrls();
@@ -16,20 +14,46 @@
       <div class="hello"><div class="row">${MASCOT((rwEquipped("mascotte") || {}).v || "")}<h1 class="grow">Salut ${esc(p.display_name || "")}${rwEquipped("titre") && rwEquipped("titre").id !== "t-novice" && rwName(rwEquipped("titre")) ? ` <span class="rwtitle">${esc(rwName(rwEquipped("titre")))}</span>` : ""}</h1></div><p class="muted">${esc(new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }).replace(/^./, c => c.toUpperCase()))} · ${esc((rwOwned(SHOP.find(r => r.id === "p-phrase"), 0, rwState()) && rwState().custom.phrase) || PEP)}</p></div>
       <div class="level"><a class="lvl" href="#recompenses" aria-label="Niveau ${lv.level}, voir les récompenses">Niveau ${lv.level}</a><a class="coinpill" href="#boutique" aria-label="${coinsInfo().balance} pièces, ouvrir la boutique">${I.coin}${coinsInfo().balance}</a><div class="bar grow"><i style="width:${lv.pct}%"></i></div><span class="small muted">encore ${lv.left} points</span></div>
       ${(() => { const tn = new Date().getHours() >= 15 ? tonightSuggestion() : null; return tn ? `<div class="banner"><div><h2>Ce soir</h2><p class="small">Demain tu as ${tn.subs.map(x => esc(x.name)).join(", ")}. Un petit tour avant ?</p></div><a class="btn sm" href="#revision-${tn.subs[0].id}">Réviser ${esc(tn.subs[0].name)}</a></div>` : ""; })()}${resumeHtml()}${nowTaskHtml()}
-      <div class="dash"><div class="card today"><div><p class="small muted">À réviser aujourd'hui</p><div class="big">${plural(due, "carte", "cartes")}</div>${(() => { const ex = due - state.cards.filter(fsrsDue).length; return ex > 0 ? `<p class="small muted">dont ${ex} pour ton prochain contrôle</p>` : ""; })()}</div>
-        <div><div class="row between small muted" style="margin-bottom:6px"><span>Objectif du jour</span><span>${doneVal} / ${p.daily_goal_value} ${unit}</span></div><div class="bar"><i style="width:${Math.min(100, doneVal / p.daily_goal_value * 100)}%"></i></div></div>
-        ${due ? '<a class="btn" href="#cartes-jour">Réviser maintenant</a>' : ""}${state.cards.length > 3 ? `<details class="moreways"><summary class="btn ghost">Autres façons de réviser</summary><div class="stack"><a class="btn ghost mixbtn" href="#melange">Révision mélangée<span class="small">${state.subjects.some(x => x.exam_date && daysUntil(x.exam_date) >= 0) ? "priorité aux contrôles proches" : "toutes tes matières"}</span></a><a class="btn ghost mixbtn" href="#perso">Choisir quoi réviser<span class="small">matières, dossiers ou chapitres au choix</span></a></div></details>` : ""}${due ? "" : `<p class="small muted">${state.cards.length ? "Tu es à jour. Reviens plus tard ou ouvre un chapitre pour t'entraîner." : "Ajoute un chapitre et importe ton cours pour créer tes premières cartes."}</p>`}</div>
-        ${weekHtml(week, p)}
-        <div class="card pad stack upnext"><div class="row between"><h2>Prochains contrôles</h2><a class="linkbtn" href="#mois">Calendrier</a></div>${ups.length ? ups.map(({ c, s: x }) => `<a class="exam" href="#matiere-${x.id}" style="--c:${esc(x.color)}"><span class="jx">${jx(c.d)}</span><span class="grow"><b>${esc(x.name)}</b><span class="small muted">${esc(fmtDate(c.d))}${c.ch ? " · " + plural(c.ch.length, "chapitre", "chapitres") : ""}</span></span></a>`).join("") : '<p class="muted small">Aucun contrôle prévu. Place une date dans le calendrier pour avoir un plan de révision.</p>'}</div></div>
-      <div class="card stats two">${[[I.bolt, st, st > 1 ? "jours d'affilée" : st === 1 ? "jour d'affilée" : "révise aujourd'hui pour lancer ta série", ""], [I.check, state.cards.filter(isMastered).length + " / " + state.cards.length, "cartes maîtrisées", ""], ].map((x, i) => `<div class="stat s${i + 1}"><span class="sico">${x[0]}</span><div><b${x[3] ? ` id="${x[3]}"` : ""}>${x[1]}</b><span>${x[2]}</span></div></div>`).join("")}</div>
+      <div class="dash dash2">${missionHtml(due, doneVal, unit, st)}${nextCtrlHtml(ups)}</div>
+      ${homeSubjectsHtml()}
+      ${weekHtml(week, p)}
       ${[0, 1].includes(new Date().getDay()) && state.sessions.length && safeGet("merge.bilanseen") !== localDay(mondayOf(new Date())) ? `<div class="banner"><div><h2>Ton bilan de la semaine est prêt</h2><p class="small">Ce que tu as fait, et ton objectif pour la suite.</p></div><a class="btn sm" href="#bilan">Voir</a></div>` : ""}
       ${planTodayHtml()}${installHtml()}
       ${newYear ? `<div class="banner"><div><h2>Nouvelle année scolaire</h2><p class="small">Tu passes en quelle classe ? Mets ta classe à jour dans Réglages.</p></div><a class="btn sm" href="#reglages">Mettre à jour</a></div>` : ""}
-      ${ready.length ? `<div class="stack"><h2>Reprendre</h2><div class="grid">${ready.map(c => `<div class="card subject"><a href="#chapitre-${c.id}" style="text-decoration:none"><b>${esc(c.name)}</b></a><div class="row"><div class="bar grow"><i style="width:${mastery(cardsOf(c.id))}%"></i></div><span class="small muted">${mastery(cardsOf(c.id))} %</span></div><div class="row"><a class="btn sm" href="#cartes-${c.id}">Cartes</a><a class="btn sm ghost" href="#ecouter-${c.id}">Écouter</a><a class="btn sm ghost" href="#quiz-${c.id}">Quiz</a></div></div>`).join("")}</div></div>` : ""}
       ${state.subjects.length ? "" : `<div class="card pad stack"><h2>Commence par une matière</h2><p class="small muted">Crée ta première matière, puis importe ton cours pour avoir tes cartes.</p><a class="btn" href="#nouvelle-matiere">Ajouter une matière</a></div>`}`;
     if ($("insb")) { $("insb").onclick = installSheet; $("insno").onclick = () => { safeSet("merge.noinstall", "1"); screenHome(); }; }
     celebrate();
     nowTaskTick();
+  }
+
+  // Accueil, design A « Mission du jour » (16 nov.) : l'objectif du jour en anneau, la série, un seul gros bouton pour continuer,
+  // le prochain contrôle avec « Prêt à N % », puis les matières en tuiles. Le reste (semaine, plan du jour…) en dessous.
+  function missionHtml(due, doneVal, unit, st) {
+    const p = state.profile, goal = Math.max(1, +p.daily_goal_value || 1), pct = Math.min(100, Math.round(doneVal / goal * 100));
+    const extra = due - state.cards.filter(fsrsDue).length, mins = Math.max(1, Math.round(due * 0.5));
+    return `<div class="card today mission"><div class="mtop"><div class="ring mring" style="--p:${pct}"><b>${doneVal}/${goal}</b></div><div class="grow"><h2>${pct >= 100 ? "Mission accomplie" : "Mission du jour"}</h2><p class="small muted">${pct >= 100 ? "Objectif atteint, bravo." : `${doneVal} ${unit} sur ${goal}`}</p><p class="mstreak${st ? " on" : ""}">${I.bolt}${st ? plural(st, "jour", "jours") + " d'affilée" : "Révise aujourd'hui pour lancer ta série"}</p></div></div>
+      ${due ? `<a class="btn mgo" href="#cartes-jour">${I.play}<span>Continuer · <span class="big">${plural(due, "carte", "cartes")}</span> · ${mins} min</span></a>${extra > 0 ? `<p class="small muted">dont ${extra} pour ton prochain contrôle</p>` : ""}`
+        : `<p class="small muted"><span class="big">0 carte</span> à revoir : ${state.cards.length ? "tu es à jour." : "importe un cours pour avoir tes cartes."}</p>`}
+      ${state.cards.length > 3 ? `<details class="moreways"><summary class="btn ghost">${due ? "Autres façons de réviser" : "Réviser quand même"}</summary><div class="stack"><a class="btn ghost mixbtn" href="#melange">Révision mélangée<span class="small">${state.subjects.some(x => x.exam_date && daysUntil(x.exam_date) >= 0) ? "priorité aux contrôles proches" : "toutes tes matières"}</span></a><a class="btn ghost mixbtn" href="#perso">Choisir quoi réviser<span class="small">matières, dossiers ou chapitres au choix</span></a></div></details>` : ""}</div>`;
+  }
+  // Prochain contrôle : la matière, J-x, et « Prêt à N % » (maîtrise des chapitres du contrôle, ou de toute la matière).
+  function nextCtrlHtml(ups) {
+    const head = `<div class="row between"><span class="small muted">Prochains contrôles</span><a class="linkbtn" href="#mois">Calendrier</a></div>`;
+    if (!ups.length) return `<div class="card pad stack upnext">${head}<p class="muted small">Aucun contrôle prévu. Place une date dans le calendrier pour avoir un plan de révision.</p></div>`;
+    const { c, s: x } = ups[0], ids = c.ch && c.ch.length ? c.ch : state.chapters.filter(k => k.subject_id === x.id).map(k => k.id);
+    const ready = mastery(state.cards.filter(k => ids.includes(k.chapter_id))), ic = subjIcon(x.name);
+    return `<div class="card pad stack upnext">${head}
+      <a class="nexam" href="#matiere-${x.id}" style="--c:${esc(x.color)}"><span class="hsico">${ic || esc(x.name.slice(0, 2).toUpperCase())}</span><span class="grow"><b>${esc(x.name)}</b><span class="small muted">${esc(fmtDate(c.d))}${c.ch && c.ch.length ? " · " + plural(c.ch.length, "chapitre", "chapitres") : ""}</span></span><span class="jx">${jx(c.d)}</span></a>
+      <div class="row"><div class="bar grow"><i style="width:${ready}%"></i></div><span class="small"><b>${ready ? `Prêt à ${ready} %` : "À commencer"}</b></span></div>
+      <a class="btn ghost" href="#revision-${x.id}">Réviser ce contrôle</a>
+      ${ups.slice(1, 4).map(({ c: c2, s: y }) => `<a class="exam" href="#matiere-${y.id}" style="--c:${esc(y.color)}"><span class="jx">${jx(c2.d)}</span><span class="grow"><b>${esc(y.name)}</b><span class="small muted">${esc(fmtDate(c2.d))}</span></span></a>`).join("")}</div>`;
+  }
+  // Matières en tuiles : icône (ou initiales), nom, maîtrise. 6 au plus, puis « Toutes les matières ».
+  function homeSubjectsHtml() {
+    const subs = state.subjects.filter(x => !x.archived);
+    if (!subs.length) return "";
+    const tile = x => { const ids = state.chapters.filter(k => k.subject_id === x.id).map(k => k.id), m = mastery(state.cards.filter(k => ids.includes(k.chapter_id))), ic = subjIcon(x.name); return `<a class="hsub" href="#matiere-${x.id}" style="--c:${esc(x.color)}"><span class="hsico">${ic || esc(x.name.slice(0, 2).toUpperCase())}</span><b>${esc(x.name)}</b><span class="small muted">${m} %</span></a>`; };
+    return `<div class="stack"><div class="row between"><h2>Mes matières</h2>${subs.length > 6 ? `<a class="linkbtn" href="#matieres">Tout voir</a>` : ""}</div><div class="hsubs">${subs.slice(0, 6).map(tile).join("")}</div></div>`;
   }
 
   function formSubject() {

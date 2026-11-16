@@ -1422,7 +1422,8 @@ async function refonte(browser) {
   for (const [w, h] of [[390, 844], [1440, 900]]) {
     const page = await open(browser, { w, h, theme: "dark" }), tag = "refonte " + w;
     await go(page, "#matieres", 300);
-    ok(await page.locator(".stiles .stile").count() >= 3 && await page.locator(".stile.sadd").count() === 1 && await page.locator(".stile .sico").first().innerText() !== "", tag + " : Matières en tuiles (initiales, + Matière)");
+    ok(await page.locator(".stiles .stile").count() >= 3 && await page.locator(".stile.sadd").count() === 1 && await page.locator(".stile .sico.ic svg").count() >= 2, tag + " : Matières en tuiles (icône de la matière, + Matière)");
+    ok(await page.evaluate(() => [...document.querySelectorAll(".stile:not(.sadd)")].every(e => { const i = e.querySelector(".sico"); return i && (i.querySelector("svg") || i.textContent.trim().length >= 1); })), tag + " : chaque matière a une icône ou ses initiales");
     let o = await overflow(page); ok(o.sw <= o.iw, tag + " : Matières sans débordement", JSON.stringify(o));
     await page.screenshot({ path: path.join(SHOTS, "refonte-matieres-" + w + ".png") });
     await go(page, "#chapitre-c1", 500);

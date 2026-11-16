@@ -135,6 +135,65 @@
     book: svg('<path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3z"/><path d="M5 17a3 3 0 013-3h11M12 7.500v3M12 12.500v.1"/>'),
     grid: svg('<rect x="4" y="3" width="16" height="18" rx="1.500"/><path d="M12 3v18M4 9h16M4 15h16"/>')
   };
+  // Icônes des matières (dessinées pour Merge, même trait que les autres). subjIcon(nom) choisit l'icône d'après le nom
+  // de la matière ; matière inconnue → null, et l'écran affiche les initiales à la place.
+  const SUBJ_IC = {
+    maths: '<path d="M17 5H6.5l6 7-6 7H17"/>',
+    atome: '<circle cx="12" cy="12" r="1.6"/><ellipse cx="12" cy="12" rx="9" ry="3.6"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(-60 12 12)"/>',
+    fiole: '<path d="M9 3h6M10 3v6.5L5 18a2 2 0 001.8 3h10.4A2 2 0 0019 18l-5-8.5V3"/><path d="M7.5 15h9"/>',
+    adn: '<path d="M7 3c0 4.5 10 4.5 10 9s-10 4.5-10 9M17 3c0 4.5-10 4.5-10 9s10 4.5 10 9"/><path d="M8.5 6.5h7M8.5 17.5h7M10 12h4"/>',
+    micro: '<path d="M5 21h14M8 18h8M12 18a6.5 6.5 0 006.5-6.5"/><path d="M9 3.5l4 1.5-2.6 7-4-1.5zM9.4 12.3l-1 2.6"/><circle cx="12.5" cy="14.5" r="1.5"/>',
+    puce: '<rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx=".5"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/>',
+    code: '<path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/>',
+    cle: '<path d="M14.7 6.3a4 4 0 015.2 4.9l-2.2-2.2-2.1.6-.6 2.1 2.2 2.2a4 4 0 01-4.9-5.2L5.5 15.5a2 2 0 102.8 2.8l6.2-6.2"/>',
+    eclair: '<path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/>',
+    batiment: '<path d="M3 21h18M5 21V8l7-4 7 4v13"/><path d="M9.5 10.5h1.5M13 10.5h1.5M9.5 14.5h1.5M13 14.5h1.5M10.5 21v-3h3v3"/>',
+    ampoule: '<path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0012 3z"/>',
+    livre: '<path d="M3 5.5c2-1 5.5-1 9 1 3.5-2 7-2 9-1V19c-2-1-5.5-1-9 1-3.5-2-7-2-9-1z"/><path d="M12 6.5V20"/>',
+    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.4 2.5 3.5 5.5 3.5 9s-1.1 6.5-3.5 9c-2.4-2.5-3.5-5.5-3.5-9S9.6 5.5 12 3z"/>',
+    temple: '<path d="M3 21h18M4 9.5h16M12 3l8.5 5H3.5z"/><path d="M6.5 9.5v8.5M10 9.5v8.5M14 9.5v8.5M17.5 9.5v8.5M4 18h16"/>',
+    bulle: '<path d="M4 5h16v11H10l-5 4v-4H4z"/><path d="M8 9h8M8 12.5h5"/>',
+    courbe: '<path d="M4 4v16h16"/><path d="M7.5 15l4-4.5 3 3 5-6"/><path d="M16 7.5h3.5V11"/>',
+    balance: '<path d="M12 4v16M8 20h8M5 7h14"/><path d="M5 7l-2.5 6a2.8 2.8 0 005 0zM19 7l-2.5 6a2.8 2.8 0 005 0z"/>',
+    drapeau: '<path d="M5 21V4"/><path d="M5 4.5h11l-2 4 2 4H5"/>',
+    haltere: '<path d="M6.5 7.5v9M3.5 9.5v5M17.5 7.5v9M20.5 9.5v5M6.5 12h11"/>',
+    palette: '<path d="M12 3a9 9 0 000 18c1.4 0 2-.9 2-1.8 0-1.2-1-1.5-1-2.6 0-1 .8-1.6 1.8-1.6H17a4 4 0 004-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.1"/><circle cx="10" cy="7" r="1.1"/><circle cx="15" cy="7.5" r="1.1"/>',
+    note: '<circle cx="7" cy="18" r="2.5"/><circle cx="17" cy="16" r="2.5"/><path d="M9.5 18V6l10-2v12"/>',
+    clap: '<rect x="3" y="9" width="18" height="11.5" rx="1.5"/><path d="M3 9l1.6-4.8 15.8 2.2L19.5 9M8.5 4.8l-.8 4.2M14 5.6l-.8 3.4"/>',
+    coeur: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0112 7.2a4.3 4.3 0 017.5 2.6C19.5 15.4 12 20 12 20z"/><path d="M12 10.5v4M10 12.5h4"/>',
+    feuille: '<path d="M5 19c0-8 5-13 14-14 0 9-5 14-13 14zM5 19l7-7"/>',
+  };
+  // Ordre important : la première règle qui correspond l'emporte (ex. « éducation physique » est du sport, pas de la physique).
+  const SUBJ_RULES = [
+    [/\beps\b|sport|education physique|activites physiques/, "haltere"],
+    [/enseignement scientifique|^sciences?$|^sciences (et|de la vie)? ?$|\bes\b/, "micro"],
+    [/\bnsi\b|informatique|\bsnt\b|programmation|algorithm/, "code"],
+    [/droit|juridique/, "balance"],
+    [/\bses\b|econom|gestion|management|mercatique|marketing|finance|compta|\bmsgn\b|\brhc\b|\bsig\b/, "courbe"],
+    [/\bsin\b|systemes? d.information|numerique/, "puce"],
+    [/\bsvt\b|vie et de la terre|biolog|biotech|geolog|ecolog/, "adn"],
+    [/physique|\bpc\b|\bphy\b|\bpcm\b/, "atome"],
+    [/chimie/, "fiole"],
+    [/math|algebre|\bmaths?\b|\bmath expert|statist/, "maths"],
+    [/philo/, "ampoule"],
+    [/latin|grec|\blca\b|antiquit/, "temple"],
+    [/histoire des arts/, "palette"],
+    [/grand oral|\boral\b|eloquence/, "bulle"],
+    [/hggsp|geopolit|histoire|geograph|\bhg\b|\bh-?g\b/, "globe"],
+    [/\bemc\b|civique|citoyen/, "drapeau"],
+    [/anglais|espagnol|allemand|italien|arabe|chinois|japonais|portugais|russe|coreen|turc|hebreu|neerlandais|polonais|\blv ?\d|\blva\b|\blvb\b|\bllcer|\bamc\b|langue|english|spanish/, "bulle"],
+    [/francais|litterature|lettres|\bhlp\b|humanites|\bfrancais\b/, "livre"],
+    [/musique|music|chant/, "note"],
+    [/cinema|audiovisuel|theatre|danse|\bcav\b/, "clap"],
+    [/\barts?\b|plastique|dessin|design|histoire des arts|\bdaac\b/, "palette"],
+    [/itec|\bsi\b|sciences de l.ingenieur|2i2d|ingenieri|technolog|mecaniq|innovation/, "cle"],
+    [/\bee\b|energie|electri|electron/, "eclair"],
+    [/\bac\b|architecture|construction|batiment|urbanis/, "batiment"],
+    [/sante|social|st2s|medic|soin|psycho/, "coeur"],
+    [/agro|agricult|environnement|\bsdd\b|developpement durable/, "feuille"],
+  ];
+  const plainName = n => String(n || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  function subjIcon(name) { const n = plainName(name); const r = n && SUBJ_RULES.find(x => x[0].test(n)); return r ? svg(SUBJ_IC[r[1]]) : null; }
 
   // ---------- utilitaires ----------
   // Bibliothèques lourdes (PDF, fichiers Office) chargées seulement quand on en a besoin : démarrage plus rapide sur téléphone.
@@ -1246,8 +1305,6 @@
     const today = state.sessions.find(s => s.day === localDay()) || { seconds: 0, cards_reviewed: 0 };
     const doneVal = p.daily_goal_kind === "minutes" ? Math.floor(today.seconds / 60) : today.cards_reviewed;
     const unit = p.daily_goal_kind === "minutes" ? "min" : "cartes";
-    const up0 = upCtrls()[0], next = up0 ? Object.assign({}, up0.s, { exam_date: up0.c.d }) : null;
-    const ready = state.chapters.filter(c => cardsOf(c.id).length).slice(-4).reverse();
     const lv = xpInfo();
     const week = lastDays(7, state.sessions);
     const ups = upCtrls();
@@ -1256,20 +1313,46 @@
       <div class="hello"><div class="row">${MASCOT((rwEquipped("mascotte") || {}).v || "")}<h1 class="grow">Salut ${esc(p.display_name || "")}${rwEquipped("titre") && rwEquipped("titre").id !== "t-novice" && rwName(rwEquipped("titre")) ? ` <span class="rwtitle">${esc(rwName(rwEquipped("titre")))}</span>` : ""}</h1></div><p class="muted">${esc(new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }).replace(/^./, c => c.toUpperCase()))} · ${esc((rwOwned(SHOP.find(r => r.id === "p-phrase"), 0, rwState()) && rwState().custom.phrase) || PEP)}</p></div>
       <div class="level"><a class="lvl" href="#recompenses" aria-label="Niveau ${lv.level}, voir les récompenses">Niveau ${lv.level}</a><a class="coinpill" href="#boutique" aria-label="${coinsInfo().balance} pièces, ouvrir la boutique">${I.coin}${coinsInfo().balance}</a><div class="bar grow"><i style="width:${lv.pct}%"></i></div><span class="small muted">encore ${lv.left} points</span></div>
       ${(() => { const tn = new Date().getHours() >= 15 ? tonightSuggestion() : null; return tn ? `<div class="banner"><div><h2>Ce soir</h2><p class="small">Demain tu as ${tn.subs.map(x => esc(x.name)).join(", ")}. Un petit tour avant ?</p></div><a class="btn sm" href="#revision-${tn.subs[0].id}">Réviser ${esc(tn.subs[0].name)}</a></div>` : ""; })()}${resumeHtml()}${nowTaskHtml()}
-      <div class="dash"><div class="card today"><div><p class="small muted">À réviser aujourd'hui</p><div class="big">${plural(due, "carte", "cartes")}</div>${(() => { const ex = due - state.cards.filter(fsrsDue).length; return ex > 0 ? `<p class="small muted">dont ${ex} pour ton prochain contrôle</p>` : ""; })()}</div>
-        <div><div class="row between small muted" style="margin-bottom:6px"><span>Objectif du jour</span><span>${doneVal} / ${p.daily_goal_value} ${unit}</span></div><div class="bar"><i style="width:${Math.min(100, doneVal / p.daily_goal_value * 100)}%"></i></div></div>
-        ${due ? '<a class="btn" href="#cartes-jour">Réviser maintenant</a>' : ""}${state.cards.length > 3 ? `<details class="moreways"><summary class="btn ghost">Autres façons de réviser</summary><div class="stack"><a class="btn ghost mixbtn" href="#melange">Révision mélangée<span class="small">${state.subjects.some(x => x.exam_date && daysUntil(x.exam_date) >= 0) ? "priorité aux contrôles proches" : "toutes tes matières"}</span></a><a class="btn ghost mixbtn" href="#perso">Choisir quoi réviser<span class="small">matières, dossiers ou chapitres au choix</span></a></div></details>` : ""}${due ? "" : `<p class="small muted">${state.cards.length ? "Tu es à jour. Reviens plus tard ou ouvre un chapitre pour t'entraîner." : "Ajoute un chapitre et importe ton cours pour créer tes premières cartes."}</p>`}</div>
-        ${weekHtml(week, p)}
-        <div class="card pad stack upnext"><div class="row between"><h2>Prochains contrôles</h2><a class="linkbtn" href="#mois">Calendrier</a></div>${ups.length ? ups.map(({ c, s: x }) => `<a class="exam" href="#matiere-${x.id}" style="--c:${esc(x.color)}"><span class="jx">${jx(c.d)}</span><span class="grow"><b>${esc(x.name)}</b><span class="small muted">${esc(fmtDate(c.d))}${c.ch ? " · " + plural(c.ch.length, "chapitre", "chapitres") : ""}</span></span></a>`).join("") : '<p class="muted small">Aucun contrôle prévu. Place une date dans le calendrier pour avoir un plan de révision.</p>'}</div></div>
-      <div class="card stats two">${[[I.bolt, st, st > 1 ? "jours d'affilée" : st === 1 ? "jour d'affilée" : "révise aujourd'hui pour lancer ta série", ""], [I.check, state.cards.filter(isMastered).length + " / " + state.cards.length, "cartes maîtrisées", ""], ].map((x, i) => `<div class="stat s${i + 1}"><span class="sico">${x[0]}</span><div><b${x[3] ? ` id="${x[3]}"` : ""}>${x[1]}</b><span>${x[2]}</span></div></div>`).join("")}</div>
+      <div class="dash dash2">${missionHtml(due, doneVal, unit, st)}${nextCtrlHtml(ups)}</div>
+      ${homeSubjectsHtml()}
+      ${weekHtml(week, p)}
       ${[0, 1].includes(new Date().getDay()) && state.sessions.length && safeGet("merge.bilanseen") !== localDay(mondayOf(new Date())) ? `<div class="banner"><div><h2>Ton bilan de la semaine est prêt</h2><p class="small">Ce que tu as fait, et ton objectif pour la suite.</p></div><a class="btn sm" href="#bilan">Voir</a></div>` : ""}
       ${planTodayHtml()}${installHtml()}
       ${newYear ? `<div class="banner"><div><h2>Nouvelle année scolaire</h2><p class="small">Tu passes en quelle classe ? Mets ta classe à jour dans Réglages.</p></div><a class="btn sm" href="#reglages">Mettre à jour</a></div>` : ""}
-      ${ready.length ? `<div class="stack"><h2>Reprendre</h2><div class="grid">${ready.map(c => `<div class="card subject"><a href="#chapitre-${c.id}" style="text-decoration:none"><b>${esc(c.name)}</b></a><div class="row"><div class="bar grow"><i style="width:${mastery(cardsOf(c.id))}%"></i></div><span class="small muted">${mastery(cardsOf(c.id))} %</span></div><div class="row"><a class="btn sm" href="#cartes-${c.id}">Cartes</a><a class="btn sm ghost" href="#ecouter-${c.id}">Écouter</a><a class="btn sm ghost" href="#quiz-${c.id}">Quiz</a></div></div>`).join("")}</div></div>` : ""}
       ${state.subjects.length ? "" : `<div class="card pad stack"><h2>Commence par une matière</h2><p class="small muted">Crée ta première matière, puis importe ton cours pour avoir tes cartes.</p><a class="btn" href="#nouvelle-matiere">Ajouter une matière</a></div>`}`;
     if ($("insb")) { $("insb").onclick = installSheet; $("insno").onclick = () => { safeSet("merge.noinstall", "1"); screenHome(); }; }
     celebrate();
     nowTaskTick();
+  }
+
+  // Accueil, design A « Mission du jour » (16 nov.) : l'objectif du jour en anneau, la série, un seul gros bouton pour continuer,
+  // le prochain contrôle avec « Prêt à N % », puis les matières en tuiles. Le reste (semaine, plan du jour…) en dessous.
+  function missionHtml(due, doneVal, unit, st) {
+    const p = state.profile, goal = Math.max(1, +p.daily_goal_value || 1), pct = Math.min(100, Math.round(doneVal / goal * 100));
+    const extra = due - state.cards.filter(fsrsDue).length, mins = Math.max(1, Math.round(due * 0.5));
+    return `<div class="card today mission"><div class="mtop"><div class="ring mring" style="--p:${pct}"><b>${doneVal}/${goal}</b></div><div class="grow"><h2>${pct >= 100 ? "Mission accomplie" : "Mission du jour"}</h2><p class="small muted">${pct >= 100 ? "Objectif atteint, bravo." : `${doneVal} ${unit} sur ${goal}`}</p><p class="mstreak${st ? " on" : ""}">${I.bolt}${st ? plural(st, "jour", "jours") + " d'affilée" : "Révise aujourd'hui pour lancer ta série"}</p></div></div>
+      ${due ? `<a class="btn mgo" href="#cartes-jour">${I.play}<span>Continuer · <span class="big">${plural(due, "carte", "cartes")}</span> · ${mins} min</span></a>${extra > 0 ? `<p class="small muted">dont ${extra} pour ton prochain contrôle</p>` : ""}`
+        : `<p class="small muted"><span class="big">0 carte</span> à revoir : ${state.cards.length ? "tu es à jour." : "importe un cours pour avoir tes cartes."}</p>`}
+      ${state.cards.length > 3 ? `<details class="moreways"><summary class="btn ghost">${due ? "Autres façons de réviser" : "Réviser quand même"}</summary><div class="stack"><a class="btn ghost mixbtn" href="#melange">Révision mélangée<span class="small">${state.subjects.some(x => x.exam_date && daysUntil(x.exam_date) >= 0) ? "priorité aux contrôles proches" : "toutes tes matières"}</span></a><a class="btn ghost mixbtn" href="#perso">Choisir quoi réviser<span class="small">matières, dossiers ou chapitres au choix</span></a></div></details>` : ""}</div>`;
+  }
+  // Prochain contrôle : la matière, J-x, et « Prêt à N % » (maîtrise des chapitres du contrôle, ou de toute la matière).
+  function nextCtrlHtml(ups) {
+    const head = `<div class="row between"><span class="small muted">Prochains contrôles</span><a class="linkbtn" href="#mois">Calendrier</a></div>`;
+    if (!ups.length) return `<div class="card pad stack upnext">${head}<p class="muted small">Aucun contrôle prévu. Place une date dans le calendrier pour avoir un plan de révision.</p></div>`;
+    const { c, s: x } = ups[0], ids = c.ch && c.ch.length ? c.ch : state.chapters.filter(k => k.subject_id === x.id).map(k => k.id);
+    const ready = mastery(state.cards.filter(k => ids.includes(k.chapter_id))), ic = subjIcon(x.name);
+    return `<div class="card pad stack upnext">${head}
+      <a class="nexam" href="#matiere-${x.id}" style="--c:${esc(x.color)}"><span class="hsico">${ic || esc(x.name.slice(0, 2).toUpperCase())}</span><span class="grow"><b>${esc(x.name)}</b><span class="small muted">${esc(fmtDate(c.d))}${c.ch && c.ch.length ? " · " + plural(c.ch.length, "chapitre", "chapitres") : ""}</span></span><span class="jx">${jx(c.d)}</span></a>
+      <div class="row"><div class="bar grow"><i style="width:${ready}%"></i></div><span class="small"><b>${ready ? `Prêt à ${ready} %` : "À commencer"}</b></span></div>
+      <a class="btn ghost" href="#revision-${x.id}">Réviser ce contrôle</a>
+      ${ups.slice(1, 4).map(({ c: c2, s: y }) => `<a class="exam" href="#matiere-${y.id}" style="--c:${esc(y.color)}"><span class="jx">${jx(c2.d)}</span><span class="grow"><b>${esc(y.name)}</b><span class="small muted">${esc(fmtDate(c2.d))}</span></span></a>`).join("")}</div>`;
+  }
+  // Matières en tuiles : icône (ou initiales), nom, maîtrise. 6 au plus, puis « Toutes les matières ».
+  function homeSubjectsHtml() {
+    const subs = state.subjects.filter(x => !x.archived);
+    if (!subs.length) return "";
+    const tile = x => { const ids = state.chapters.filter(k => k.subject_id === x.id).map(k => k.id), m = mastery(state.cards.filter(k => ids.includes(k.chapter_id))), ic = subjIcon(x.name); return `<a class="hsub" href="#matiere-${x.id}" style="--c:${esc(x.color)}"><span class="hsico">${ic || esc(x.name.slice(0, 2).toUpperCase())}</span><b>${esc(x.name)}</b><span class="small muted">${m} %</span></a>`; };
+    return `<div class="stack"><div class="row between"><h2>Mes matières</h2>${subs.length > 6 ? `<a class="linkbtn" href="#matieres">Tout voir</a>` : ""}</div><div class="hsubs">${subs.slice(0, 6).map(tile).join("")}</div></div>`;
   }
 
   function formSubject() {
@@ -2806,14 +2889,14 @@
   }
 
   // ---------- matières ----------
-  // Matières, design A (16 nov.) : grille de tuiles. Pastille de couleur avec les initiales, nom, chapitres et cartes,
+  // Matières, design A (16 nov.) : grille de tuiles. Pastille de couleur avec l'icône de la matière (ou ses initiales si elle est inconnue), nom, chapitres et cartes,
   // prochain contrôle, barre de maîtrise. Une tuile en pointillés pour ajouter une matière.
   const subjInitials = n => { const t = String(n || "").trim(); if (t.length <= 4 && /^[A-Z0-9]+$/.test(t)) return t; const w = t.split(/[\s\-–]+/).filter(Boolean); return w.length > 1 ? (w[0][0] + w[1][0]).toUpperCase() : t.slice(0, 2).replace(/^./, c => c.toUpperCase()); };
   function screenSubjects() {
     drawTabs("matieres");
     const tile = s => {
       const chs = state.chapters.filter(c => c.subject_id === s.id), cs = state.cards.filter(k => chs.some(c => c.id === k.chapter_id)), m = mastery(cs), nc = nextCtrl(s);
-      return `<a class="stile" style="--c:${esc(s.color)}" href="#matiere-${s.id}"><span class="sico">${esc(subjInitials(s.name))}</span><b>${esc(s.name)}</b><span class="small muted">${chs.length} chap. · ${plural(cs.length, "carte", "cartes")}</span>${nc ? `<span class="spill">${jx(nc.d) === "Auj." ? "Contrôle aujourd'hui" : "Contrôle " + jx(nc.d)}</span>` : ""}<span class="srow"><span class="bar grow"><i style="width:${m}%"></i></span><span class="small muted">${m} %</span></span></a>`;
+      return `<a class="stile" style="--c:${esc(s.color)}" href="#matiere-${s.id}"><span class="sico${subjIcon(s.name) ? " ic" : ""}">${subjIcon(s.name) || esc(subjInitials(s.name))}</span><b>${esc(s.name)}</b><span class="small muted">${chs.length} chap. · ${plural(cs.length, "carte", "cartes")}</span>${nc ? `<span class="spill">${jx(nc.d) === "Auj." ? "Contrôle aujourd'hui" : "Contrôle " + jx(nc.d)}</span>` : ""}<span class="srow"><span class="bar grow"><i style="width:${m}%"></i></span><span class="small muted">${m} %</span></span></a>`;
     };
     app.innerHTML = `<div class="row between"><h1>Matières</h1><div class="row"><button class="iconbtn flat" data-qs aria-label="Recherche rapide">${I.search}</button><a class="iconbtn addround" href="#nouvelle-matiere" aria-label="Ajouter une matière">${I.plus}</a></div></div>
       ${state.subjects.length ? `<div class="stiles">${state.subjects.map(tile).join("")}<a class="stile sadd" href="#nouvelle-matiere"><span>${I.plus}Matière</span></a></div>` : `<div class="card empty"><svg viewBox="0 0 120 90" aria-hidden="true"><rect x="14" y="22" width="58" height="50" rx="8" fill="var(--accent-soft)"/><rect x="34" y="12" width="58" height="50" rx="8" fill="var(--btn-bg)"/><path d="M48 30h30M48 40h22M48 50h26" stroke="#fff" stroke-width="4" stroke-linecap="round"/><circle cx="98" cy="68" r="10" fill="var(--accent)"/><path d="M98 63v10M93 68h10" stroke="var(--accent-fg)" stroke-width="3" stroke-linecap="round"/></svg><b>Aucune matière. Ajoute ta première matière.</b><p class="small muted">Crée une matière, ajoute un chapitre, importe ton cours : tes cartes et ton résumé arrivent tout seuls.</p><a class="btn" href="#nouvelle-matiere">${I.plus}Ajouter une matière</a></div>`}`;

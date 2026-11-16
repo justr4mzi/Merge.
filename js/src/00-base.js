@@ -135,4 +135,63 @@
     book: svg('<path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3z"/><path d="M5 17a3 3 0 013-3h11M12 7.500v3M12 12.500v.1"/>'),
     grid: svg('<rect x="4" y="3" width="16" height="18" rx="1.500"/><path d="M12 3v18M4 9h16M4 15h16"/>')
   };
+  // Icônes des matières (dessinées pour Merge, même trait que les autres). subjIcon(nom) choisit l'icône d'après le nom
+  // de la matière ; matière inconnue → null, et l'écran affiche les initiales à la place.
+  const SUBJ_IC = {
+    maths: '<path d="M17 5H6.5l6 7-6 7H17"/>',
+    atome: '<circle cx="12" cy="12" r="1.6"/><ellipse cx="12" cy="12" rx="9" ry="3.6"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(-60 12 12)"/>',
+    fiole: '<path d="M9 3h6M10 3v6.5L5 18a2 2 0 001.8 3h10.4A2 2 0 0019 18l-5-8.5V3"/><path d="M7.5 15h9"/>',
+    adn: '<path d="M7 3c0 4.5 10 4.5 10 9s-10 4.5-10 9M17 3c0 4.5-10 4.5-10 9s10 4.5 10 9"/><path d="M8.5 6.5h7M8.5 17.5h7M10 12h4"/>',
+    micro: '<path d="M5 21h14M8 18h8M12 18a6.5 6.5 0 006.5-6.5"/><path d="M9 3.5l4 1.5-2.6 7-4-1.5zM9.4 12.3l-1 2.6"/><circle cx="12.5" cy="14.5" r="1.5"/>',
+    puce: '<rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx=".5"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/>',
+    code: '<path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/>',
+    cle: '<path d="M14.7 6.3a4 4 0 015.2 4.9l-2.2-2.2-2.1.6-.6 2.1 2.2 2.2a4 4 0 01-4.9-5.2L5.5 15.5a2 2 0 102.8 2.8l6.2-6.2"/>',
+    eclair: '<path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/>',
+    batiment: '<path d="M3 21h18M5 21V8l7-4 7 4v13"/><path d="M9.5 10.5h1.5M13 10.5h1.5M9.5 14.5h1.5M13 14.5h1.5M10.5 21v-3h3v3"/>',
+    ampoule: '<path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0012 3z"/>',
+    livre: '<path d="M3 5.5c2-1 5.5-1 9 1 3.5-2 7-2 9-1V19c-2-1-5.5-1-9 1-3.5-2-7-2-9-1z"/><path d="M12 6.5V20"/>',
+    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.4 2.5 3.5 5.5 3.5 9s-1.1 6.5-3.5 9c-2.4-2.5-3.5-5.5-3.5-9S9.6 5.5 12 3z"/>',
+    temple: '<path d="M3 21h18M4 9.5h16M12 3l8.5 5H3.5z"/><path d="M6.5 9.5v8.5M10 9.5v8.5M14 9.5v8.5M17.5 9.5v8.5M4 18h16"/>',
+    bulle: '<path d="M4 5h16v11H10l-5 4v-4H4z"/><path d="M8 9h8M8 12.5h5"/>',
+    courbe: '<path d="M4 4v16h16"/><path d="M7.5 15l4-4.5 3 3 5-6"/><path d="M16 7.5h3.5V11"/>',
+    balance: '<path d="M12 4v16M8 20h8M5 7h14"/><path d="M5 7l-2.5 6a2.8 2.8 0 005 0zM19 7l-2.5 6a2.8 2.8 0 005 0z"/>',
+    drapeau: '<path d="M5 21V4"/><path d="M5 4.5h11l-2 4 2 4H5"/>',
+    haltere: '<path d="M6.5 7.5v9M3.5 9.5v5M17.5 7.5v9M20.5 9.5v5M6.5 12h11"/>',
+    palette: '<path d="M12 3a9 9 0 000 18c1.4 0 2-.9 2-1.8 0-1.2-1-1.5-1-2.6 0-1 .8-1.6 1.8-1.6H17a4 4 0 004-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.1"/><circle cx="10" cy="7" r="1.1"/><circle cx="15" cy="7.5" r="1.1"/>',
+    note: '<circle cx="7" cy="18" r="2.5"/><circle cx="17" cy="16" r="2.5"/><path d="M9.5 18V6l10-2v12"/>',
+    clap: '<rect x="3" y="9" width="18" height="11.5" rx="1.5"/><path d="M3 9l1.6-4.8 15.8 2.2L19.5 9M8.5 4.8l-.8 4.2M14 5.6l-.8 3.4"/>',
+    coeur: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0112 7.2a4.3 4.3 0 017.5 2.6C19.5 15.4 12 20 12 20z"/><path d="M12 10.5v4M10 12.5h4"/>',
+    feuille: '<path d="M5 19c0-8 5-13 14-14 0 9-5 14-13 14zM5 19l7-7"/>',
+  };
+  // Ordre important : la première règle qui correspond l'emporte (ex. « éducation physique » est du sport, pas de la physique).
+  const SUBJ_RULES = [
+    [/\beps\b|sport|education physique|activites physiques/, "haltere"],
+    [/enseignement scientifique|^sciences?$|^sciences (et|de la vie)? ?$|\bes\b/, "micro"],
+    [/\bnsi\b|informatique|\bsnt\b|programmation|algorithm/, "code"],
+    [/droit|juridique/, "balance"],
+    [/\bses\b|econom|gestion|management|mercatique|marketing|finance|compta|\bmsgn\b|\brhc\b|\bsig\b/, "courbe"],
+    [/\bsin\b|systemes? d.information|numerique/, "puce"],
+    [/\bsvt\b|vie et de la terre|biolog|biotech|geolog|ecolog/, "adn"],
+    [/physique|\bpc\b|\bphy\b|\bpcm\b/, "atome"],
+    [/chimie/, "fiole"],
+    [/math|algebre|\bmaths?\b|\bmath expert|statist/, "maths"],
+    [/philo/, "ampoule"],
+    [/latin|grec|\blca\b|antiquit/, "temple"],
+    [/histoire des arts/, "palette"],
+    [/grand oral|\boral\b|eloquence/, "bulle"],
+    [/hggsp|geopolit|histoire|geograph|\bhg\b|\bh-?g\b/, "globe"],
+    [/\bemc\b|civique|citoyen/, "drapeau"],
+    [/anglais|espagnol|allemand|italien|arabe|chinois|japonais|portugais|russe|coreen|turc|hebreu|neerlandais|polonais|\blv ?\d|\blva\b|\blvb\b|\bllcer|\bamc\b|langue|english|spanish/, "bulle"],
+    [/francais|litterature|lettres|\bhlp\b|humanites|\bfrancais\b/, "livre"],
+    [/musique|music|chant/, "note"],
+    [/cinema|audiovisuel|theatre|danse|\bcav\b/, "clap"],
+    [/\barts?\b|plastique|dessin|design|histoire des arts|\bdaac\b/, "palette"],
+    [/itec|\bsi\b|sciences de l.ingenieur|2i2d|ingenieri|technolog|mecaniq|innovation/, "cle"],
+    [/\bee\b|energie|electri|electron/, "eclair"],
+    [/\bac\b|architecture|construction|batiment|urbanis/, "batiment"],
+    [/sante|social|st2s|medic|soin|psycho/, "coeur"],
+    [/agro|agricult|environnement|\bsdd\b|developpement durable/, "feuille"],
+  ];
+  const plainName = n => String(n || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  function subjIcon(name) { const n = plainName(name); const r = n && SUBJ_RULES.find(x => x[0].test(n)); return r ? svg(SUBJ_IC[r[1]]) : null; }
 
