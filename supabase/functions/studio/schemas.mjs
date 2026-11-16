@@ -6,7 +6,15 @@
 // Ici on remplace chaque repère par « [Schéma S1 : titre] » (lisible pour le résumé, les cartes et le Prof)
 // et on garde la liste des schémas (page, cadre) pour afficher l'image recadrée sur les cartes.
 
-const MARK = /\[\[\s*SCHEMA\s*\|([^|\]]*)\|([^\]]*)\]\]/gi;
+// L'IA n'écrit pas toujours le repère pareil : « 120,80,560,900 », « 120|80|560|900 », « [120, 80, 560, 900] »…
+// (vu au test réel : séparateurs « | »). On lit donc les 4 premiers nombres, et le reste est le titre.
+const MARK = /\[\[\s*SCHEMA\s*\|([^\n]*?)\]\](?!\])/gi;
+const NUM = "\\s*\\[?\\s*(-?\\d+(?:\\.\\d+)?)";
+const INNER = new RegExp("^" + NUM + "\\s*[,;|\\s]" + NUM + "\\s*[,;|\\s]" + NUM + "\\s*[,;|\\s]" + NUM + "\\s*\\]?\\s*(?:\\|\\s*)?([\\s\\S]*)$");
+export function parseMark(inner) {
+  const m = INNER.exec(String(inner ?? ""));
+  return m ? { box: [m[1], m[2], m[3], m[4]].join(","), titre: m[5] } : { box: "", titre: String(inner ?? "").split("|").pop() };
+}
 
 // Cadre valide, un peu agrandi (marge de 2,5 % pour ne pas couper les légendes), sinon null.
 export function cleanBox(raw) {
@@ -31,7 +39,8 @@ export function extractSchemas(pages) {
   const schemas = [];
   const texts = (pages || []).map((p) => {
     let perPage = 0;
-    return String(p?.text ?? "").replace(MARK, (_, box, titre) => {
+    return String(p?.text ?? "").replace(MARK, (_, inner) => {
+      const { box, titre } = parseMark(inner);
       const t = cleanTitle(titre) || "schéma", b = p?.path ? cleanBox(box) : null;
       if (!b || perPage >= 4 || schemas.length >= 60) return `[Schéma : ${t}]`;
       perPage++;

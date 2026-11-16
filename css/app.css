@@ -1390,3 +1390,15 @@ body[data-flame="bonbon"] .streak,[data-flameprev="bonbon"]{background:linear-gr
 .schpage{position:relative;display:block;aspect-ratio:var(--par,.75);width:min(100%,calc((100vh - 140px) * var(--par,.75)))}
 .schpage img{position:absolute;inset:0;width:100%;height:100%;border-radius:10px;background:#fff}
 .schpage .schmark{position:absolute;border:3px solid var(--accent);border-radius:8px;box-shadow:0 0 0 9999px rgba(8,8,14,.35)}
+
+/* Planning : la journée (frise des cours et révisions) remonte. Les actions deviennent 4 petites tuiles sur une ligne
+   (icône + mot court, sans glisser), les contrôles du jour une ligne compacte. */
+.jall{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding:2px 0}
+.jround{flex-direction:column;gap:3px;min-height:58px;padding:6px 4px;border-radius:16px;background:var(--card);border:1px solid var(--line);font-size:.74rem;white-space:nowrap;justify-content:center}
+.jround>span{width:28px;height:28px;background:none;border:0}
+.jround>span svg{width:20px;height:20px}
+.jround.on{background:color-mix(in srgb,var(--accent) 22%,var(--card));border-color:var(--accent)}
+.jround.on>span{background:none;color:var(--accent)}
+.jctls{flex-direction:row;flex-wrap:wrap;gap:6px}
+.jctl{min-height:36px;padding:4px 12px;border-radius:99px;font-size:.88rem;flex:none}
+.jctl b{flex:none}

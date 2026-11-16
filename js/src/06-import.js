@@ -79,6 +79,8 @@
     } catch (e) { return false; }
   }
   const newImp = (ch) => ({ tab: "files", files: [], shots: [], text: "", n: ch && cardsOf(ch.id).length ? 20 : (ch && ch.cards_target) || C.CARTES_PAR_DEFAUT, busy: false, cache: {} });
+  // Nombre de cartes choisi par l'IA (activé par défaut) : autant que nécessaire pour couvrir tout le cours, 100 au plus.
+  const autoN = () => safeGet("merge.autoN") !== "0";
   const onImport = (chId) => location.hash === "#import-" + chId;
   function jobDoneHtml(chId, res) {
     const ch = state.chapters.find(c => c.id === chId) || { name: "" }, notes = (res.notes || []).slice();
@@ -137,12 +139,15 @@
   }
   function chipUpdate() {
     let chip = document.getElementById("jobchip");
-    const hit = Object.entries(IMPORTS).find(([, v]) => v.busy || v.ready || v.failed), here = hit && location.hash === "#import-" + hit[0];
+    // Un cours prêt ou un import arrêté passe avant les imports en cours (c'est ce qu'il faut ouvrir).
+    const all = Object.entries(IMPORTS).filter(([k]) => location.hash !== "#import-" + k), hit = all.find(([, v]) => v.ready || v.failed) || all.find(([, v]) => v.busy), here = false;
     if (!hit || here) { if (chip) chip.hidden = true; return; }
     if (!chip) { chip = document.createElement("a"); chip.id = "jobchip"; chip.className = "jobchip"; document.body.appendChild(chip); }
     const [k, v] = hit; chip.hidden = false; chip.href = "#import-" + k;
     chip.classList.toggle("ok", !!v.ready); chip.classList.toggle("ko", !!v.failed);
-    chip.innerHTML = v.busy ? `<span class="spin"></span>Import ${Math.round(v.shown || 0)} %` : v.ready ? "Cours prêt · Ouvrir" : "Import interrompu · Voir";
+    // Plusieurs imports en même temps (un par chapitre) : la pastille les compte et montre leur avancement moyen.
+    const busy = Object.values(IMPORTS).filter(x => x.busy);
+    chip.innerHTML = v.ready ? "Cours prêt · Ouvrir" : v.failed ? "Import interrompu · Voir" : busy.length > 1 ? `<span class="spin"></span>${busy.length} imports · ${Math.round(busy.reduce((a, x) => a + (x.shown || 0), 0) / busy.length)} %` : `<span class="spin"></span>Import ${Math.round(v.shown || 0)} %`;
   }
   function impNotify(title, body) {
     try {
@@ -170,7 +175,8 @@
           <input id="pick" type="file" multiple accept=".pdf,.pptx,.ppsx,.ppt,.pps,.odp,.docx,.odt,.rtf,.txt,.md,.csv,image/*" hidden><input id="cam" type="file" accept="image/*" capture="environment" hidden></div>
           <div class="filelist">${d.files.map((f, i) => `<div><span>${esc(f.name)}</span><button class="mini" data-rm="${i}" aria-label="Retirer ${esc(f.name)}">Retirer</button></div>`).join("")}</div>`
           : `<div class="field"><label for="txt">Texte du cours</label><textarea id="txt" placeholder="Colle ton cours ici">${esc(d.text)}</textarea></div>${shotsHtml()}`}
-        <div class="field"><label for="n">${cardsOf(id).length ? "Combien de nouvelles flashcards ajouter ?" : "Combien de flashcards ?"} <b id="nv">${d.n}</b></label>${cardsOf(id).length ? `<p class="small muted">Tu as déjà ${plural(cardsOf(id).length, "carte", "cartes")} dans ce chapitre : les nouvelles s'ajoutent à elles, sans refaire celles que tu as déjà.</p>` : ""}<input id="n" type="range" min="10" max="${C.CARTES_MAX}" step="5" value="${d.n}"></div>
+        <div class="field"><label for="n">${cardsOf(id).length ? "Combien de nouvelles flashcards ajouter ?" : "Combien de flashcards ?"} <b id="nv">${autoN() ? "auto" : d.n}</b></label>${cardsOf(id).length ? `<p class="small muted">Tu as déjà ${plural(cardsOf(id).length, "carte", "cartes")} dans ce chapitre : les nouvelles s'ajoutent à elles, sans refaire celles que tu as déjà.</p>` : ""}<input id="n" type="range" min="10" max="${C.CARTES_MAX}" step="5" value="${d.n}"${autoN() ? " disabled" : ""}></div>
+        <button class="switch" id="nauto" role="switch" aria-checked="${autoN()}" type="button"><i></i>Laisser l'IA choisir le nombre : juste ce qu'il faut pour couvrir tout le cours</button>
         <button class="btn" id="go">Créer le résumé et les cartes</button>
         <div id="status" class="note" role="status">Les cartes viennent uniquement de ton cours. Chaque carte garde la phrase du cours qui la justifie.</div>`;
       app.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { keep(); d.tab = b.dataset.tab; draw(); });
@@ -178,6 +184,7 @@
       app.querySelectorAll("[data-rms]").forEach(b => b.onclick = () => { keep(); d.shots.splice(+b.dataset.rms, 1); draw(); });
       if ($("shotpick")) $("shotpick").onchange = e => { keep(); d.shots.push(...e.target.files); draw(); };
       $("n").oninput = () => { d.n = +$("n").value; $("nv").textContent = d.n; };
+      $("nauto").onclick = () => { const on = !autoN(); safeSet("merge.autoN", on ? "1" : "0"); $("nauto").setAttribute("aria-checked", on); $("n").disabled = on; $("nv").textContent = on ? "auto" : d.n; };
       const add = (list) => { d.files.push(...list); draw(); };
       if ($("redsw")) $("redsw").onclick = () => { const on = safeGet("merge.redresse") === "0"; safeSet("merge.redresse", on ? "1" : "0"); $("redsw").setAttribute("aria-checked", on); };
       if ($("pick")) { $("pick").onchange = e => add([...e.target.files]); $("cam").onchange = e => add([...e.target.files]);
@@ -363,7 +370,7 @@
         }
         impProg(d, "read", 1); say("Envoi du cours au serveur…");
         const label = d.tab === "text" ? "Texte collé" : d.files.map(f => f.name).join(", ").slice(0, 300);
-        const r = await ai({ action: "import_start", chapter_id: id, n: d.n, label, mime: d.tab === "text" ? "text/plain" : "mixte", pages: budget.pages || null, notes, avoid: cardsOf(id).map(c => c.front).filter(Boolean).slice(-200), segs: segs.map(x => x.path ? { path: x.path } : { text: x.text }) }, "studio");
+        const r = await ai({ action: "import_start", chapter_id: id, n: autoN() ? 0 : d.n, auto: autoN(), label, mime: d.tab === "text" ? "text/plain" : "mixte", pages: budget.pages || null, notes, avoid: cardsOf(id).map(c => c.front).filter(Boolean).slice(-200), segs: segs.map(x => x.path ? { path: x.path } : { text: x.text }) }, "studio");
         if (!r || !r.job_id) throw new Error("Le serveur n'a pas pris l'import. Réessaie dans un instant.");
         d.jobId = r.job_id; d.local = false; d.stage = segs.some(x => x.path) ? "img" : "gen"; d.target = Math.max(d.target, 12); d.msg = "C'est parti côté serveur…";
         if (onImport(id)) draw(); watchJob(id);

@@ -653,7 +653,7 @@
     draw();
   }
 
-  const TABS = [["accueil", "Accueil", "home"], ["matieres", "Matières", "subj"], ["calendrier", "Planning", "day"], ["exos", "Prof", "prof"], ["progres", "Progrès", "chart"], ["reglages", "Réglages", "gear"]];
+  const TABS = [["accueil", "Accueil", "home"], ["matieres", "Matières", "subj"], ["exos", "Prof", "prof"], ["calendrier", "Planning", "day"], ["progres", "Progrès", "chart"], ["reglages", "Réglages", "gear"]];
   function drawTabs(current) {
     tabs.hidden = false;
     const due = state.cards ? dueCards(state.cards).length : 0, st = state.sessions ? streak() : 0;
@@ -1642,6 +1642,8 @@
     } catch (e) { return false; }
   }
   const newImp = (ch) => ({ tab: "files", files: [], shots: [], text: "", n: ch && cardsOf(ch.id).length ? 20 : (ch && ch.cards_target) || C.CARTES_PAR_DEFAUT, busy: false, cache: {} });
+  // Nombre de cartes choisi par l'IA (activé par défaut) : autant que nécessaire pour couvrir tout le cours, 100 au plus.
+  const autoN = () => safeGet("merge.autoN") !== "0";
   const onImport = (chId) => location.hash === "#import-" + chId;
   function jobDoneHtml(chId, res) {
     const ch = state.chapters.find(c => c.id === chId) || { name: "" }, notes = (res.notes || []).slice();
@@ -1700,12 +1702,15 @@
   }
   function chipUpdate() {
     let chip = document.getElementById("jobchip");
-    const hit = Object.entries(IMPORTS).find(([, v]) => v.busy || v.ready || v.failed), here = hit && location.hash === "#import-" + hit[0];
+    // Un cours prêt ou un import arrêté passe avant les imports en cours (c'est ce qu'il faut ouvrir).
+    const all = Object.entries(IMPORTS).filter(([k]) => location.hash !== "#import-" + k), hit = all.find(([, v]) => v.ready || v.failed) || all.find(([, v]) => v.busy), here = false;
     if (!hit || here) { if (chip) chip.hidden = true; return; }
     if (!chip) { chip = document.createElement("a"); chip.id = "jobchip"; chip.className = "jobchip"; document.body.appendChild(chip); }
     const [k, v] = hit; chip.hidden = false; chip.href = "#import-" + k;
     chip.classList.toggle("ok", !!v.ready); chip.classList.toggle("ko", !!v.failed);
-    chip.innerHTML = v.busy ? `<span class="spin"></span>Import ${Math.round(v.shown || 0)} %` : v.ready ? "Cours prêt · Ouvrir" : "Import interrompu · Voir";
+    // Plusieurs imports en même temps (un par chapitre) : la pastille les compte et montre leur avancement moyen.
+    const busy = Object.values(IMPORTS).filter(x => x.busy);
+    chip.innerHTML = v.ready ? "Cours prêt · Ouvrir" : v.failed ? "Import interrompu · Voir" : busy.length > 1 ? `<span class="spin"></span>${busy.length} imports · ${Math.round(busy.reduce((a, x) => a + (x.shown || 0), 0) / busy.length)} %` : `<span class="spin"></span>Import ${Math.round(v.shown || 0)} %`;
   }
   function impNotify(title, body) {
     try {
@@ -1733,7 +1738,8 @@
           <input id="pick" type="file" multiple accept=".pdf,.pptx,.ppsx,.ppt,.pps,.odp,.docx,.odt,.rtf,.txt,.md,.csv,image/*" hidden><input id="cam" type="file" accept="image/*" capture="environment" hidden></div>
           <div class="filelist">${d.files.map((f, i) => `<div><span>${esc(f.name)}</span><button class="mini" data-rm="${i}" aria-label="Retirer ${esc(f.name)}">Retirer</button></div>`).join("")}</div>`
           : `<div class="field"><label for="txt">Texte du cours</label><textarea id="txt" placeholder="Colle ton cours ici">${esc(d.text)}</textarea></div>${shotsHtml()}`}
-        <div class="field"><label for="n">${cardsOf(id).length ? "Combien de nouvelles flashcards ajouter ?" : "Combien de flashcards ?"} <b id="nv">${d.n}</b></label>${cardsOf(id).length ? `<p class="small muted">Tu as déjà ${plural(cardsOf(id).length, "carte", "cartes")} dans ce chapitre : les nouvelles s'ajoutent à elles, sans refaire celles que tu as déjà.</p>` : ""}<input id="n" type="range" min="10" max="${C.CARTES_MAX}" step="5" value="${d.n}"></div>
+        <div class="field"><label for="n">${cardsOf(id).length ? "Combien de nouvelles flashcards ajouter ?" : "Combien de flashcards ?"} <b id="nv">${autoN() ? "auto" : d.n}</b></label>${cardsOf(id).length ? `<p class="small muted">Tu as déjà ${plural(cardsOf(id).length, "carte", "cartes")} dans ce chapitre : les nouvelles s'ajoutent à elles, sans refaire celles que tu as déjà.</p>` : ""}<input id="n" type="range" min="10" max="${C.CARTES_MAX}" step="5" value="${d.n}"${autoN() ? " disabled" : ""}></div>
+        <button class="switch" id="nauto" role="switch" aria-checked="${autoN()}" type="button"><i></i>Laisser l'IA choisir le nombre : juste ce qu'il faut pour couvrir tout le cours</button>
         <button class="btn" id="go">Créer le résumé et les cartes</button>
         <div id="status" class="note" role="status">Les cartes viennent uniquement de ton cours. Chaque carte garde la phrase du cours qui la justifie.</div>`;
       app.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { keep(); d.tab = b.dataset.tab; draw(); });
@@ -1741,6 +1747,7 @@
       app.querySelectorAll("[data-rms]").forEach(b => b.onclick = () => { keep(); d.shots.splice(+b.dataset.rms, 1); draw(); });
       if ($("shotpick")) $("shotpick").onchange = e => { keep(); d.shots.push(...e.target.files); draw(); };
       $("n").oninput = () => { d.n = +$("n").value; $("nv").textContent = d.n; };
+      $("nauto").onclick = () => { const on = !autoN(); safeSet("merge.autoN", on ? "1" : "0"); $("nauto").setAttribute("aria-checked", on); $("n").disabled = on; $("nv").textContent = on ? "auto" : d.n; };
       const add = (list) => { d.files.push(...list); draw(); };
       if ($("redsw")) $("redsw").onclick = () => { const on = safeGet("merge.redresse") === "0"; safeSet("merge.redresse", on ? "1" : "0"); $("redsw").setAttribute("aria-checked", on); };
       if ($("pick")) { $("pick").onchange = e => add([...e.target.files]); $("cam").onchange = e => add([...e.target.files]);
@@ -1926,7 +1933,7 @@
         }
         impProg(d, "read", 1); say("Envoi du cours au serveur…");
         const label = d.tab === "text" ? "Texte collé" : d.files.map(f => f.name).join(", ").slice(0, 300);
-        const r = await ai({ action: "import_start", chapter_id: id, n: d.n, label, mime: d.tab === "text" ? "text/plain" : "mixte", pages: budget.pages || null, notes, avoid: cardsOf(id).map(c => c.front).filter(Boolean).slice(-200), segs: segs.map(x => x.path ? { path: x.path } : { text: x.text }) }, "studio");
+        const r = await ai({ action: "import_start", chapter_id: id, n: autoN() ? 0 : d.n, auto: autoN(), label, mime: d.tab === "text" ? "text/plain" : "mixte", pages: budget.pages || null, notes, avoid: cardsOf(id).map(c => c.front).filter(Boolean).slice(-200), segs: segs.map(x => x.path ? { path: x.path } : { text: x.text }) }, "studio");
         if (!r || !r.job_id) throw new Error("Le serveur n'a pas pris l'import. Réessaie dans un instant.");
         d.jobId = r.job_id; d.local = false; d.stage = segs.some(x => x.path) ? "img" : "gen"; d.target = Math.max(d.target, 12); d.msg = "C'est parti côté serveur…";
         if (onImport(id)) draw(); watchJob(id);
@@ -2763,7 +2770,7 @@
   // ---------- matières ----------
   function screenSubjects() {
     drawTabs("matieres");
-    app.innerHTML = `<div class="row between" style="flex-wrap:wrap"><h1>Matières</h1><div class="row" style="flex-wrap:wrap"><button class="btn sm ghost" data-qs>Rechercher</button><a class="btn sm" href="#nouvelle-matiere">${I.plus}Ajouter</a></div></div>
+    app.innerHTML = `<div class="row between" style="flex-wrap:wrap"><h1>Matières</h1><div class="row" style="flex-wrap:wrap"><button class="iconbtn flat" data-qs aria-label="Recherche rapide">${I.search}</button><a class="btn sm" href="#nouvelle-matiere">${I.plus}Ajouter</a></div></div>
       <div class="grid">${state.subjects.length ? state.subjects.map(s => { const chs = state.chapters.filter(c => c.subject_id === s.id); const cs = state.cards.filter(k => chs.some(c => c.id === k.chapter_id)); const m = mastery(cs), j = daysUntil(s.exam_date); return `<a class="card subject" style="--c:${esc(s.color)}" href="#matiere-${s.id}"><div class="row between"><div class="row"><span class="dot"></span><b>${esc(s.name)}</b></div>${j != null && j >= 0 ? `<span class="pill">J-${j}</span>` : ""}</div><p class="small muted">${plural(chs.length, "chapitre", "chapitres")} · ${plural(cs.length, "carte", "cartes")}</p><div class="row"><div class="bar grow"><i style="width:${m}%"></i></div><span class="small muted">${m} %</span></div></a>`; }).join("") : `<div class="card empty"><svg viewBox="0 0 120 90" aria-hidden="true"><rect x="14" y="22" width="58" height="50" rx="8" fill="var(--accent-soft)"/><rect x="34" y="12" width="58" height="50" rx="8" fill="var(--btn-bg)"/><path d="M48 30h30M48 40h22M48 50h26" stroke="#fff" stroke-width="4" stroke-linecap="round"/><circle cx="98" cy="68" r="10" fill="var(--accent)"/><path d="M98 63v10M93 68h10" stroke="var(--accent-fg)" stroke-width="3" stroke-linecap="round"/></svg><b>Aucune matière. Ajoute ta première matière.</b><p class="small muted">Crée une matière, ajoute un chapitre, importe ton cours : tes cartes et ton résumé arrivent tout seuls.</p></div>`}</div>`;
   }
 
@@ -3051,7 +3058,7 @@
     const dots = k => { const bs = blocksOn(j, k).filter(b => b.act !== "pause").slice(0, 4); return bs.map(b => `<i style="background:${esc(colorOf(b))}"></i>`).join(""); };
     app.innerHTML = `<div class="jnav"><button class="linkbtn" id="jup">${I.back}Calendrier</button><span class="grow"></span>${jDay !== today ? `<button class="btn sm" id="jback">Aujourd'hui</button>` : ""}<button class="btn sm ghost" id="jhours" aria-pressed="${hours}">${I.clock}${hours ? "Frise" : "Heures"}</button></div><div class="jhead"><button class="jtitle" id="jtoday"><b>${sel.getDate()} ${esc(month)}</b> <span>${sel.getFullYear()}</span></button>${edtGet().ab && ab ? `<span class="pill">Sem. ${ab}</span>` : ""}</div>
       <div class="jweek"><button class="iconbtn flat" id="jprev" aria-label="Semaine précédente">${I.back}</button>${week.map(k => { const d = dayOf(k); return `<button class="jd${k === jDay ? " on" : ""}${k === today ? " now" : ""}" data-day="${k}"><span>${d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "")}</span><b>${d.getDate()}</b><span class="jdots">${dots(k)}</span></button>`; }).join("")}<button class="iconbtn flat" id="jnext" aria-label="Semaine suivante" style="transform:scaleX(-1)">${I.back}</button></div>
-      <div class="jall"><button class="jround${j.off[jDay] ? " on" : ""}" id="joff" aria-pressed="${!!j.off[jDay]}"><span>${I.home}</span>Pas cours</button><button class="jround" id="jauto"><span>${I.bolt}</span>Remplir ma journée</button><button class="jround" id="jai"><span>${I.spark}</span>Demander à l'IA</button><button class="jround" id="jctl"><span>${I.plus}</span>Ajouter un contrôle</button></div>
+      <div class="jall"><button class="jround${j.off[jDay] ? " on" : ""}" id="joff" aria-pressed="${!!j.off[jDay]}"><span>${I.home}</span>Pas cours</button><button class="jround" id="jauto"><span>${I.bolt}</span>Remplir</button><button class="jround" id="jai"><span>${I.spark}</span>IA</button><button class="jround" id="jctl"><span>${I.plus}</span>Contrôle</button></div>
       ${ctrlToday.length ? `<div class="jctls">${ctrlToday.map(x => `<a class="jctl" href="#matiere-${x.s.id}" style="--c:${esc(x.s.color)}"><span class="dot"></span><b>Contrôle de ${esc(x.s.name)}</b>${x.c.ch && x.c.ch.length ? `<span class="small muted">${plural(x.c.ch.length, "chapitre", "chapitres")}</span>` : ""}</a>`).join("")}</div>` : ""}
       ${hours ? hoursHtml(j, jDay, school, list, colorOf) : ""}<div class="jline"${hours ? " hidden" : ""}>${rows.join("") || `<div class="card pad stack jempty"><b>Rien de prévu ${jDay === today ? "aujourd'hui" : "ce jour-là"}.</b><p class="small muted">Touche + pour ajouter une révision (par exemple « Maths, 30 min »), « Remplir ma journée » pour un plan tout fait, ou « IA » pour le demander avec tes mots.</p></div>`}</div>
       ${edtGet().slots.length ? "" : `<button class="linkbtn" id="jedt">${I.cal}Ajouter mon emploi du temps</button>`}
@@ -3324,9 +3331,14 @@
     return ctx.s.map(id => `<span class="pchip" style="--c:${esc(subj(id).color || "#9483ff")}"><span class="dot"></span>${esc(subj(id).name || "")} · toute la matière<button class="pchipx" data-unctx="s:${id}" aria-label="Retirer ${esc(subj(id).name || "")}">${I.x}</button></span>`).join("")
       + ctx.ch.map(id => { const c = state.chapters.find(x => x.id === id) || {}, s = subj(c.subject_id); return `<span class="pchip" style="--c:${esc(s.color || "#9483ff")}"><span class="dot"></span>${esc(c.name || "")}<button class="pchipx" data-unctx="c:${id}" aria-label="Retirer ${esc(c.name || "")}">${I.x}</button></span>`; }).join("");
   }
+  // Comme dans les applis de chat : en rouvrant Merge (ou après 30 min ailleurs), l'onglet Prof s'ouvre sur une nouvelle
+  // discussion ; les anciennes restent dans l'historique (☰).
+  let profFresh = true, profHiddenAt = 0;
+  document.addEventListener("visibilitychange", () => { if (document.hidden) profHiddenAt = Date.now(); else if (profHiddenAt && Date.now() - profHiddenAt > 30 * 60000) profFresh = true; });
   function screenExos(arg) {
     drawTabs("exos");
     const p = profGet();
+    if (profFresh) { profFresh = false; if (curConv(p).m.length) { const c = newConv(); p.convs.unshift(c); p.cur = c.id; profSave(p); } }
     // Ouvert depuis un chapitre (#exos-<id>) : on lie ce chapitre, dans une nouvelle discussion si la discussion en cours a déjà des messages.
     if (arg && state.chapters.some(c => c.id === arg) && !curConv(p).ctx.ch.includes(arg)) {
       let c = curConv(p); if (c.m.length) { c = newConv(); p.convs.unshift(c); p.cur = c.id; }

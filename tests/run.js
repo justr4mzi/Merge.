@@ -1299,6 +1299,9 @@ async function schemasServeur() {
   ok(JSON.stringify(S.cleanBox("500,800,100,200")) === "[75,175,525,825]" && S.cleanBox("0,0,1000,1000")[2] === 1000, tag + " : cadre à l'envers remis dans l'ordre, bornes respectées");
   const ex = S.extractSchemas([{ text: "Intro\n[[SCHEMA|100,100,600,900|Cycle cellulaire]]\nLe schéma montre…\n[[SCHEMA|1,1,2,2|Flèche]]", path: "u/c/p1.jpg" }, { text: "Texte collé [[SCHEMA|100,100,600,900|X]]", path: null }]);
   ok(ex.schemas.length === 1 && ex.schemas[0].id === "S1" && ex.schemas[0].path === "u/c/p1.jpg" && ex.texts[0].includes("[Schéma S1 : Cycle cellulaire]") && ex.texts[0].includes("[Schéma : Flèche]") && !/\[\[SCHEMA/.test(ex.texts.join("")), tag + " : repères remplacés, seuls les vrais schémas d'une photo gardés", JSON.stringify(ex));
+  // Format vu au test réel avec Gemini (pages de cahier de tests/schemas) : séparateurs « | » au lieu de virgules.
+  const reel = S.extractSchemas([{ text: "Schéma du neurone :\n\n[[SCHEMA|190|85|660|910|Schéma du neurone]]\nSchéma anatomique…", path: "p1" }, { text: "[[SCHEMA|[240, 270, 550, 860]|Schéma d'une cellule animale]]", path: "p2" }]);
+  ok(reel.schemas.length === 2 && reel.schemas[0].box.join() === "165,60,685,935" && reel.schemas[1].titre === "Schéma d'une cellule animale", tag + " : repères écrits avec « | » ou crochets lus aussi", JSON.stringify(reel.schemas));
   ok(S.similar("Que donne la mitose ?", "Qu'est-ce que donne la mitose ?") >= 0.75 && S.similar("Que donne la mitose ?", "Que donne la méiose ?") < 0.5, tag + " : questions presque identiques reconnues, différentes séparées");
   const kept = S.dedupCards([{ front: "Que donne la mitose ?" }, { front: "Combien de chromosomes chez l'humain ?" }, { front: "Combien de chromosomes chez l'humain ?" }], ["Qu'est-ce que donne la mitose ?"]);
   ok(kept.length === 1 && kept[0].front.startsWith("Combien"), tag + " : doublons retirés (avec l'existant et entre nouvelles cartes)", JSON.stringify(kept));
@@ -1336,6 +1339,45 @@ async function schemasCartes(browser) {
     }
     ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
   }
+}
+// Deux imports en même temps (deux chapitres) ; onglets du bas (Prof avant Planning) ; loupe dans Matières ; Prof rouvert sur une nouvelle discussion ;
+// Planning : la journée visible tout de suite ; nombre de cartes choisi par l'IA.
+async function multiImport(browser) {
+  const page = await open(browser, { w: 390, h: 844, theme: "dark" }), tag = "multi-import";
+  const tabs = await page.$$eval("#tabs a", a => a.map(x => x.getAttribute("href")));
+  ok(tabs.indexOf("#exos") >= 0 && tabs.indexOf("#exos") + 1 === tabs.indexOf("#calendrier"), tag + " : onglet Prof puis Planning à sa droite", JSON.stringify(tabs));
+  await go(page, "#matieres", 300);
+  ok(await page.locator("#app button[data-qs] svg").count() === 1 && !(await page.locator("#app button[data-qs]").innerText()).trim(), tag + " : loupe (sans texte) pour rechercher dans Matières");
+  await go(page, "#import-c1", 300);
+  ok(await page.locator('#nauto[aria-checked="true"]').count() === 1 && await page.locator("#n").isDisabled() && (await page.textContent("#nv")).trim() === "auto", tag + " : nombre de cartes choisi par l'IA (par défaut)");
+  await page.click("#nauto"); ok(!(await page.locator("#n").isDisabled()) && /\d+/.test(await page.textContent("#nv")), tag + " : on peut reprendre la main sur le nombre"); await page.click("#nauto");
+  await page.evaluate(() => localStorage.setItem("fake.delay", "1500"));
+  await page.click('[data-tab="text"]'); await page.fill("#txt", "La mitose est une division cellulaire qui donne deux cellules identiques. ".repeat(4));
+  await page.click("#go"); await page.waitForTimeout(400);
+  ok(await page.evaluate(() => window.__fake.lastSegs && true), tag + " : 1er import lancé");
+  await page.click('a[href="#accueil"].btn, .prog a.btn.ghost'); await page.waitForTimeout(300);
+  await go(page, "#import-c2", 300); await page.click('[data-tab="text"]'); await page.fill("#txt", "La méiose donne quatre cellules haploïdes après deux divisions successives. ".repeat(4));
+  await page.click("#go"); await page.waitForTimeout(400);
+  await go(page, "#accueil", 300);
+  const chip = (await page.locator("#jobchip").innerText()).trim();
+  ok(/2 imports · \d+ %/.test(chip), tag + " : pastille « 2 imports » pendant que les deux tournent", chip);
+  await page.waitForFunction(() => /Cours prêt/.test((document.getElementById("jobchip") || {}).innerText || ""), null, { timeout: 15000 }).catch(() => {});
+  await page.click("#jobchip"); await page.waitForTimeout(400); ok((await txt(page)).includes("Bon travail"), tag + " : premier cours prêt, ouvert");
+  await go(page, "#accueil", 300);
+  await page.waitForFunction(() => /Cours prêt/.test((document.getElementById("jobchip") || {}).innerText || ""), null, { timeout: 15000 }).catch(() => {});
+  const chip2 = await page.locator("#jobchip:not([hidden])").count() ? (await page.locator("#jobchip").innerText()).trim() : "";
+  ok(/Cours prêt/.test(chip2), tag + " : le second cours est prêt aussi", chip2);
+  await page.click("#jobchip"); await page.waitForTimeout(400); ok((await txt(page)).includes("Bon travail"), tag + " : second cours ouvert");
+  // Prof : une discussion avec des messages, puis l'appli rouverte → nouvelle discussion, l'ancienne dans l'historique.
+  await go(page, "#exos", 300); await page.fill("#exq", "Bonjour"); await page.click("#exsend"); await page.waitForTimeout(500);
+  await page.reload(); await page.waitForSelector("#app > *", { state: "attached" }); await go(page, "#exos", 400);
+  ok(await page.locator(".exmsg").count() === 0 && await page.evaluate(() => JSON.parse(localStorage.getItem("merge.prof")).convs.some(c => c.m.length)), tag + " : Prof rouvert sur une nouvelle discussion, l'ancienne gardée");
+  // Planning : la frise de la journée commence dans le premier écran.
+  await go(page, "#calendrier", 400);
+  const top = await page.evaluate(() => { const l = document.querySelector(".jline"); return l ? l.getBoundingClientRect().top : 9999; });
+  ok(top < 480, tag + " : journée visible tout de suite dans Planning", String(top));
+  await page.screenshot({ path: path.join(SHOTS, "planning-journee-390.png") });
+  ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
 }
 async function exos(browser) {
   // 1100 px : PC moyen, l'historique s'ouvre avec ☰ (au-delà de 1200 px il est en colonne fixe, voir profPc).
@@ -1599,7 +1641,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => only ? only.includes(n) : n !== "chasse";
     if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
-    const SUITES = { majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
+    const SUITES = { multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
     for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();

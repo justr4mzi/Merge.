@@ -559,3 +559,12 @@ Liste retenue (sur 20 proposées) : plan de révision automatique, rappel la vei
 - Colonne `cards.image_box` (jsonb) à ajouter par l'éditeur SQL. Sans elle, tout marche comme avant : les cartes sont enregistrées sans recadrage et l'appli relit les cartes sans cette colonne.
 - Pas encore essayé sur un vrai cahier (seulement avec le faux serveur des tests) : à vérifier au premier import réel.
 - Suites `schemasServeur` (fonctions du serveur, dans `studio/schemas.mjs`) et `schemasCartes`.
+
+## Plusieurs imports, onglets, Prof, Planning, nombre de cartes auto, schémas testés en vrai (16 nov., soir)
+- **Plusieurs imports en même temps** (un par chapitre) : déjà possible, maintenant vérifié par un test (`multiImport`). La pastille affiche « 2 imports · 45 % » ; un cours prêt passe avant les imports en cours.
+- **Barre du bas** : Prof avant Planning (Planning à sa droite).
+- **Matières** : loupe à la place du mot « Rechercher », comme sur l'accueil.
+- **Prof** : en rouvrant Merge (ou après 30 min ailleurs), l'onglet s'ouvre sur une nouvelle discussion ; les anciennes restent dans l'historique, comme dans les applis de chat.
+- **Planning** : la journée remonte. Les 4 actions (Pas cours, Remplir, IA, Contrôle) sont de petites tuiles sur une ligne au lieu de gros ronds, les contrôles du jour une ligne compacte : la frise commence dans le premier écran.
+- **Nombre de cartes choisi par l'IA** (activé par défaut à l'import, interrupteur pour reprendre la main) : l'IA fait juste ce qu'il faut pour couvrir tout le cours (chaque définition, notion, formule, date, méthode, schéma important), 100 au plus.
+- **Schémas, test réel** : deux pages de cahier fabriquées (écriture manuscrite, lignes, photo légèrement tournée et floue) avec de vrais schémas de SVT légendés de Wikimedia Commons (neurone, cellule animale), dans `tests/schemas/`. Envoyées à Gemini par la même lecture qu'un vrai import (fonction `lirePages`, partagée par l'import et l'action de diagnostic `schema_test` ; fonction `diag` qui récupère les pages sur GitHub). Résultat : les deux schémas trouvés, cadres à quelques % près du vrai, recadrage propre avec toutes les légendes. **Bug trouvé et corrigé** : Gemini écrivait les nombres du cadre séparés par « | » au lieu de virgules, et le serveur rejetait le repère (aucune carte de schéma n'aurait été créée). Le serveur lit maintenant toutes les formes (virgules, « | », crochets, espaces). Studio v16.
