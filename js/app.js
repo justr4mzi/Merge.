@@ -1563,7 +1563,38 @@
   const IMPORTS = {};
   const STAGES = [["read", "Lecture et envoi", 0, 10], ["img", "Photos et schémas", 10, 60], ["gen", "Résumé et cartes", 60, 92], ["save", "Enregistrement", 92, 100]];
   function impProg(d, stage, frac) { const s = STAGES.find(x => x[0] === stage); d.stage = stage; d.target = Math.max(d.target || 0, s[2] + (s[3] - s[2]) * Math.max(0, Math.min(1, frac || 0))); }
+  // Estimation du temps restant, d'après ce que fait vraiment le serveur (et non une simple règle de trois sur le %).
+  // Photos : traitées par lots de 4, jusqu'à 5 lots en même temps ; un lot de cahier écrit à la main ≈ 95 s
+  // (lecture + relecture + déchiffrage), une page imprimée va plus vite. Dès qu'un lot est fini, on prend son vrai temps.
+  // Puis résumé et cartes ≈ 45 s, enregistrement ≈ 5 s.
+  const ROUND_S = 95, GEN_S = 45, SAVE_S = 5;
+  function impEstimate(d) {
+    if (d.local || !d.busy) return;
+    const now = Date.now(), m = /lus\s*:\s*(\d+)\s*sur\s*(\d+)/.exec(d.msg || "");
+    let left = 0;
+    if (d.stage === "img") {
+      const done = m ? +m[1] : 0, total = m ? +m[2] : d.photos || 4;
+      // Appli rouverte en plein milieu : on ne sait pas quand le lot a commencé, on garde l'estimation par défaut.
+      if (!d.imgStart) { d.imgStart = now; d.imgDone = done; if (done) d.roundAt = now; }
+      if (done > (d.imgDone || 0)) { if (!d.imgDone && !d.roundAt) d.roundS = Math.min(240, Math.max(25, (now - d.imgStart) / 1000)); d.imgDone = done; d.roundAt = now; }
+      const per = d.roundS || ROUND_S, rounds = Math.ceil(Math.max(0, total - done) / 20);
+      // Le lot en cours a déjà commencé : on retire le temps déjà passé dessus.
+      const since = (now - (d.roundAt || d.imgStart)) / 1000;
+      left = Math.max(rounds ? per * 0.25 : 0, rounds * per - (rounds ? since : 0)) + GEN_S + SAVE_S;
+    } else if (d.stage === "gen") left = GEN_S + SAVE_S;
+    else if (d.stage === "save") left = SAVE_S;
+    else return;
+    const at = now + left * 1000;
+    // On ne fait pas sauter l'estimation à chaque relevé : seulement si elle change de plus de 15 s.
+    if (!d.etaAt || Math.abs(at - d.etaAt) > 15000) d.etaAt = at;
+  }
   function impEta(d) {
+    if (d.etaAt && !d.local) {
+      const r = (d.etaAt - Date.now()) / 1000;
+      if (r < 8) return "presque fini…";
+      const n = r < 60 ? Math.round(r / 5) * 5 : Math.round(r / 30) * 30;
+      return "environ " + (n < 60 ? n + " s" : (n / 60).toString().replace(".", ",") + " min") + " restantes";
+    }
     const el = (Date.now() - d.t0) / 1000; if ((d.shown || 0) < 8 || el < 4) return "estimation en cours…";
     const r = Math.max(3, el * (100 - d.shown) / d.shown), n = r < 60 ? Math.max(5, Math.round(r / 5) * 5) : Math.round(r / 30) * 30;
     return "environ " + (n < 60 ? n + " s" : (n / 60).toString().replace(".", ",") + " min") + " restantes";
@@ -1622,7 +1653,7 @@
       d.autoRes = (d.autoRes || 0) + 1; d.msg = "Reprise de l'import…"; impPaint(d);
       try { await ai({ action: "import_resume", job_id: d.jobId }, "studio"); return; } catch (e) { /* on affiche l'arrêt ci-dessous */ }
     }
-    if (j.status === "running" && !stale) { d.stage = STAGES.some(x => x[0] === j.stage) ? j.stage : "gen"; d.target = Math.max(d.target || 0, j.progress || 0); d.msg = j.message || d.msg; return impPaint(d); }
+    if (j.status === "running" && !stale) { d.stage = STAGES.some(x => x[0] === j.stage) ? j.stage : "gen"; d.target = Math.max(d.target || 0, j.progress || 0); d.msg = j.message || d.msg; impEstimate(d); return impPaint(d); }
     clearTimeout(d.poll); d.pollTok = null; clearInterval(d.timer); d.busy = false; d.local = false;
     if (j.status === "done") {
       d.shown = 100; d.ready = true; d.files = []; d.cache = {}; delete courseMemo[chId];
@@ -1877,7 +1908,7 @@
         if (budget.cut) notes.push("Seules les " + C.PAGES_MAX_PAR_IMPORT + " premières pages ont été lues. Refais un import pour la suite.");
         if (!segs.some(x => x.img || x.path || (x.text && x.text.trim()))) throw new Error(notes[0] || "Je n'ai pas trouvé assez de texte dans ce cours.");
         // Les pages à faire lire par l'IA sont envoyées dans l'espace privé de l'élève ; le serveur fait tout le reste.
-        const todo = segs.filter(x => x.img && !x.path), stamp = Date.now(); let sent = 0, nextUp = 0;
+        const todo = segs.filter(x => x.img && !x.path), stamp = Date.now(); let sent = 0, nextUp = 0; d.photos = todo.length;
         if (todo.length) {
           say("Envoi de " + plural(todo.length, "page", "pages") + " avec photos ou schémas…");
           const up = async () => {

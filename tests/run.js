@@ -1275,6 +1275,22 @@ async function importRelance(browser) {
     ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
   }
 }
+// Temps restant d'un import de photos de cahier : estimé d'après les lots (pas « estimation en cours » ni un chiffre qui saute).
+async function importEta(browser) {
+  const page = await open(browser, { w: 390, h: 844, theme: "dark" }), tag = "import durée";
+  await page.evaluate(() => { localStorage.setItem("fake.imgslow", "1"); localStorage.setItem("fake.delay", "300"); });
+  await go(page, "#import-c1"); await page.click('[data-tab="text"]'); await page.fill("#txt", "La mitose est une division cellulaire qui donne deux cellules identiques. ".repeat(4));
+  await page.click("#go"); await page.waitForTimeout(1500);
+  const a = (await page.textContent("#progeta")).trim();
+  ok(/environ (2|2,5|3) min restantes/.test(a), tag + " : estimation dès le début pour un cahier (≈ 1 lot + résumé)", a);
+  await page.waitForFunction(() => /4 sur 8/.test((document.getElementById("status") || {}).textContent || ""), null, { timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(800);
+  const b = (await page.textContent("#progeta")).trim();
+  ok(/environ \d+( s|,?\d* min) restantes|presque fini/.test(b) && b !== a, tag + " : estimation corrigée avec le vrai temps du premier lot", a + " → " + b);
+  await page.waitForFunction(() => /Bon travail/.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+  ok((await txt(page)).includes("Bon travail"), tag + " : import terminé");
+  ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+}
 async function exos(browser) {
   // 1100 px : PC moyen, l'historique s'ouvre avec ☰ (au-delà de 1200 px il est en colonne fixe, voir profPc).
   for (const [w, h] of [[390, 844], [1100, 800]]) {
@@ -1537,7 +1553,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => only ? only.includes(n) : n !== "chasse";
     if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
-    const SUITES = { majSw, profPc, importRelance, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
+    const SUITES = { majSw, profPc, importRelance, importEta, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
     for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();

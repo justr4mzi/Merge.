@@ -135,6 +135,8 @@
     if (opt("stall") === "1" && b.action === "import_start") { Object.assign(job, { updated_at: new Date(Date.now() - 300000).toISOString(), progress: 45, message: "Photos et schémas lus : 9 sur 13…" }); return { data: { job_id: job.id }, error: null }; }
     (async () => {
       const wait = () => new Promise(r => setTimeout(r, delay));
+      // fake.imgslow = 1 : photos de cahier lues par lots (8 photos, 2 lots), comme le vrai serveur.
+      if (opt("imgslow") === "1" && b.action === "import_start") { Object.assign(job, { stage: "img", progress: 10, message: "Photos et schémas lus : 0 sur 8…", updated_at: now() }); await new Promise(r => setTimeout(r, 2500)); Object.assign(job, { progress: 35, message: "Photos et schémas lus : 4 sur 8…", updated_at: now() }); await new Promise(r => setTimeout(r, 2500)); }
       await wait(); if (opt("jobfail") === "1" && !job.retried) { job.retried = true; return Object.assign(job, { status: "error", error: "vertex: panne simulée", error_code: "erreur", updated_at: now() }); }
       Object.assign(job, { stage: "gen", progress: 60, message: "L'IA prépare le résumé et les cartes…", updated_at: now() }); quotaLeft--; calls++;
       await wait();

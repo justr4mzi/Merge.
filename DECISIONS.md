@@ -547,3 +547,7 @@ Liste retenue (sur 20 proposées) : plan de révision automatique, rappel la vei
 - **Barre du bas** visible sur les écrans Matière, Dossier et Chapitre (onglet Matières allumé) : on revient à l'accueil d'un geste. Les écrans de révision (cartes, quiz…) restent en plein écran.
 - **Pastille d'import** translucide (fond flouté), placée plus haut : au-dessus de la barre de message dans le Prof, sur téléphone comme sur PC.
 - Suite de tests `importRelance`.
+
+## Temps restant d'un import de photos (16 nov.)
+- L'ancien calcul était une règle de trois sur le pourcentage : faux pour les photos, qui avancent par à-coups (un lot de 4 pages d'un coup). Nouveau calcul d'après ce que fait le serveur : lots de 4 photos, 5 lots en même temps, ≈ 95 s par lot de cahier manuscrit (lecture + relecture + déchiffrage si besoin), puis ≈ 45 s pour le résumé et les cartes et ≈ 5 s d'enregistrement. Dès qu'un premier lot est fini, on remplace les 95 s par le vrai temps mesuré (une page imprimée va plus vite). L'estimation ne bouge que si elle change de plus de 15 s, et décompte entre-temps ; sous 8 s : « presque fini… ». Appli rouverte en plein import : estimation par défaut (on ne sait pas quand le lot a commencé). Suite `importEta`.
+- Les 3 passages par lot restent : lecture, relecture comparée aux photos (corrige chiffres, signes, mots mal lus — l'erreur la plus fréquente sur un cahier), et déchiffrage seulement s'il reste des passages [illisible]. Les deux derniers ne comptent pas dans la limite d'IA du jour.
