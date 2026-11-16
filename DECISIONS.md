@@ -536,3 +536,6 @@ Liste retenue (sur 20 proposées) : plan de révision automatique, rappel la vei
 ## Graphique « Ta semaine » et prix de la boutique (15 nov., soir)
 - Graphique de la semaine : la hauteur des colonnes suit l'objectif (minutes si l'objectif est en minutes), mais le nombre affiché au-dessus était le nombre de cartes. Résultat trompeur : 229 cartes aujourd'hui avec une colonne plus basse que les 213 de la veille (moins de minutes). Le nombre au-dessus est maintenant celui qui fixe la hauteur (minutes si objectif en minutes, sinon cartes) ; le détail cartes + minutes reste au survol.
 - Boutique : tous les prix (articles et cadeaux en vrai) augmentés d'un tiers, arrondis à 10 pièces, appliqués en une ligne après chaque liste pour pouvoir revenir en arrière facilement. Ce qui est déjà acheté reste acquis.
+
+## Rayons de la boutique espacés (16 nov.)
+- Sur téléphone, une règle prévue pour faire tenir 5 onglets sur une ligne (écart 0) s'appliquait aussi aux rayons de la boutique, qui sont trop nombreux et défilent : les mots se collaient. La boutique est exclue de cette règle ; ses rayons ont 22 px d'écart et un fondu à droite indique qu'on peut faire défiler. Test dans la suite `boutique`.

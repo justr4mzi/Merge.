@@ -978,6 +978,8 @@ async function boutique(browser) {
     let sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px minimum", sm.join(" | "));
     let o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
     if (w === 390) await page.screenshot({ path: path.join(SHOTS, "boutique-390.png"), fullPage: true });
+    const gaps = await page.evaluate(() => { const b = [...document.querySelectorAll(".shoptabs button")].map(x => x.getBoundingClientRect()); return b.slice(1).map((r, i) => Math.round(r.left - b[i].right)); });
+    ok(gaps.length >= 5 && Math.min(...gaps) >= 16, tag + " : rayons de la boutique bien espacés", JSON.stringify(gaps));
     await page.click('[data-st="fond"]'); await page.click('[data-buy="f-neige"]'); await page.waitForTimeout(200);
     ok(await page.evaluate(() => document.body.dataset.bg) === "neige" && await page.evaluate(() => parseInt(document.querySelector(".coinhero b.big").textContent, 10)) === bal0 - 360, tag + " : fond acheté (360 pièces, prix +1/3) et équipé");
     await page.click('[data-st="mascotte"]'); await page.click('[data-buy="m-casque"]'); await page.waitForTimeout(150);
