@@ -16,11 +16,13 @@
       sb.from("profiles").select("*").eq("user_id", uid).maybeSingle(),
       sb.from("subjects").select("*").eq("archived", false).eq("user_id", uid).order("created_at"),
       sb.from("chapters").select("id,name,status,subject_id,group_id,cards_target,lang,notes,color,created_at").eq("archived", false).eq("user_id", uid).order("created_at"),
-      allCards(CARD_META + ",mastered,mnemonic,picture"),
+      allCards(CARD_META + ",mastered,mnemonic,picture,image_box"),
       sb.from("study_sessions").select("day,seconds,cards_reviewed").eq("user_id", uid).gte("day", localDay(since)),
       sb.from("groups").select("id,name,subject_id,color,created_at").eq("user_id", uid).order("created_at")
     ]);
     state.legacy = false;
+    // Bases plus anciennes : sans image_box (cadre des schémas), puis sans image, puis sans les colonnes v6.
+    if (k.error) k = await allCards(CARD_META + ",mastered,mnemonic,picture");
     if (k.error) { k = await allCards(CARD_META + ",mastered,mnemonic"); if (k.error) { k = await allCards(CARD_META); state.legacy = true; } }
     for (const r of [p, s, c, k, ss]) if (r.error) throw r.error;
     state.profile = p.data; state.subjects = s.data || []; state.chapters = c.data || []; state.sessions = ss.data || []; state.groups = g.error ? [] : (g.data || []);

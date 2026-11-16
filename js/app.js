@@ -324,11 +324,13 @@
       sb.from("profiles").select("*").eq("user_id", uid).maybeSingle(),
       sb.from("subjects").select("*").eq("archived", false).eq("user_id", uid).order("created_at"),
       sb.from("chapters").select("id,name,status,subject_id,group_id,cards_target,lang,notes,color,created_at").eq("archived", false).eq("user_id", uid).order("created_at"),
-      allCards(CARD_META + ",mastered,mnemonic,picture"),
+      allCards(CARD_META + ",mastered,mnemonic,picture,image_box"),
       sb.from("study_sessions").select("day,seconds,cards_reviewed").eq("user_id", uid).gte("day", localDay(since)),
       sb.from("groups").select("id,name,subject_id,color,created_at").eq("user_id", uid).order("created_at")
     ]);
     state.legacy = false;
+    // Bases plus anciennes : sans image_box (cadre des schémas), puis sans image, puis sans les colonnes v6.
+    if (k.error) k = await allCards(CARD_META + ",mastered,mnemonic,picture");
     if (k.error) { k = await allCards(CARD_META + ",mastered,mnemonic"); if (k.error) { k = await allCards(CARD_META); state.legacy = true; } }
     for (const r of [p, s, c, k, ss]) if (r.error) throw r.error;
     state.profile = p.data; state.subjects = s.data || []; state.chapters = c.data || []; state.sessions = ss.data || []; state.groups = g.error ? [] : (g.data || []);
@@ -1455,6 +1457,7 @@
     ]).catch(() => [{ error: { message: "hors ligne" } }, { error: true }]);
     // Hors ligne : cartes de la copie locale, résumé s'il a été enregistré sur l'appareil.
     if (cr.error) cr = { data: cardsOf(id).filter(c => c.front).map(c => Object.assign({ needs_check: false, flagged: false }, c)) };
+    else (cr.data || []).forEach(c => { const m = state.cards.find(x => x.id === c.id); if (m && m.image_box) c.image_box = m.image_box; }); // cadre des schémas
     if (sr.error) sr = { data: safeGet("merge.sum." + id) ? { chapter_id: id } : null };
     if (location.hash !== here) return;
     const cards = cr.data || [], meta = cardsOf(id), m = mastery(meta), due = dueCards(meta).length, hasSum = !!(sr.data);
@@ -1481,7 +1484,7 @@
     wireChapterTools(id, ch, cards); wireModes();
     if (!cards.length) return;
     const list = $("list");
-    const drawCard = (c) => `<div class="card term" data-id="${c.id}">${picHtml(c)}<div class="row between"><b>${mx(c.front)}</b>${c.needs_check ? '<span class="pill warn">À vérifier</span>' : ""}${c.flagged ? '<span class="pill warn">Signalée</span>' : ""}</div><p>${mx(c.back)}</p>${c.source_quote ? `<p class="quote">${esc(c.source_quote)}</p>` : ""}<div class="pagebox"></div><div class="tools">${c.image_path ? `<button class="mini" data-img="${c.id}">Voir la page</button>` : ""}<button class="mini" data-edit="${c.id}">Modifier</button><button class="mini" data-flag="${c.id}">${c.flagged ? "Retirer le signalement" : "Signaler"}</button><button class="mini" data-del="${c.id}">Supprimer</button></div></div>`;
+    const drawCard = (c) => `<div class="card term" data-id="${c.id}">${picHtml(c)}<div class="row between"><b>${cfront(c, true)}</b>${c.needs_check ? '<span class="pill warn">À vérifier</span>' : ""}${c.flagged ? '<span class="pill warn">Signalée</span>' : ""}</div><p>${mx(c.back)}</p>${c.source_quote ? `<p class="quote">${esc(c.source_quote)}</p>` : ""}<div class="pagebox"></div><div class="tools">${c.image_path ? `<button class="mini" data-img="${c.id}">Voir la page</button>` : ""}<button class="mini" data-edit="${c.id}">Modifier</button><button class="mini" data-flag="${c.id}">${c.flagged ? "Retirer le signalement" : "Signaler"}</button><button class="mini" data-del="${c.id}">Supprimer</button></div></div>`;
     list.innerHTML = cards.map(drawCard).join("");
     list.onchange = async (e) => {
       const inp = e.target.closest("[data-pic-in]"); if (!inp || !inp.files[0]) return; const cid = inp.dataset.picIn, c = cards.find(x => x.id === cid); if (!c) return;
@@ -1643,7 +1646,7 @@
   function jobDoneHtml(chId, res) {
     const ch = state.chapters.find(c => c.id === chId) || { name: "" }, notes = (res.notes || []).slice();
     if (res.bad) notes.push(plural(res.bad, "carte est marquée", "cartes sont marquées") + " « À vérifier ».");
-    return `<div class="card done"><h1>Bon travail !</h1><p class="muted">${(() => { const tot = cardsOf(chId).length, n = res.cards || 0; return tot > n ? plural(n, "nouvelle carte ajoutée", "nouvelles cartes ajoutées") + " à « " + esc(ch.name) + " » : " + tot + " cartes au total, et le résumé est complété." : plural(n, "carte créée", "cartes créées") + " et un résumé pour « " + esc(ch.name) + " »."; })()}</p>${notes.map(n => `<p class="note">${esc(n)}</p>`).join("")}<a class="btn" href="#cartes-${chId}">Réviser maintenant</a><a class="btn ghost" href="#chapitre-${chId}">Voir le chapitre</a></div>`;
+    return `<div class="card done"><h1>Bon travail !</h1><p class="muted">${(() => { const tot = cardsOf(chId).length, n = res.cards || 0; return tot > n && n === 0 ? "Rien de nouveau à ajouter : ce que tu as envoyé était déjà dans « " + esc(ch.name) + " » (" + plural(tot, "carte", "cartes") + "). Aucune carte en double n'a été créée." : tot > n ? plural(n, "nouvelle carte ajoutée", "nouvelles cartes ajoutées") + " à « " + esc(ch.name) + " » : " + tot + " cartes au total, et le résumé est complété." : plural(n, "carte créée", "cartes créées") + " et un résumé pour « " + esc(ch.name) + " »."; })()}</p>${notes.map(n => `<p class="note">${esc(n)}</p>`).join("")}<a class="btn" href="#cartes-${chId}">Réviser maintenant</a><a class="btn ghost" href="#chapitre-${chId}">Voir le chapitre</a></div>`;
   }
   async function applyJob(chId, j, quiet) {
     const d = IMPORTS[chId]; if (!d || d.jobId !== j.id) return;
@@ -2041,9 +2044,10 @@
         <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Progression de la session"><i style="width:${pct}%"></i></div>
         <div class="counters"><span class="counter no" aria-label="Cartes à revoir">${S.again.size}</span><span class="counter yes" aria-label="Cartes réussies">${S.known}</span></div>
         <div class="flipwrap" id="wrap"><button class="flip${S.flipped ? " back" : ""}" id="flip" aria-label="Retourner la carte">
-          <div class="face"><header>${training ? "Entraînement" : S.again.has(c.id) ? "On la revoit" : "Question"}</header><div class="txt">${mx(c.front)}</div><footer>Touche la carte pour voir la réponse</footer></div>
+          <div class="face"><header>${training ? "Entraînement" : S.again.has(c.id) ? "On la revoit" : "Question"}</header><div class="txt">${cfront(c)}</div><footer>Touche la carte pour voir la réponse</footer></div>
           <div class="face b"><header>Réponse</header>${picHtml(c)}<div class="txt">${mx(c.back)}</div><div id="mnemo">${mnemoHtml(c)}</div><div id="extra" class="extra">${backExtra(c)}</div><footer>${c.source_quote ? "Dans ton cours : « " + esc(c.source_quote) + " »" : ""}</footer></div>
         </button></div>
+        ${schBox(c) ? `<button class="chip sm schbtn" id="zoomsch">${I.search}Agrandir le schéma</button>` : ""}
         ${typed() ? `<div class="field typedbox"><label for="mine">Ta réponse, avant de retourner la carte</label><textarea id="mine" style="min-height:70px" placeholder="Écris ce que tu répondrais">${esc(S.mine)}</textarea></div>` : ""}
         <div class="answers"><button class="btn bad" id="no" aria-label="Faux, pas compris">${I.x}Faux</button><button class="btn good" id="yes">${I.check}Juste</button></div>
         <div class="row rate2"><button class="chip sm grow" id="hard">Juste, mais à revoir bientôt</button><button class="chip sm grow" id="easy">Trop facile</button></div>
@@ -2052,6 +2056,7 @@
           <div class="card pad stack"><h2>Raccourcis clavier</h2><div class="srow"><span>Retourner la carte</span><kbd>Espace</kbd></div><div class="srow"><span>Juste</span><kbd>→</kbd></div><div class="srow"><span>Faux</span><kbd>←</kbd></div><div class="srow"><span>Annuler ma réponse</span><kbd>Ctrl Z</kbd></div><div class="srow"><span>Trop facile</span><kbd>↑</kbd></div><div class="srow"><span>À revoir bientôt</span><kbd>↓</kbd></div></div>
           <p class="note">Une carte ratée revient jusqu'à ce que tu la réussisses.</p></aside></div>`;
       if ($("see")) $("see").onclick = () => showPage(c.image_path, $("pageimg"));
+      if ($("zoomsch")) $("zoomsch").onclick = () => openSchema(c);
       if ($("say")) $("say").onclick = () => speakText(S.flipped ? c.back : c.front, "fr-FR");
       $("flip").onclick = () => { if ($("mine")) S.mine = $("mine").value; S.flipped = !S.flipped; $("flip").classList.toggle("back", S.flipped); $("extra").innerHTML = backExtra(c); };
       $("no").onclick = () => answer(false); $("yes").onclick = () => answer(true);
@@ -2063,7 +2068,7 @@
         Object.assign(c, { front, back, needs_check: false, flagged: false }); const row = state.cards.find(x => x.id === c.id); if (row) Object.assign(row, { front, back }); closeSheet(); toast("Carte modifiée."); render(); }; });
       app.querySelector(".cmore").ontoggle = e => safeSet("merge.cmore", e.target.open ? "1" : "0");
       $("huh").onclick = async () => {
-        sheet(`<h1>Je ne comprends pas</h1><p class="muted small">${mx(c.front)}</p><div id="huhbox" class="md"><div class="row"><div class="spin" aria-hidden="true"></div><p class="muted" role="status">L'IA t'explique à partir de ton cours…</p></div></div><button class="btn ghost" data-close>Fermer</button>`);
+        sheet(`<h1>Je ne comprends pas</h1><p class="muted small">${cfront(c)}</p><div id="huhbox" class="md"><div class="row"><div class="spin" aria-hidden="true"></div><p class="muted" role="status">L'IA t'explique à partir de ton cours…</p></div></div><button class="btn ghost" data-close>Fermer</button>`);
         try { const text = await courseText(c.chapter_id); const r = await ai({ action: "pourquoi", text, question: c.front, attendu: c.back, donne: "" }); const b = $("huhbox"); if (b) b.innerHTML = md(r.answer || ""); }
         catch (e) { const b = $("huhbox"); if (b) showErr(b, e); }
       };
@@ -2092,6 +2097,59 @@
   async function picUrl(path) { const c = picUrls[path]; if (c && c.t > Date.now()) return c.u; const { data, error } = await sb.storage.from("cours").createSignedUrl(path, 3600); if (error || !data) return null; picUrls[path] = { u: data.signedUrl, t: Date.now() + 3000000 }; return data.signedUrl; }
   function fillPics(root) { (root || document).querySelectorAll("img[data-pic]:not([src])").forEach(async im => { const u = await picUrl(im.dataset.pic); if (u) im.src = u; else im.remove(); }); }
   const picHtml = (c) => c && c.picture ? `<img class="cardpic" data-pic="${esc(c.picture)}" alt="Image de la carte">` : "";
+  // ---------- schémas du cours sur les cartes ----------
+  // Une carte de schéma garde la photo de la page (image_path) et le cadre du schéma (image_box : [haut, gauche, bas, droite] de 0 à 1000).
+  // On n'affiche que le schéma : l'image entière est placée dans un cadre qui cache le reste (aucune copie d'image en plus).
+  function schBox(c) {
+    const b = c && c.image_path && Array.isArray(c.image_box) ? c.image_box.map(Number) : null;
+    return b && b.length === 4 && b.every(Number.isFinite) && b[2] > b[0] && b[3] > b[1] ? b : null;
+  }
+  // Rapport largeur / hauteur du schéma : la photo est supposée en 3:4 jusqu'à son chargement, puis on prend sa vraie taille.
+  const schRatio = (b, w, h) => ((b[3] - b[1]) * (w || 3)) / ((b[2] - b[0]) * (h || 4));
+  function schemaHtml(c, small) {
+    const b = schBox(c); if (!b) return "";
+    const bw = (b[3] - b[1]) / 1000, bh = (b[2] - b[0]) / 1000, pc = x => (x * 100).toFixed(3) + "%";
+    return `<span class="schema${small ? " sm" : ""}" data-sch="${esc(c.id)}" role="img" aria-label="Schéma du cours" style="--ar:${schRatio(b).toFixed(4)}">`
+      + `<img class="schimg" data-pic="${esc(c.image_path)}" alt="" draggable="false" style="width:${pc(1 / bw)};height:${pc(1 / bh)};left:${pc(-b[1] / 1000 / bw)};top:${pc(-b[0] / 1000 / bh)}">`
+      + (small ? "" : `<i class="schzoom" aria-hidden="true">${I.search}</i>`) + `</span>`;
+  }
+  // Question d'une carte : son schéma (s'il y en a un) puis le texte. small = petite vignette dans les listes.
+  function cfront(c, small) { return schemaHtml(c, small) + mx(c.front); }
+  // Vraie taille de la photo connue : on corrige le rapport du cadre pour que le schéma ne soit pas déformé.
+  document.addEventListener("load", e => {
+    const im = e.target; if (!im || !im.classList) return;
+    if (im.parentElement && im.parentElement.classList.contains("schpage") && im.naturalWidth) return im.parentElement.style.setProperty("--par", (im.naturalWidth / im.naturalHeight).toFixed(4));
+    if (!im.classList.contains("schimg")) return;
+    const box = im.closest(".schema"), c = box && (state.cards || []).find(x => x.id === box.dataset.sch) || null, b = schBox(c) || schBox(box && box._c);
+    if (b && im.naturalWidth) box.style.setProperty("--ar", schRatio(b, im.naturalWidth, im.naturalHeight).toFixed(4));
+    if (box) box.classList.add("ok");
+  }, true);
+  // Agrandir un schéma : en grand, avec « Voir la page entière » (le schéma y est entouré).
+  function openSchema(c) {
+    const b = schBox(c); if (!b) return;
+    const old = document.getElementById("schview"); if (old) old.remove();
+    const el = document.createElement("div"); el.id = "schview"; el.className = "schview"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Schéma du cours");
+    const pc = x => (x / 10).toFixed(2) + "%";
+    const draw = (full) => {
+      el.innerHTML = `<div class="schviewbar"><button class="iconbtn flat" data-schx aria-label="Fermer">${I.x}</button><button class="btn sm ghost" data-schfull>${full ? "Voir le schéma seul" : "Voir la page entière"}</button></div>`
+        + `<div class="schviewbody">${full ? `<span class="schpage"><img class="pageimg" data-pic="${esc(c.image_path)}" alt="Page du cours"><i class="schmark" style="top:${pc(b[0])};left:${pc(b[1])};height:${pc(b[2] - b[0])};width:${pc(b[3] - b[1])}"></i></span>` : schemaHtml(c).replace('class="schema"', 'class="schema big"')}</div>`;
+      el.querySelector("[data-schx]").onclick = close;
+      el.querySelector("[data-schfull]").onclick = () => draw(!full);
+      const box = el.querySelector(".schema"); if (box) box._c = c;
+      fillPics(el);
+    };
+    const close = () => { el.remove(); document.removeEventListener("keydown", esc_); };
+    const esc_ = e => { if (e.key === "Escape") close(); };
+    document.addEventListener("keydown", esc_);
+    el.addEventListener("click", e => { if (e.target === el || e.target.classList.contains("schviewbody")) close(); });
+    document.body.appendChild(el); draw(false);
+  }
+  // Toucher un schéma l'agrandit (sauf dans un bouton ou un lien : la carte se retourne, le lien s'ouvre).
+  document.addEventListener("click", e => {
+    const f = e.target.closest && e.target.closest(".schema[data-sch]");
+    if (!f || f.closest("button,a,#schview")) return;
+    const c = (state.cards || []).find(x => x.id === f.dataset.sch); if (c) { e.preventDefault(); openSchema(c); }
+  });
   async function uploadCardPic(file, chapterId, cardId) {
     let bmp; try { bmp = await createImageBitmap(file); } catch (e) { if (!window.heic2any) await new Promise((ok, ko) => { const sc = document.createElement("script"); sc.src = "vendor/heic2any.min.js"; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); }); const o = await window.heic2any({ blob: file, toType: "image/jpeg", quality: 0.85 }); bmp = await createImageBitmap(Array.isArray(o) ? o[0] : o); }
     const k = Math.min(1, 1000 / Math.max(bmp.width, bmp.height)), cv = document.createElement("canvas"); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k); cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
@@ -2269,7 +2327,7 @@
       const sec = (t, n, body) => n ? `<h2>${t} <span class="small muted">(${n})</span></h2>${body}` : "";
       $("sr").innerHTML = (sec("Dans tes cours", course.length, course.map(o => `<a class="card term" style="text-decoration:none" href="#resume-${o.x.chapter_id}"><span class="small muted">${esc(chName(o.x.chapter_id))} · ${esc(o.x.filename || "Cours")} · ${plural(o.n, "fois", "fois")}</span><p class="snip">${o.s}</p></a>`).join(""))
         + sec("Dans tes résumés", sums.length, sums.map(o => `<a class="card term" style="text-decoration:none" href="#resume-${o.x.chapter_id}"><span class="small muted">${esc(chName(o.x.chapter_id))}</span><p class="snip">${o.s}</p></a>`).join(""))
-        + sec("Dans tes cartes", cards.length, cards.map(c => `<a class="card term" style="text-decoration:none" href="#chapitre-${c.chapter_id}"><span class="small muted">${esc(chName(c.chapter_id))}</span><b>${mx(c.front)}</b><p>${mx(c.back)}</p></a>`).join("")))
+        + sec("Dans tes cartes", cards.length, cards.map(c => `<a class="card term" style="text-decoration:none" href="#chapitre-${c.chapter_id}"><span class="small muted">${esc(chName(c.chapter_id))}</span><b>${cfront(c, true)}</b><p>${mx(c.back)}</p></a>`).join("")))
         || '<p class="muted">Rien trouvé dans tes cours, tes résumés ni tes cartes. Essaie un autre mot.</p>';
     }
     $("sf").onsubmit = (e) => { e.preventDefault(); const q = $("sq").value.trim(); if (q.length < 2) return toast("Écris au moins 2 lettres."); searchPending = q; run(q); };
@@ -3519,13 +3577,13 @@
       const c = S.queue[0], done = S.total - new Set(S.queue).size, head = top(title) + `<div class="bar"><i style="width:${done / S.total * 100}%"></i></div>${S.deadline ? '<p class="small muted" id="qtimer" role="timer"></p>' : ""}`;
       if (!c.opts && (S.written || c.ia)) {
         screenSession.key = null;
-        app.innerHTML = head + `<div class="card pad stack"><p class="small muted">Question ${Math.min(S.asked.length + 1, S.total)} sur ${S.total} · réponse rédigée</p><h2 class="qtxt">${mx(c.front)}</h2><div class="field"><label for="ans">Ta réponse</label><textarea id="ans" style="min-height:110px"></textarea></div><button class="btn" id="check">Voir la réponse attendue</button><div id="fb"></div></div>`;
+        app.innerHTML = head + `<div class="card pad stack"><p class="small muted">Question ${Math.min(S.asked.length + 1, S.total)} sur ${S.total} · réponse rédigée</p><h2 class="qtxt">${cfront(c)}</h2><div class="field"><label for="ans">Ta réponse</label><textarea id="ans" style="min-height:110px"></textarea></div><button class="btn" id="check">Voir la réponse attendue</button><div id="fb"></div></div>`;
         $("check").onclick = () => { $("check").hidden = true; $("ans").readOnly = true; $("fb").innerHTML = `<div class="stack"><p class="label">Réponse idéale attendue</p><p class="expected">${mx(c.back)}</p><p class="note">Compare avec ta réponse et valide toi-même : c'est le sens qui compte, pas les mots exacts.</p><button class="linkbtn" id="aicmp">Demander à l'IA de comparer (1 appel)</button><div class="md" id="aiout"></div><div class="answers"><button class="btn bad" id="ko">${I.x}Faux</button><button class="btn good" id="okb">${I.check}Juste</button></div></div>`; $("ko").onclick = () => next(false, c, $("ans").value); $("okb").onclick = () => next(true, c);
           $("aicmp").onclick = async () => { $("aicmp").disabled = true; $("aiout").innerHTML = '<p class="muted">Comparaison…</p>'; try { const r = await ai({ action: "ask", text: "Question : " + c.front + "\nRéponse attendue d'après le cours : " + c.back, question: "La réponse de l'élève est : « " + $("ans").value.slice(0, 500) + " ». A-t-elle le même sens que la réponse attendue ? Commence par OUI ou NON, puis explique en une phrase ce qui manque ou ce qui est faux." }); if ($("aiout")) $("aiout").innerHTML = md(r.answer); } catch (e) { if ($("aiout")) { showErr($("aiout"), e); $("aicmp").disabled = false; } } }; };
         return;
       }
       const opts = c.opts ? shuffle(c.opts.map((t, k) => ({ id: t === c.back ? c.id : c.id + "x" + k, back: t }))) : shuffle([c, ...lookalikes(c.back, all.filter(x => x.id !== c.id && x.back !== c.back), 3, x => x.back)]);
-      app.innerHTML = head + `<div class="card pad stack"><span class="pill ${S.missed.includes(c) ? "warn" : ""}" style="align-self:flex-start">${S.missed.includes(c) ? "Essayons à nouveau" : "Question " + Math.min(S.asked.length + 1, S.total) + " sur " + S.total}</span><h2 class="qtxt">${mx(c.front)}</h2><p class="fb" id="fb" role="status"></p><div class="opts">${opts.map((o, i) => `<button class="opt" data-i="${i}">${mx(o.back)}</button>`).join("")}</div><p class="note" id="expl" hidden></p><button class="btn" id="cont" hidden>Continuer</button></div>`;
+      app.innerHTML = head + `<div class="card pad stack"><span class="pill ${S.missed.includes(c) ? "warn" : ""}" style="align-self:flex-start">${S.missed.includes(c) ? "Essayons à nouveau" : "Question " + Math.min(S.asked.length + 1, S.total) + " sur " + S.total}</span><h2 class="qtxt">${cfront(c)}</h2><p class="fb" id="fb" role="status"></p><div class="opts">${opts.map((o, i) => `<button class="opt" data-i="${i}">${mx(o.back)}</button>`).join("")}</div><p class="note" id="expl" hidden></p><button class="btn" id="cont" hidden>Continuer</button></div>`;
       screenSession.key = (e) => { const n = "1234".indexOf(e.key); const bs = app.querySelectorAll(".opt"); if (n >= 0 && bs[n] && !bs[n].disabled) bs[n].click(); else if (e.key === "Enter" && $("cont") && !$("cont").hidden) $("cont").click(); };
       app.querySelectorAll(".opt").forEach(b => b.onclick = () => {
         const ok = opts[+b.dataset.i].id === c.id;
@@ -3550,7 +3608,7 @@
       }
       const resume = midQuiz === id; midQuiz = null;
       app.innerHTML = top(title) + `<div class="card done"><h1>${good === S.total ? "Bon travail !" : "C'est fini"}</h1>${kind === "apprendre" ? `<p class="muted">${plural(S.total, "notion vue", "notions vues")}, ${plural(S.missed.length, "à retravailler", "à retravailler")}.</p>` : `<div class="big">${String(note).replace(".", ",")} / 20</div><p class="muted">${good} bonnes réponses sur ${S.total}.</p>`}${extra}
-        ${S.missed.length ? `<div class="stack" style="text-align:left;width:100%"><p class="label">À revoir</p>${S.missed.map(c => `<div class="term" style="padding:8px 0"><b>${mx(c.front)}</b><p>${mx(c.back)}</p></div>`).join("")}</div>` : ""}
+        ${S.missed.length ? `<div class="stack" style="text-align:left;width:100%"><p class="label">À revoir</p>${S.missed.map(c => `<div class="term" style="padding:8px 0"><b>${cfront(c, true)}</b><p>${mx(c.back)}</p></div>`).join("")}</div>` : ""}
         ${resume ? `<a class="btn" href="#cartes-${id}">Reprendre mes cartes</a>` : ""}<button class="btn${resume ? " ghost" : ""}" id="again">Recommencer</button>${kind === "quiz" || kind === "controle" ? `<button class="btn ghost" id="newai">${I.spark}${kind === "quiz" ? "Nouveau quiz, nouvelles questions" : "Nouveau contrôle, nouvelles questions"}</button>` : ""}${kind === "apprendre" ? `<button class="btn ghost" id="morec">${I.spark}Créer d'autres cartes</button>` : ""}<a class="btn ghost" href="${back}">Retour au chapitre</a></div>`;
       $("again").onclick = () => screenQuestions(id, kind);
       if ($("newai")) $("newai").onclick = () => { freshAi = true; screenQuestions(id, kind); };
@@ -3630,7 +3688,7 @@
     const qs = shuffle(all).slice(0, 10).map(c => { const truth = Math.random() < 0.5, other = lookalikes(c.back, shuffle(all.filter(x => x.id !== c.id && x.back !== c.back)), 2, x => x.back)[Math.random() < 0.7 ? 0 : 1] || all.find(x => x.id !== c.id && x.back !== c.back); return { c, truth: truth || !other, shown: truth || !other ? c.back : other.back }; });
     let i = 0, good = 0; const missed = [];
     function ask() {
-      if (i >= qs.length) { app.innerHTML = head + `<div class="card done"><h1>${good === qs.length ? "Bon travail !" : "C'est fini"}</h1><div class="big">${good} / ${qs.length}</div>${missed.length ? `<div class="stack" style="text-align:left;width:100%"><p class="label">À revoir</p>${missed.map(c => `<div class="term" style="padding:8px 0"><b>${mx(c.front)}</b><p>${mx(c.back)}</p></div>`).join("")}</div>` : ""}<button class="btn" id="again">Rejouer</button><a class="btn ghost" href="${back}">Retour au chapitre</a></div>`; $("again").onclick = () => screenTrueFalse(id); return; }
+      if (i >= qs.length) { app.innerHTML = head + `<div class="card done"><h1>${good === qs.length ? "Bon travail !" : "C'est fini"}</h1><div class="big">${good} / ${qs.length}</div>${missed.length ? `<div class="stack" style="text-align:left;width:100%"><p class="label">À revoir</p>${missed.map(c => `<div class="term" style="padding:8px 0"><b>${cfront(c, true)}</b><p>${mx(c.back)}</p></div>`).join("")}</div>` : ""}<button class="btn" id="again">Rejouer</button><a class="btn ghost" href="${back}">Retour au chapitre</a></div>`; $("again").onclick = () => screenTrueFalse(id); return; }
       const q = qs[i];
       app.innerHTML = head + `<div class="bar"><i style="width:${i / qs.length * 100}%"></i></div><div class="card pad stack"><p class="small muted">Affirmation ${i + 1} sur ${qs.length}</p><h2 class="qtxt">${mx(q.c.front)}</h2><p class="expected" style="background:var(--accent-soft);color:var(--accent-ink)">${mx(q.shown)}</p><p class="fb" id="fb" role="status"></p><div class="answers"><button class="btn peach" id="faux">Faux</button><button class="btn" id="vrai">Vrai</button></div><button class="btn ghost" id="cont" hidden>Continuer</button></div>`;
       const pick = (v) => { const ok = v === q.truth; ping(ok); if (ok) good++; else missed.push(q.c); $("vrai").disabled = $("faux").disabled = true; $("fb").className = "fb " + (ok ? "ok" : "ko"); $("fb").textContent = ok ? "Bon travail !" : (q.truth ? "C'était vrai." : "C'était faux. La bonne réponse : " + q.c.back); $("cont").hidden = false; $("cont").onclick = () => { i++; ask(); }; $("cont").focus(); };
@@ -3776,7 +3834,7 @@
         <div class="card pad"><p class="recall">${highlight(recall, marks)}</p></div>
         ${(r.erreurs || []).length ? `<div class="card pad stack"><h2>Erreurs à corriger</h2>${r.erreurs.map(e => `<div class="fix"><p><mark class="hl ko">${mx(e.extrait)}</mark></p><p class="expected">${mx(e.correction)}</p></div>`).join("")}</div>` : ""}
         ${(r.oublis || []).length ? `<div class="card pad stack"><h2>Ce que tu as oublié</h2><ul class="plain">${r.oublis.map(o => `<li><mark class="hl warn">${mx(o)}</mark></li>`).join("")}</ul></div>` : ""}
-        ${cards.length ? `<div class="card pad stack"><h2>${plural(cards.length, "carte de renfort", "cartes de renfort")}</h2>${cards.map(c => `<div class="term" style="padding:6px 0"><b>${mx(c.front)}</b><p>${mx(c.back)}</p></div>`).join("")}<button class="btn sm" id="addc">Ajouter ces cartes au chapitre</button></div>` : ""}
+        ${cards.length ? `<div class="card pad stack"><h2>${plural(cards.length, "carte de renfort", "cartes de renfort")}</h2>${cards.map(c => `<div class="term" style="padding:6px 0"><b>${cfront(c, true)}</b><p>${mx(c.back)}</p></div>`).join("")}<button class="btn sm" id="addc">Ajouter ces cartes au chapitre</button></div>` : ""}
         <button class="btn ghost" id="redo">Refaire une feuille blanche</button>`;
       $("redo").onclick = () => form("");
       if ($("addc")) $("addc").onclick = async () => {
@@ -3977,7 +4035,7 @@
     function ask() {
       const c = list[i]; let final = "", t0 = 0, secs = 0, on = false;
       app.innerHTML = toolHead(id, T) + `<div class="bar"><i style="width:${i / list.length * 100}%"></i></div>
-        <div class="card pad stack"><span class="pill" style="align-self:flex-start">Question ${i + 1} sur ${list.length}</span><h2 class="qtxt">${mx(c.front)}</h2>
+        <div class="card pad stack"><span class="pill" style="align-self:flex-start">Question ${i + 1} sur ${list.length}</span><h2 class="qtxt">${cfront(c)}</h2>
           ${"speechSynthesis" in window ? `<button class="linkbtn" id="hear" style="align-self:flex-start">${I.listen}Réécouter la question</button>` : ""}
           ${Rec ? `<button class="btn" id="mic">${I.mic}Répondre au micro</button><p class="transcript" id="tr" aria-live="polite"></p>` : `<p class="note">Ton navigateur ne gère pas la dictée vocale. Réponds à voix haute, puis écris ce que tu as dit.</p>`}
           <div class="field"${Rec ? " hidden" : ""} id="trf"><label for="trt">Ta réponse</label><textarea id="trt" style="min-height:100px"></textarea></div>
@@ -4035,7 +4093,7 @@
       if (B.hp <= 0 || B.shields <= 0) return end();
       if (!B.queue.length) B.queue = shuffle(all);
       const c = B.queue.shift(), opts = shuffle([c, ...lookalikes(c.back, all.filter(x => x.id !== c.id && x.back !== c.back), 3, x => x.back)]);
-      app.innerHTML = toolHead(id, T) + hud() + `<div class="card pad stack"><h2 class="qtxt">${mx(c.front)}</h2><p class="fb" id="fb" role="status"></p><div class="opts">${opts.map((o, k) => `<button class="opt" data-i="${k}">${mx(o.back)}</button>`).join("")}</div><button class="btn" id="cont" hidden>Continuer</button></div>`;
+      app.innerHTML = toolHead(id, T) + hud() + `<div class="card pad stack"><h2 class="qtxt">${cfront(c)}</h2><p class="fb" id="fb" role="status"></p><div class="opts">${opts.map((o, k) => `<button class="opt" data-i="${k}">${mx(o.back)}</button>`).join("")}</div><button class="btn" id="cont" hidden>Continuer</button></div>`;
       screenSession.key = (e) => { const n = "1234".indexOf(e.key), bs = app.querySelectorAll(".opt"); if (n >= 0 && bs[n] && !bs[n].disabled) bs[n].click(); else if (e.key === "Enter" && $("cont") && !$("cont").hidden) $("cont").click(); };
       app.querySelectorAll(".opt").forEach(b => b.onclick = () => {
         const ok = opts[+b.dataset.i].id === c.id; B.n++;
@@ -4141,7 +4199,7 @@
     function move(d) { const was = B.playing; pause(); B.i = (B.i + d + B.list.length) % B.list.length; B.phase = "q"; was ? play() : draw(); }
     function draw() {
       if (!location.hash.startsWith("#bus-")) return; const c = B.list[B.i];
-      app.innerHTML = toolHead(id, T) + `<h1>${mx(ch.name)}</h1><div class="card pad stack player"><p class="small muted">Carte ${B.i + 1} sur ${B.list.length} · ${B.phase === "q" ? "Question" : B.phase === "p" ? "Réfléchis…" : "Réponse"}</p><p class="qtxt" aria-live="polite">${mx(c.front)}</p><p class="expected${B.phase === "a" ? "" : " veiled"}">${B.phase === "a" ? esc(c.back) : "La réponse arrive après la pause."}</p><div class="bar"><i style="width:${(B.i + (B.phase === "a" ? 0.7 : 0.2)) / B.list.length * 100}%"></i></div>
+      app.innerHTML = toolHead(id, T) + `<h1>${mx(ch.name)}</h1><div class="card pad stack player"><p class="small muted">Carte ${B.i + 1} sur ${B.list.length} · ${B.phase === "q" ? "Question" : B.phase === "p" ? "Réfléchis…" : "Réponse"}</p><p class="qtxt" aria-live="polite">${cfront(c)}</p><p class="expected${B.phase === "a" ? "" : " veiled"}">${B.phase === "a" ? esc(c.back) : "La réponse arrive après la pause."}</p><div class="bar"><i style="width:${(B.i + (B.phase === "a" ? 0.7 : 0.2)) / B.list.length * 100}%"></i></div>
         <div class="row" style="justify-content:center"><button class="iconbtn" id="bprev" aria-label="Carte précédente">${I.back}</button><button class="btn" id="bplay" style="min-width:140px">${B.playing ? "Pause" : "Lecture"}</button><button class="iconbtn" id="bnext" aria-label="Carte suivante" style="transform:scaleX(-1)">${I.back}</button></div></div>
         <div class="field"><span class="label">Temps de réflexion avant la réponse</span><div class="chips">${[2, 4, 6, 10].map(s => `<button class="chip" data-ps="${s}" aria-pressed="${B.pause === s}">${s} s</button>`).join("")}</div></div>
         <div class="row"><button class="chip" id="bshuf">Mélanger les cartes</button></div>

@@ -13,14 +13,14 @@ const QUOTA_MSG = "Vous avez atteint votre limite journalière. Contacte le cré
 let failures = 0; const log = [];
 const ok = (cond, name, extra) => { if (!cond) { failures++; log.push("ÉCHEC  " + name + (extra ? "  → " + extra : "")); } else log.push("ok     " + name); };
 
-async function open(browser, { w, h, theme, seed = "plein", legacy, quota, mastered, xp, trash, oldSeason }) {
+async function open(browser, { w, h, theme, seed = "plein", legacy, quota, mastered, xp, trash, oldSeason, extra }) {
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, serviceWorkers: "block", colorScheme: theme === "dark" ? "dark" : "light" });
   const page = await ctx.newPage(); page.errors = [];
   page.on("pageerror", e => page.errors.push(String(e)));
   page.on("console", m => { if (m.type() === "error" && !/Failed to load resource|fonts\.g/.test(m.text())) page.errors.push(m.text()); });
   await page.route("**/vendor/supabase.js", r => r.fulfill({ path: path.join(__dirname, "fake-supabase.js"), contentType: "text/javascript" }));
   await page.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
-  await page.addInitScript(o => { if (sessionStorage.getItem("init")) return; sessionStorage.setItem("init", "1"); localStorage.clear(); if (!o.oldSeason) localStorage.setItem("merge.rewards", JSON.stringify({ season: 2, xp0: 0 })); else localStorage.setItem("merge.rewards", JSON.stringify({ buys: [{ id: "c-sakura", price: 0, level: 2 }, { id: "c-cerise", price: 150 }], equip: { couleur: "c-cerise" }, lvl: 4 })); localStorage.setItem("fake.seed", o.seed); localStorage.setItem("fake.theme", o.theme); localStorage.setItem("merge.tuto", "1"); if (o.legacy) localStorage.setItem("fake.legacy", "1"); if (o.quota != null) localStorage.setItem("fake.quota", String(o.quota)); if (o.mastered) localStorage.setItem("fake.mastered", "1"); if (o.xp) localStorage.setItem("fake.xp", String(o.xp)); if (o.trash) localStorage.setItem("fake.trash", "1"); }, { seed, theme, legacy, quota, mastered, xp, trash, oldSeason });
+  await page.addInitScript(o => { if (sessionStorage.getItem("init")) return; sessionStorage.setItem("init", "1"); localStorage.clear(); if (!o.oldSeason) localStorage.setItem("merge.rewards", JSON.stringify({ season: 2, xp0: 0 })); else localStorage.setItem("merge.rewards", JSON.stringify({ buys: [{ id: "c-sakura", price: 0, level: 2 }, { id: "c-cerise", price: 150 }], equip: { couleur: "c-cerise" }, lvl: 4 })); localStorage.setItem("fake.seed", o.seed); Object.entries(o.extra || {}).forEach(([k, v]) => localStorage.setItem("fake." + k, v)); localStorage.setItem("fake.theme", o.theme); localStorage.setItem("merge.tuto", "1"); if (o.legacy) localStorage.setItem("fake.legacy", "1"); if (o.quota != null) localStorage.setItem("fake.quota", String(o.quota)); if (o.mastered) localStorage.setItem("fake.mastered", "1"); if (o.xp) localStorage.setItem("fake.xp", String(o.xp)); if (o.trash) localStorage.setItem("fake.trash", "1"); }, { seed, theme, legacy, quota, mastered, xp, trash, oldSeason, extra });
   await page.goto(BASE + "/"); await page.waitForSelector("#app > *");
   return page;
 }
@@ -1291,6 +1291,52 @@ async function importEta(browser) {
   ok((await txt(page)).includes("Bon travail"), tag + " : import terminé");
   ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
 }
+// Schémas (serveur) : repères lus sur les photos → cadre propre ; cartes en double retirées au 2e import.
+async function schemasServeur() {
+  const S = await import(require("url").pathToFileURL(path.join(ROOT, "supabase/functions/studio/schemas.mjs")).href), tag = "schémas serveur";
+  ok(JSON.stringify(S.cleanBox("100,200,500,800")) === "[75,175,525,825]", tag + " : cadre agrandi d'une petite marge", JSON.stringify(S.cleanBox("100,200,500,800")));
+  ok(S.cleanBox("10,10,30,30") === null && S.cleanBox("a,b,c,d") === null && S.cleanBox("1,2,3") === null, tag + " : cadres trop petits ou faux refusés");
+  ok(JSON.stringify(S.cleanBox("500,800,100,200")) === "[75,175,525,825]" && S.cleanBox("0,0,1000,1000")[2] === 1000, tag + " : cadre à l'envers remis dans l'ordre, bornes respectées");
+  const ex = S.extractSchemas([{ text: "Intro\n[[SCHEMA|100,100,600,900|Cycle cellulaire]]\nLe schéma montre…\n[[SCHEMA|1,1,2,2|Flèche]]", path: "u/c/p1.jpg" }, { text: "Texte collé [[SCHEMA|100,100,600,900|X]]", path: null }]);
+  ok(ex.schemas.length === 1 && ex.schemas[0].id === "S1" && ex.schemas[0].path === "u/c/p1.jpg" && ex.texts[0].includes("[Schéma S1 : Cycle cellulaire]") && ex.texts[0].includes("[Schéma : Flèche]") && !/\[\[SCHEMA/.test(ex.texts.join("")), tag + " : repères remplacés, seuls les vrais schémas d'une photo gardés", JSON.stringify(ex));
+  ok(S.similar("Que donne la mitose ?", "Qu'est-ce que donne la mitose ?") >= 0.75 && S.similar("Que donne la mitose ?", "Que donne la méiose ?") < 0.5, tag + " : questions presque identiques reconnues, différentes séparées");
+  const kept = S.dedupCards([{ front: "Que donne la mitose ?" }, { front: "Combien de chromosomes chez l'humain ?" }, { front: "Combien de chromosomes chez l'humain ?" }], ["Qu'est-ce que donne la mitose ?"]);
+  ok(kept.length === 1 && kept[0].front.startsWith("Combien"), tag + " : doublons retirés (avec l'existant et entre nouvelles cartes)", JSON.stringify(kept));
+}
+// Schémas (appli) : carte de schéma recadrée, agrandissement, page entière ; message quand un 2e import n'apporte rien.
+async function schemasCartes(browser) {
+  for (const [w, h] of [[390, 844], [1440, 900]]) {
+    const page = await open(browser, { w, h, theme: "dark", extra: { schema: "1" } }), tag = "schémas cartes " + w;
+    await go(page, "#chapitre-c1", 500);
+    ok(await page.locator(".schema.sm").count() === 1, tag + " : vignette du schéma dans la liste des cartes");
+    await go(page, "#cartes-c1", 600);
+    let st = await page.evaluate(() => { const s = document.querySelector(".flip .schema"), im = s && s.querySelector("img"); if (!s || !im) return null; const r = s.getBoundingClientRect(), f = document.querySelector(".flip").getBoundingClientRect(); return { ok: s.classList.contains("ok"), ar: r.width / r.height, want: ((880 - 120) * im.naturalWidth) / ((620 - 180) * im.naturalHeight), inside: r.left >= f.left - 1 && r.right <= f.right + 1, imW: im.getBoundingClientRect().width, boxW: r.width }; });
+    ok(st && st.ok && Math.abs(st.ar - st.want) < 0.05 && st.inside, tag + " : schéma recadré, pas déformé, dans la carte", JSON.stringify(st));
+    ok(st && Math.abs(st.imW / (st.boxW / 0.76) - 1) < 0.02, tag + " : seule la zone du schéma est visible", JSON.stringify(st));
+    await page.screenshot({ path: path.join(SHOTS, "schema-carte-" + w + ".png") });
+    await page.click("#zoomsch"); await page.waitForTimeout(400);
+    ok(await page.locator("#schview .schema.big").count() === 1, tag + " : bouton « Agrandir le schéma »");
+    await page.screenshot({ path: path.join(SHOTS, "schema-grand-" + w + ".png") });
+    await page.click("[data-schfull]"); await page.waitForTimeout(500);
+    const mk = await page.evaluate(() => { const p = document.querySelector(".schpage").getBoundingClientRect(), m = document.querySelector(".schmark").getBoundingClientRect(); return { top: (m.top - p.top) / p.height, left: (m.left - p.left) / p.width, h: m.height / p.height }; });
+    ok(Math.abs(mk.top - 0.18) < 0.02 && Math.abs(mk.left - 0.12) < 0.02 && Math.abs(mk.h - 0.44) < 0.02, tag + " : page entière avec le schéma entouré au bon endroit", JSON.stringify(mk));
+    await page.screenshot({ path: path.join(SHOTS, "schema-page-" + w + ".png") });
+    await page.keyboard.press("Escape"); await page.waitForTimeout(200);
+    ok(await page.locator("#schview").count() === 0, tag + " : Échap ferme l'agrandissement");
+    await page.click("#flip"); await page.waitForTimeout(400);
+    ok(await page.locator("#flip.back").count() === 1, tag + " : toucher la carte (même sur le schéma) la retourne toujours");
+    const sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px minimum", sm.join(" | "));
+    const o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
+    if (w === 390) {
+      await page.evaluate(() => { localStorage.setItem("fake.rien", "1"); localStorage.setItem("fake.delay", "100"); });
+      await go(page, "#import-c1"); await page.click('[data-tab="text"]'); await page.fill("#txt", "La mitose est une division cellulaire qui donne deux cellules identiques. ".repeat(4));
+      await page.click("#go"); await page.waitForFunction(() => /Bon travail/.test(document.body.innerText), null, { timeout: 10000 }).catch(() => {});
+      const t = await txt(page);
+      ok(t.includes("Rien de nouveau à ajouter") && t.includes("Aucune carte en double"), tag + " : 2e import qui n'apporte rien : message clair, pas d'erreur", t.slice(0, 300));
+    }
+    ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+  }
+}
 async function exos(browser) {
   // 1100 px : PC moyen, l'historique s'ouvre avec ☰ (au-delà de 1200 px il est en colonne fixe, voir profPc).
   for (const [w, h] of [[390, 844], [1100, 800]]) {
@@ -1553,7 +1599,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => only ? only.includes(n) : n !== "chasse";
     if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
-    const SUITES = { majSw, profPc, importRelance, importEta, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
+    const SUITES = { majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
     for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();

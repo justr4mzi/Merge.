@@ -104,9 +104,10 @@
         <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Progression de la session"><i style="width:${pct}%"></i></div>
         <div class="counters"><span class="counter no" aria-label="Cartes à revoir">${S.again.size}</span><span class="counter yes" aria-label="Cartes réussies">${S.known}</span></div>
         <div class="flipwrap" id="wrap"><button class="flip${S.flipped ? " back" : ""}" id="flip" aria-label="Retourner la carte">
-          <div class="face"><header>${training ? "Entraînement" : S.again.has(c.id) ? "On la revoit" : "Question"}</header><div class="txt">${mx(c.front)}</div><footer>Touche la carte pour voir la réponse</footer></div>
+          <div class="face"><header>${training ? "Entraînement" : S.again.has(c.id) ? "On la revoit" : "Question"}</header><div class="txt">${cfront(c)}</div><footer>Touche la carte pour voir la réponse</footer></div>
           <div class="face b"><header>Réponse</header>${picHtml(c)}<div class="txt">${mx(c.back)}</div><div id="mnemo">${mnemoHtml(c)}</div><div id="extra" class="extra">${backExtra(c)}</div><footer>${c.source_quote ? "Dans ton cours : « " + esc(c.source_quote) + " »" : ""}</footer></div>
         </button></div>
+        ${schBox(c) ? `<button class="chip sm schbtn" id="zoomsch">${I.search}Agrandir le schéma</button>` : ""}
         ${typed() ? `<div class="field typedbox"><label for="mine">Ta réponse, avant de retourner la carte</label><textarea id="mine" style="min-height:70px" placeholder="Écris ce que tu répondrais">${esc(S.mine)}</textarea></div>` : ""}
         <div class="answers"><button class="btn bad" id="no" aria-label="Faux, pas compris">${I.x}Faux</button><button class="btn good" id="yes">${I.check}Juste</button></div>
         <div class="row rate2"><button class="chip sm grow" id="hard">Juste, mais à revoir bientôt</button><button class="chip sm grow" id="easy">Trop facile</button></div>
@@ -115,6 +116,7 @@
           <div class="card pad stack"><h2>Raccourcis clavier</h2><div class="srow"><span>Retourner la carte</span><kbd>Espace</kbd></div><div class="srow"><span>Juste</span><kbd>→</kbd></div><div class="srow"><span>Faux</span><kbd>←</kbd></div><div class="srow"><span>Annuler ma réponse</span><kbd>Ctrl Z</kbd></div><div class="srow"><span>Trop facile</span><kbd>↑</kbd></div><div class="srow"><span>À revoir bientôt</span><kbd>↓</kbd></div></div>
           <p class="note">Une carte ratée revient jusqu'à ce que tu la réussisses.</p></aside></div>`;
       if ($("see")) $("see").onclick = () => showPage(c.image_path, $("pageimg"));
+      if ($("zoomsch")) $("zoomsch").onclick = () => openSchema(c);
       if ($("say")) $("say").onclick = () => speakText(S.flipped ? c.back : c.front, "fr-FR");
       $("flip").onclick = () => { if ($("mine")) S.mine = $("mine").value; S.flipped = !S.flipped; $("flip").classList.toggle("back", S.flipped); $("extra").innerHTML = backExtra(c); };
       $("no").onclick = () => answer(false); $("yes").onclick = () => answer(true);
@@ -126,7 +128,7 @@
         Object.assign(c, { front, back, needs_check: false, flagged: false }); const row = state.cards.find(x => x.id === c.id); if (row) Object.assign(row, { front, back }); closeSheet(); toast("Carte modifiée."); render(); }; });
       app.querySelector(".cmore").ontoggle = e => safeSet("merge.cmore", e.target.open ? "1" : "0");
       $("huh").onclick = async () => {
-        sheet(`<h1>Je ne comprends pas</h1><p class="muted small">${mx(c.front)}</p><div id="huhbox" class="md"><div class="row"><div class="spin" aria-hidden="true"></div><p class="muted" role="status">L'IA t'explique à partir de ton cours…</p></div></div><button class="btn ghost" data-close>Fermer</button>`);
+        sheet(`<h1>Je ne comprends pas</h1><p class="muted small">${cfront(c)}</p><div id="huhbox" class="md"><div class="row"><div class="spin" aria-hidden="true"></div><p class="muted" role="status">L'IA t'explique à partir de ton cours…</p></div></div><button class="btn ghost" data-close>Fermer</button>`);
         try { const text = await courseText(c.chapter_id); const r = await ai({ action: "pourquoi", text, question: c.front, attendu: c.back, donne: "" }); const b = $("huhbox"); if (b) b.innerHTML = md(r.answer || ""); }
         catch (e) { const b = $("huhbox"); if (b) showErr(b, e); }
       };
@@ -155,6 +157,59 @@
   async function picUrl(path) { const c = picUrls[path]; if (c && c.t > Date.now()) return c.u; const { data, error } = await sb.storage.from("cours").createSignedUrl(path, 3600); if (error || !data) return null; picUrls[path] = { u: data.signedUrl, t: Date.now() + 3000000 }; return data.signedUrl; }
   function fillPics(root) { (root || document).querySelectorAll("img[data-pic]:not([src])").forEach(async im => { const u = await picUrl(im.dataset.pic); if (u) im.src = u; else im.remove(); }); }
   const picHtml = (c) => c && c.picture ? `<img class="cardpic" data-pic="${esc(c.picture)}" alt="Image de la carte">` : "";
+  // ---------- schémas du cours sur les cartes ----------
+  // Une carte de schéma garde la photo de la page (image_path) et le cadre du schéma (image_box : [haut, gauche, bas, droite] de 0 à 1000).
+  // On n'affiche que le schéma : l'image entière est placée dans un cadre qui cache le reste (aucune copie d'image en plus).
+  function schBox(c) {
+    const b = c && c.image_path && Array.isArray(c.image_box) ? c.image_box.map(Number) : null;
+    return b && b.length === 4 && b.every(Number.isFinite) && b[2] > b[0] && b[3] > b[1] ? b : null;
+  }
+  // Rapport largeur / hauteur du schéma : la photo est supposée en 3:4 jusqu'à son chargement, puis on prend sa vraie taille.
+  const schRatio = (b, w, h) => ((b[3] - b[1]) * (w || 3)) / ((b[2] - b[0]) * (h || 4));
+  function schemaHtml(c, small) {
+    const b = schBox(c); if (!b) return "";
+    const bw = (b[3] - b[1]) / 1000, bh = (b[2] - b[0]) / 1000, pc = x => (x * 100).toFixed(3) + "%";
+    return `<span class="schema${small ? " sm" : ""}" data-sch="${esc(c.id)}" role="img" aria-label="Schéma du cours" style="--ar:${schRatio(b).toFixed(4)}">`
+      + `<img class="schimg" data-pic="${esc(c.image_path)}" alt="" draggable="false" style="width:${pc(1 / bw)};height:${pc(1 / bh)};left:${pc(-b[1] / 1000 / bw)};top:${pc(-b[0] / 1000 / bh)}">`
+      + (small ? "" : `<i class="schzoom" aria-hidden="true">${I.search}</i>`) + `</span>`;
+  }
+  // Question d'une carte : son schéma (s'il y en a un) puis le texte. small = petite vignette dans les listes.
+  function cfront(c, small) { return schemaHtml(c, small) + mx(c.front); }
+  // Vraie taille de la photo connue : on corrige le rapport du cadre pour que le schéma ne soit pas déformé.
+  document.addEventListener("load", e => {
+    const im = e.target; if (!im || !im.classList) return;
+    if (im.parentElement && im.parentElement.classList.contains("schpage") && im.naturalWidth) return im.parentElement.style.setProperty("--par", (im.naturalWidth / im.naturalHeight).toFixed(4));
+    if (!im.classList.contains("schimg")) return;
+    const box = im.closest(".schema"), c = box && (state.cards || []).find(x => x.id === box.dataset.sch) || null, b = schBox(c) || schBox(box && box._c);
+    if (b && im.naturalWidth) box.style.setProperty("--ar", schRatio(b, im.naturalWidth, im.naturalHeight).toFixed(4));
+    if (box) box.classList.add("ok");
+  }, true);
+  // Agrandir un schéma : en grand, avec « Voir la page entière » (le schéma y est entouré).
+  function openSchema(c) {
+    const b = schBox(c); if (!b) return;
+    const old = document.getElementById("schview"); if (old) old.remove();
+    const el = document.createElement("div"); el.id = "schview"; el.className = "schview"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Schéma du cours");
+    const pc = x => (x / 10).toFixed(2) + "%";
+    const draw = (full) => {
+      el.innerHTML = `<div class="schviewbar"><button class="iconbtn flat" data-schx aria-label="Fermer">${I.x}</button><button class="btn sm ghost" data-schfull>${full ? "Voir le schéma seul" : "Voir la page entière"}</button></div>`
+        + `<div class="schviewbody">${full ? `<span class="schpage"><img class="pageimg" data-pic="${esc(c.image_path)}" alt="Page du cours"><i class="schmark" style="top:${pc(b[0])};left:${pc(b[1])};height:${pc(b[2] - b[0])};width:${pc(b[3] - b[1])}"></i></span>` : schemaHtml(c).replace('class="schema"', 'class="schema big"')}</div>`;
+      el.querySelector("[data-schx]").onclick = close;
+      el.querySelector("[data-schfull]").onclick = () => draw(!full);
+      const box = el.querySelector(".schema"); if (box) box._c = c;
+      fillPics(el);
+    };
+    const close = () => { el.remove(); document.removeEventListener("keydown", esc_); };
+    const esc_ = e => { if (e.key === "Escape") close(); };
+    document.addEventListener("keydown", esc_);
+    el.addEventListener("click", e => { if (e.target === el || e.target.classList.contains("schviewbody")) close(); });
+    document.body.appendChild(el); draw(false);
+  }
+  // Toucher un schéma l'agrandit (sauf dans un bouton ou un lien : la carte se retourne, le lien s'ouvre).
+  document.addEventListener("click", e => {
+    const f = e.target.closest && e.target.closest(".schema[data-sch]");
+    if (!f || f.closest("button,a,#schview")) return;
+    const c = (state.cards || []).find(x => x.id === f.dataset.sch); if (c) { e.preventDefault(); openSchema(c); }
+  });
   async function uploadCardPic(file, chapterId, cardId) {
     let bmp; try { bmp = await createImageBitmap(file); } catch (e) { if (!window.heic2any) await new Promise((ok, ko) => { const sc = document.createElement("script"); sc.src = "vendor/heic2any.min.js"; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); }); const o = await window.heic2any({ blob: file, toType: "image/jpeg", quality: 0.85 }); bmp = await createImageBitmap(Array.isArray(o) ? o[0] : o); }
     const k = Math.min(1, 1000 / Math.max(bmp.width, bmp.height)), cv = document.createElement("canvas"); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k); cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);

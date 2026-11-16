@@ -1367,3 +1367,26 @@ body[data-flame="bonbon"] .streak,[data-flameprev="bonbon"]{background:linear-gr
 /* Progrès : raccourcis en liste sur téléphone (3 tuiles serrées coupaient les mots) */
 @media (max-width:600px){.prgrid{grid-template-columns:1fr!important;gap:8px}.ptile{flex-direction:row;align-items:center;min-height:56px;padding:8px 12px}.ptile .grow{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}}
 .row>h1.grow{font-size:clamp(1.2rem,5.6vw,2rem)}
+
+/* Schémas du cours sur les cartes : la photo de la page est placée dans un cadre qui ne laisse voir que le schéma. */
+.schema{position:relative;display:block;overflow:hidden;aspect-ratio:var(--ar,1.3);width:min(100%,calc(34vh * var(--ar,1.3)));margin:0 auto 12px;border-radius:14px;background:#fff;border:1px solid var(--line);cursor:zoom-in}
+.schema img{position:absolute;max-width:none;display:block;user-select:none;-webkit-user-drag:none;opacity:0;transition:opacity .25s}
+.schema.ok img{opacity:1}
+.schema .schzoom{position:absolute;right:8px;bottom:8px;width:32px;height:32px;border-radius:99px;display:grid;place-items:center;background:rgba(15,15,25,.55);color:#fff;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.schema .schzoom svg{width:18px;height:18px}
+.flip .schema{cursor:inherit}
+/* Carte de schéma : le schéma en grand au-dessus de la question, carte un peu plus haute. */
+.flipwrap:has(.schema){min-height:min(560px,calc(100vh - 330px))}
+.face .txt:has(.schema){flex-direction:column;justify-content:center;gap:14px;font-size:1.12em;padding:16px 18px}
+.face .txt .schema{flex:none;margin:0;width:min(100%,calc(min(34vh,320px) * var(--ar,1.3)))}
+@media (min-width:900px){.flipwrap:has(.schema){min-height:560px}.face .txt:has(.schema){font-size:1.35em}.face .txt .schema{width:min(100%,calc(330px * var(--ar,1.3)))}}
+.schema.sm{width:min(100%,calc(120px * var(--ar,1.3)));max-width:220px;margin:0 0 8px;border-radius:10px}
+.schbtn{align-self:center;margin-top:-4px}
+.schview{position:fixed;inset:0;z-index:95;background:rgba(8,8,14,.92);display:flex;flex-direction:column;padding:calc(env(safe-area-inset-top,0px) + 10px) 14px calc(env(safe-area-inset-bottom,0px) + 14px)}
+.schviewbar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.schviewbody{flex:1;min-height:0;display:grid;place-items:center;padding-top:10px}
+.schema.big{width:min(100%,calc((100vh - 140px) * var(--ar,1.3)));margin:0;cursor:default}
+.schema.big .schzoom{display:none}
+.schpage{position:relative;display:block;aspect-ratio:var(--par,.75);width:min(100%,calc((100vh - 140px) * var(--par,.75)))}
+.schpage img{position:absolute;inset:0;width:100%;height:100%;border-radius:10px;background:#fff}
+.schpage .schmark{position:absolute;border:3px solid var(--accent);border-radius:8px;box-shadow:0 0 0 9999px rgba(8,8,14,.35)}

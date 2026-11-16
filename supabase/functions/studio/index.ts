@@ -4,6 +4,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 import { autoTitle } from "./titre.mjs";
+import { extractSchemas, dedupCards } from "./schemas.mjs";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 const CORS = {
@@ -208,19 +209,20 @@ async function stepRun(id: string) {
           }
           // 1) Lecture. Les photos peuvent être des pages imprimées OU un cahier écrit à la main : on lit, on ne devine jamais.
           const LECTURE = "Transcris fidèlement et INTÉGRALEMENT le contenu de ces pages de cours, dans l'ordre, en texte : chaque titre, paragraphe, encadré, légende, note de bas de page et tableau, sans sauter aucune page ni aucune section. Décris en une ou deux phrases chaque schéma, graphique ou tableau à partir de ce qui est visible (légendes, axes, flèches). Écris les formules en LaTeX entre $…$ (voir FORMULES). N'ajoute rien, ne résume pas, ne corrige pas le contenu. " + REGLE +
-            "\nCAHIER ÉCRIT À LA MAIN : lis lettre par lettre. Ne complète JAMAIS un mot, un nombre, une unité ou une formule à partir de ce que tu sais du sujet : écris seulement ce qui est réellement écrit sur la page. Fais très attention aux chiffres, virgules, puissances de 10, signes (+, −, =), indices, exposants et unités. Un mot ou un passage que tu ne lis pas avec certitude : écris [illisible] à sa place (jamais une supposition). Ignore les ratures barrées. Sépare les pages par une ligne [[PAGE]].";
+            "\nCAHIER ÉCRIT À LA MAIN : lis lettre par lettre. Ne complète JAMAIS un mot, un nombre, une unité ou une formule à partir de ce que tu sais du sujet : écris seulement ce qui est réellement écrit sur la page. Fais très attention aux chiffres, virgules, puissances de 10, signes (+, −, =), indices, exposants et unités. Un mot ou un passage que tu ne lis pas avec certitude : écris [illisible] à sa place (jamais une supposition). Ignore les ratures barrées. Sépare les pages par une ligne [[PAGE]]." +
+            "\nSCHÉMAS : pour chaque vrai schéma, dessin légendé, graphique ou carte (pas un simple encadré de texte, pas un tableau), écris à sa place, seule sur une ligne, [[SCHEMA|ymin,xmin,ymax,xmax|titre court]] : les 4 nombres entiers sont le cadre qui entoure TOUT le schéma avec ses légendes, sur la page où il se trouve, de 0 à 1000 (0,0 = coin en haut à gauche). Juste après, décris-le : ce qu'il représente et chaque légende telle qu'elle est écrite. 4 schémas au plus par page.";
           let txt = await ask(uid, sa, sys, [{ text: LECTURE }, ...imgs], false, 0, stall >= 2 ? "minimal" : "low");
           // 2) Relecture : on compare la transcription aux photos, mot à mot, et on corrige ce qui ne correspond pas (surtout pour l'écriture à la main).
           if (stall < 2) try {
             // Ne compte pas dans la limite du jour : c'est une vérification de la même lecture, pas une nouvelle demande.
-            const rel: string = (await gemini(sa, sys, [{ text: "Voici des photos de pages de cours et leur transcription. Relis la transcription mot à mot en la comparant aux photos. Corrige : mot ou nombre mal lu, chiffre, signe, exposant, indice ou unité faux, mot ajouté qui n'est PAS sur la photo, passage oublié. Pour chaque [illisible] déjà présent, regarde cet endroit de très près et remplace-le par le texte exact si tu peux le lire avec certitude. Ce qui ne se lit vraiment pas avec certitude reste [illisible]. N'ajoute aucune connaissance extérieure et ne corrige pas les erreurs de l'auteur du cours. Renvoie UNIQUEMENT la transcription corrigée complète, dans le même format, pages séparées par [[PAGE]].\n\nTranscription :\n<<<\n" + txt + "\n>>>" }, ...imgs], false, 0, "low")).text;
+            const rel: string = (await gemini(sa, sys, [{ text: "Voici des photos de pages de cours et leur transcription. Relis la transcription mot à mot en la comparant aux photos. Corrige : mot ou nombre mal lu, chiffre, signe, exposant, indice ou unité faux, mot ajouté qui n'est PAS sur la photo, passage oublié. Pour chaque [illisible] déjà présent, regarde cet endroit de très près et remplace-le par le texte exact si tu peux le lire avec certitude. Ce qui ne se lit vraiment pas avec certitude reste [illisible]. N'ajoute aucune connaissance extérieure et ne corrige pas les erreurs de l'auteur du cours. Renvoie UNIQUEMENT la transcription corrigée complète, dans le même format, pages séparées par [[PAGE]]. Garde chaque ligne [[SCHEMA|…]] exactement telle quelle, à sa place.\n\nTranscription :\n<<<\n" + txt + "\n>>>" }, ...imgs], false, 0, "low")).text;
             const a = txt.split("[[PAGE]]").filter((x) => x.trim()).length, b = rel.split("[[PAGE]]").filter((x: string) => x.trim()).length;
             if (rel.trim().length > txt.trim().length * 0.6 && b === a) txt = rel;
           } catch (e) { console.error("relecture", e); }
           // 3) Déchiffrage : s'il reste des [illisible], un passage dédié uniquement à ces endroits (ne compte pas non plus dans la limite).
           if (stall < 1 && /\[illisible\]/i.test(txt)) {
             try {
-              const dec: string = (await gemini(sa, sys, [{ text: "Cette transcription de pages de cours contient des passages marqués [illisible]. Concentre-toi UNIQUEMENT sur eux : pour chacun, retrouve l'endroit sur la photo et regarde-le de très près. Aide-toi de la façon dont l'auteur forme les mêmes lettres et chiffres ailleurs sur la page, des mots autour et de la grammaire de la phrase, et du même mot écrit plus clairement ailleurs dans ces pages. Remplace [illisible] par le texte exact quand tu peux le lire avec certitude ; si un seul mot reste douteux dans un passage, garde [illisible] juste pour ce mot. N'invente jamais un mot, un nombre ou une formule qui n'est pas écrit, n'utilise pas tes connaissances du sujet pour combler un trou, et ne change RIEN d'autre dans le texte. Renvoie UNIQUEMENT la transcription complète, même format, pages séparées par [[PAGE]].\n\nTranscription :\n<<<\n" + txt + "\n>>>" }, ...imgs], false, 0, "high")).text;
+              const dec: string = (await gemini(sa, sys, [{ text: "Cette transcription de pages de cours contient des passages marqués [illisible]. Concentre-toi UNIQUEMENT sur eux : pour chacun, retrouve l'endroit sur la photo et regarde-le de très près. Aide-toi de la façon dont l'auteur forme les mêmes lettres et chiffres ailleurs sur la page, des mots autour et de la grammaire de la phrase, et du même mot écrit plus clairement ailleurs dans ces pages. Remplace [illisible] par le texte exact quand tu peux le lire avec certitude ; si un seul mot reste douteux dans un passage, garde [illisible] juste pour ce mot. N'invente jamais un mot, un nombre ou une formule qui n'est pas écrit, n'utilise pas tes connaissances du sujet pour combler un trou, et ne change RIEN d'autre dans le texte. Renvoie UNIQUEMENT la transcription complète, même format, pages séparées par [[PAGE]]. Garde chaque ligne [[SCHEMA|…]] exactement telle quelle, à sa place.\n\nTranscription :\n<<<\n" + txt + "\n>>>" }, ...imgs], false, 0, "high")).text;
               const a = txt.split("[[PAGE]]").filter((x) => x.trim()).length, b = dec.split("[[PAGE]]").filter((x: string) => x.trim()).length;
               const ill = (t: string) => (t.match(/\[illisible\]/gi) || []).length;
               if (b === a && dec.trim().length > txt.trim().length * 0.8 && ill(dec) <= ill(txt)) txt = dec;
@@ -243,17 +245,37 @@ async function stepRun(id: string) {
       }
       return await kick(id);
     }
-    const texts = segs.map((s, i) => (s.path ? st.texts[i] : s.text)).filter(Boolean) as string[];
+    // Repères de schémas → « [Schéma S1 : titre] » dans le texte, et liste des schémas (page + cadre) pour les cartes.
+    const ex = extractSchemas(segs.map((s, i) => ({ text: s.path ? st.texts[i] : s.text, path: s.path ?? null })));
+    const texts = ex.texts.filter(Boolean) as string[], schemas: Any[] = ex.schemas;
     const full = texts.join("\n\n[[PAGE]]\n\n"), chunks = chunksOf(texts), n = Math.min(100, Math.max(5, Number(P.n) || 40));
     if (job.stage === "gen") {
       if (full.replace(/\s/g, "").length < 80) throw new Error("Je n'ai pas trouvé assez de texte dans ce cours.");
       st.ci ??= 0; st.cards ??= []; st.summary ??= "";
       const ci = st.ci as number, part = chunks[ci], want = Math.max(5, Math.round(n * part.length / Math.max(1, full.length)));
-      const avoid = (P.avoid ?? []).concat(st.cards.map((c: Any) => c.front)).slice(-200).map((x: Any) => clip(x, 160));
-      const g = await askJson(uid, sa, sys, [{ text: cours(part) + `${REGLE}\nRéponds en JSON strict avec exactement ces clés :\n{"lang":"code langue du cours, ex. fr","title":"titre court du chapitre, repris du cours s'il en a un, 60 caractères au plus","summary":"résumé en Markdown de 250 à 500 mots","cards":[{"front":"question courte","back":"réponse courte et exacte","source_quote":"phrase EXACTE du cours qui justifie la réponse, 200 caractères max"}]}\nLe résumé doit faire comprendre le but et l'essence du chapitre : commence par une ou deux phrases « À quoi sert ce chapitre », puis les définitions principales et les notions clés incontournables (titres avec ## et listes avec -). Laisse de côté les détails superflus, les anecdotes et les exemples secondaires.\nCrée au maximum ${want} cartes, moins si le cours est court, en couvrant tout le cours (cours, diaporama, livret, vocabulaire : toutes les parties fournies). Une carte = une seule notion. Aucune carte sans source_quote tirée mot pour mot du cours. Ne crée AUCUNE carte sur un passage qui contient [illisible] ou dont le sens n'est pas sûr, et ne complète jamais un passage illisible avec tes connaissances.` + (avoid.length ? `\nCes questions existent déjà, ne les refais pas : ${JSON.stringify(avoid)}` : "") }], 0.2);
+      // Deuxième import dans un chapitre qui a déjà un cours : l'IA voit ce qui existe et n'ajoute que le nouveau.
+      if (st.prevFronts == null) {
+        const [oc, os] = await Promise.all([admin.from("cards").select("front").eq("chapter_id", job.chapter_id).limit(500), admin.from("summaries").select("markdown").eq("chapter_id", job.chapter_id).maybeSingle()]);
+        st.prevFronts = ((oc.data ?? []) as Any[]).map((r) => clip(r.front, 200)).filter(Boolean);
+        st.prevSummary = clip(os.data?.markdown, 15000);
+      }
+      const already = st.prevFronts.length > 0 || String(st.prevSummary || "").trim().length > 0;
+      const avoid = (st.prevFronts as string[]).concat(P.avoid ?? [], st.cards.map((c: Any) => c.front)).slice(-300).map((x: Any) => clip(x, 160));
+      const schList = schemas.filter((x) => part.includes(`[Schéma ${x.id} :`));
+      const g = await askJson(uid, sa, sys, [{ text: cours(part) + `${REGLE}\nRéponds en JSON strict avec exactement ces clés :\n{"lang":"code langue du cours, ex. fr","title":"titre court du chapitre, repris du cours s'il en a un, 60 caractères au plus","summary":"résumé en Markdown de 250 à 500 mots","cards":[{"front":"question courte","back":"réponse courte et exacte","source_quote":"phrase EXACTE du cours qui justifie la réponse, 200 caractères max"}]}\nLe résumé doit faire comprendre le but et l'essence du chapitre : commence par une ou deux phrases « À quoi sert ce chapitre », puis les définitions principales et les notions clés incontournables (titres avec ## et listes avec -). Laisse de côté les détails superflus, les anecdotes et les exemples secondaires.\nCrée au maximum ${want} cartes, moins si le cours est court, en couvrant tout le cours (cours, diaporama, livret, vocabulaire : toutes les parties fournies). Une carte = une seule notion. Aucune carte sans source_quote tirée mot pour mot du cours. Ne crée AUCUNE carte sur un passage qui contient [illisible] ou dont le sens n'est pas sûr, et ne complète jamais un passage illisible avec tes connaissances.` +
+        (schList.length ? `\nSCHÉMAS : le cours contient des schémas, repérés par « [Schéma S1 : titre] » et suivis de leur description. Pour chaque schéma important (pas un dessin décoratif), crée 1 ou 2 cartes qui s'appuient sur l'image, avec la clé "schema":"S1" : la question se lit en regardant le schéma (ex. « Que représente ce schéma du cycle cellulaire ? », « Sur ce schéma du neurone, quel est le nom de la partie qui reçoit le message ? ») et nomme toujours son sujet (jamais « ce schéma » tout seul) ; la réponse vient de la description du schéma. Les autres cartes n'ont pas de clé "schema". Schémas disponibles : ${schList.map((x) => x.id + " (" + x.titre + ")").join(", ")}.` : "") +
+        (already ? `\nCE CHAPITRE A DÉJÀ UN COURS. Le nouvel envoi peut répéter une partie de ce qui existe (par exemple le même cours en cahier puis en PDF). Crée des cartes UNIQUEMENT pour les notions qui ne sont pas déjà couvertes par les questions existantes ci-dessous, même formulées autrement. Dans "summary", écris SEULEMENT les notions nouvelles par rapport au résumé existant (sans « À quoi sert ce chapitre », sans redire ce qu'il contient) ; s'il n'y a rien de nouveau, mets "summary":"" et "cards":[].\nRésumé existant :\n<<<\n${st.prevSummary || "(aucun)"}\n>>>` : "") +
+        (avoid.length ? `\nCes questions existent déjà, ne les refais pas (même reformulées) : ${JSON.stringify(avoid)}` : "") }], 0.2);
       const pn = normQ(part);
-      (g.cards ?? []).filter((c: Any) => c && c.front && c.back).slice(0, want).forEach((c: Any) => st.cards.push({ front: clip(c.front, 500), back: clip(c.back, 2000), q: c.source_quote ? clip(c.source_quote, 400) : null, bad: !quoteFits(c.source_quote, pn) || /illisible/i.test(String(c.source_quote ?? "") + String(c.back ?? "")), ci }));
-      if (g.summary) st.summary += (st.summary ? "\n\n" : "") + g.summary;
+      const got = (g.cards ?? []).filter((c: Any) => c && c.front && c.back).slice(0, want + 2 * schList.length).map((c: Any) => {
+        const sch = schList.find((x) => x.id === String(c.schema ?? "").trim()) ? String(c.schema).trim() : null;
+        return { front: clip(c.front, 500), back: clip(c.back, 2000), q: c.source_quote ? clip(c.source_quote, 400) : null, bad: !quoteFits(c.source_quote, pn) || /illisible/i.test(String(c.source_quote ?? "") + String(c.back ?? "")), ci, sch };
+      });
+      // Filet de sécurité : une carte qui redit une carte existante (ou une autre de cet import) est retirée.
+      // Les cartes de schéma ne sont pas comparées entre elles : chacune a sa propre image.
+      const plain = dedupCards(got.filter((c: Any) => !c.sch), (st.prevFronts as string[]).concat(st.cards.filter((c: Any) => !c.sch).map((c: Any) => c.front)));
+      st.cards.push(...got.filter((c: Any) => c.sch || plain.includes(c)));
+      if (g.summary && String(g.summary).trim()) st.summary += (st.summary ? "\n\n" : "") + g.summary;
       if (ci === 0 && g.lang) st.lang = clip(g.lang, 8);
       if (ci === 0 && g.title) st.title = clip(g.title, 120);
       st.ci = ci + 1;
@@ -262,20 +284,28 @@ async function stepRun(id: string) {
       return await kick(id);
     }
     if (job.stage === "save") {
-      const cards: Any[] = st.cards.slice(0, Math.max(n, 5 * chunks.length));
-      if (!cards.length) throw new Error("L'IA n'a créé aucune carte à partir de ce cours.");
+      const nSch = st.cards.filter((c: Any) => c.sch).length;
+      const cards: Any[] = st.cards.slice(0, Math.max(n, 5 * chunks.length) + nSch);
+      const already = (st.prevFronts ?? []).length > 0 || String(st.prevSummary || "").trim().length > 0;
+      if (!cards.length && !already) throw new Error("L'IA n'a créé aucune carte à partir de ce cours.");
       const notes: string[] = (P.notes ?? []).slice(0, 8);
       const pageOf = (q: unknown) => { const k = normQ(q).slice(0, 40); if (k.length < 8) return null; const i = segs.findIndex((s, j) => s.path && normQ(st.texts[j]).includes(k)); return i >= 0 ? segs[i].path : null; };
       const src = await admin.from("sources").insert({ user_id: uid, chapter_id: job.chapter_id, filename: clip(P.label || "Cours", 300), mime: P.mime ?? "mixte", pages: P.pages ?? null, extracted_text: full });
       if (src.error) throw new Error(src.error.message);
       const old = await admin.from("summaries").select("edited_by_user,markdown").eq("chapter_id", job.chapter_id).maybeSingle();
       if (!old.data) await admin.from("summaries").insert({ user_id: uid, chapter_id: job.chapter_id, markdown: st.summary || "" });
-      else if (!old.data.edited_by_user) await admin.from("summaries").update({ markdown: (old.data.markdown ? old.data.markdown + "\n\n## Complément : " + clip(P.label, 80) + "\n\n" : "") + (st.summary || ""), updated_at: new Date().toISOString() }).eq("chapter_id", job.chapter_id);
-      else notes.push("Ton résumé modifié à la main a été gardé.");
-      const ins = await admin.from("cards").insert(cards.map((c) => ({ user_id: uid, chapter_id: job.chapter_id, front: c.front, back: c.back, source_quote: c.q, needs_check: c.bad || !c.q, image_path: pageOf(c.q) }))).select("id");
+      else if (!old.data.edited_by_user && String(st.summary || "").trim()) await admin.from("summaries").update({ markdown: (old.data.markdown ? old.data.markdown + "\n\n## Complément : " + clip(P.label, 80) + "\n\n" : "") + (st.summary || ""), updated_at: new Date().toISOString() }).eq("chapter_id", job.chapter_id);
+      else if (old.data.edited_by_user) notes.push("Ton résumé modifié à la main a été gardé.");
+      if (already && !cards.length) notes.push("Rien de nouveau : tout ce que tu as envoyé était déjà dans ce chapitre.");
+      // Carte de schéma : la photo de la page + le cadre du schéma (image_box) ; l'appli n'affiche que le schéma recadré.
+      const rows = cards.map((c) => { const sc = c.sch ? schemas.find((x) => x.id === c.sch) : null; return { user_id: uid, chapter_id: job.chapter_id, front: c.front, back: c.back, source_quote: c.q, needs_check: c.bad || !c.q, image_path: sc ? sc.path : pageOf(c.q), image_box: sc ? sc.box : null }; });
+      let ins: Any = rows.length ? await admin.from("cards").insert(rows).select("id") : { data: [], error: null };
+      // Base sans la colonne image_box (migration pas encore faite) : on enregistre quand même, sans le recadrage.
+      if (ins.error && /image_box/i.test(ins.error.message)) ins = await admin.from("cards").insert(rows.map(({ image_box: _b, ...r }) => r)).select("id");
       if (ins.error) throw new Error(ins.error.message);
       st.ids = (ins.data ?? []).map((r: Any) => r.id);
       st.cards = cards.map((c) => ({ front: c.front, back: c.back, ci: c.ci }));
+      delete st.prevFronts; delete st.prevSummary;
       // Nom choisi automatiquement : seulement si l'élève l'a demandé à la création du chapitre (chapters.auto_name).
       const auto = ch?.auto_name === true ? autoTitle(st.title, st.summary, P.label) : null;
       await admin.from("chapters").update(Object.assign({ status: "ready", lang: st.lang || "fr", cards_target: n }, auto ? { name: auto, auto_name: false } : {})).eq("id", job.chapter_id);
@@ -284,7 +314,7 @@ async function stepRun(id: string) {
       if (illisible) notes.push(plural(illisible, "passage illisible", "passages illisibles") + " dans tes photos : corrige les cartes concernées ou reprends la photo avec plus de lumière.");
       await setJob(id, { status: "done", stage: "verify", progress: 100, message: "Prêt", state: st, result: { cards: cards.length, bad, notes } });
       ready = true;
-      await push(uid, `« ${name} » est prêt : ${plural(cards.length, "carte créée", "cartes créées")}.`, "./#chapitre-" + job.chapter_id);
+      await push(uid, already && !cards.length ? `« ${name} » : rien de nouveau, tout était déjà dans le chapitre.` : `« ${name} » est prêt : ${plural(cards.length, already ? "nouvelle carte" : "carte créée", already ? "nouvelles cartes" : "cartes créées")}.`, "./#chapitre-" + job.chapter_id);
       return await kick(id);
     }
     if (job.stage === "verify") {

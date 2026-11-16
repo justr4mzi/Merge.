@@ -160,7 +160,7 @@
       const sec = (t, n, body) => n ? `<h2>${t} <span class="small muted">(${n})</span></h2>${body}` : "";
       $("sr").innerHTML = (sec("Dans tes cours", course.length, course.map(o => `<a class="card term" style="text-decoration:none" href="#resume-${o.x.chapter_id}"><span class="small muted">${esc(chName(o.x.chapter_id))} · ${esc(o.x.filename || "Cours")} · ${plural(o.n, "fois", "fois")}</span><p class="snip">${o.s}</p></a>`).join(""))
         + sec("Dans tes résumés", sums.length, sums.map(o => `<a class="card term" style="text-decoration:none" href="#resume-${o.x.chapter_id}"><span class="small muted">${esc(chName(o.x.chapter_id))}</span><p class="snip">${o.s}</p></a>`).join(""))
-        + sec("Dans tes cartes", cards.length, cards.map(c => `<a class="card term" style="text-decoration:none" href="#chapitre-${c.chapter_id}"><span class="small muted">${esc(chName(c.chapter_id))}</span><b>${mx(c.front)}</b><p>${mx(c.back)}</p></a>`).join("")))
+        + sec("Dans tes cartes", cards.length, cards.map(c => `<a class="card term" style="text-decoration:none" href="#chapitre-${c.chapter_id}"><span class="small muted">${esc(chName(c.chapter_id))}</span><b>${cfront(c, true)}</b><p>${mx(c.back)}</p></a>`).join("")))
         || '<p class="muted">Rien trouvé dans tes cours, tes résumés ni tes cartes. Essaie un autre mot.</p>';
     }
     $("sf").onsubmit = (e) => { e.preventDefault(); const q = $("sq").value.trim(); if (q.length < 2) return toast("Écris au moins 2 lettres."); searchPending = q; run(q); };
