@@ -63,10 +63,10 @@ async function accessToken(sa: Any) {
   if (!res.ok || !data.access_token) throw new Error("google_auth: " + JSON.stringify(data).slice(0, 300));
   return data.access_token as string;
 }
-async function geminiJson(sa: Any, token: string, parts: Any[]) {
+async function geminiJson(sa: Any, token: string, parts: Any[], thinking = "low") {
   const host = LOCATION === "global" ? "aiplatform.googleapis.com" : `${LOCATION}-aiplatform.googleapis.com`;
   const url = `https://${host}/v1/projects/${sa.project_id}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
-  const body: Any = { systemInstruction: { parts: [{ text: "Tu aides un élève français à réviser avec des schémas de son cours. Tu ne réponds qu'à partir de ce qui est visible sur la photo." }] }, contents: [{ role: "user", parts }], generationConfig: { temperature: 0, responseMimeType: "application/json", thinkingConfig: { thinkingLevel: "high" } } };
+  const body: Any = { systemInstruction: { parts: [{ text: "Tu aides un élève français à réviser avec des schémas de son cours. Tu ne réponds qu'à partir de ce qui est visible sur la photo." }] }, contents: [{ role: "user", parts }], generationConfig: { temperature: 0, responseMimeType: "application/json", thinkingConfig: { thinkingLevel: thinking } } };
   const send = () => fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
   let res = await send();
   let data = await res.json();
@@ -166,57 +166,65 @@ async function schemaAdd(ids: string[], only: number, dry: boolean) {
 // { action: "schema_recheck", only: n, dry?: true } : n = numéro de la page (toutes les photos qui ont des cartes de schéma).
 // Pour chaque carte : on découpe réellement la page avec son cadre, on dessine ses masques en aplat et on envoie la découpe à Gemini
 // (jusqu'à 3 essais pour resserrer un cadre qui contient du texte parasite ; jamais de carte supprimée).
-async function schemaRecheck(only: number, dry: boolean) {
+async function schemaRecheck(only: number, dry: boolean, to?: number) {
   const { data: rows } = await admin.from("cards").select("id,front,back,image_path,image_box").not("image_box", "is", null).limit(2000);
   const todo = ((rows ?? []) as Any[]).filter((c) => Array.isArray(c.image_box) && c.image_box.length >= 4 && c.image_path);
   const byPage = new Map<string, Any[]>();
   for (const c of todo) { if (!byPage.has(c.image_path)) byPage.set(c.image_path, []); byPage.get(c.image_path)!.push(c); }
   const pages = [...byPage].sort((a, b) => a[0].localeCompare(b[0]));
   if (only < 0 || only >= pages.length) return { pages: pages.length, cartes: todo.length };
-  const [path, cs] = pages[only];
   const raw = Deno.env.get("GCP_SERVICE_ACCOUNT_JSON");
   if (!raw) return { error: "GCP_SERVICE_ACCOUNT_JSON absent" };
-  const sa = JSON.parse(raw), token = await accessToken(sa), out: Any[] = [];
-  const dl = await admin.storage.from("cours").download(path);
-  if (dl.error || !dl.data) return { path, error: "image introuvable" };
-  const pageImg = await decodePage(new Uint8Array(await dl.data.arrayBuffer()));
-  const fname = path.split("/").pop() ?? "";
-  const frameMemo = new Map<string, number[]>();
-  for (const c of cs) {
-    const frame0 = c.image_box.slice(0, 4).map(Number), key0 = frame0.join(",");
-    const masks0 = groups(c.image_box.slice(4));
-    const memo = frameMemo.get(key0);
-    const startFrame = memo && masks0.every((b) => b[0] >= memo[0] - 20 && b[1] >= memo[1] - 20 && b[2] <= memo[2] + 20 && b[3] <= memo[3] + 20) ? memo : frame0;
-    const res = await checkCroppedSchema({
-      frame: startFrame,
-      masks: masks0,
-      front: c.front,
-      back: c.back,
-      renderCrop: (f: number[], m: number[][]) => renderCropB64(pageImg, f, m),
-      askGemini: (prompt: string, imgB64: string) => geminiJson(sa, token, [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: imgB64 } }]),
-    });
-    if (res.tightened) frameMemo.set(key0, res.frame);
-    const tightened = res.frame.join(",") !== frame0.join(",");
-    // Si la carte existe en copie identique sur un autre compte (ex. chapitre transféré de Déborah vers Esteban), on met à jour les deux.
-    const twinIds = todo.filter((t) => t.id === c.id || (fname && String(t.image_path).endsWith("/" + fname) && t.front === c.front)).map((t) => t.id);
-    if (!dry && JSON.stringify(res.box) !== JSON.stringify(c.image_box)) {
-      await admin.from("cards").update({ image_box: res.box }).in("id", twinIds);
+  const sa = JSON.parse(raw), token = await accessToken(sa);
+  const end = Number.isInteger(to) && (to as number) >= only ? Math.min(pages.length - 1, to as number) : only;
+  const results: Any[] = [];
+  const t0 = Date.now();
+  for (let idx = only; idx <= end; idx++) {
+    if (idx > only && Date.now() - t0 > 95000) break;
+    const [path, cs] = pages[idx], out: Any[] = [];
+    const dl = await admin.storage.from("cours").download(path);
+    if (dl.error || !dl.data) { results.push({ only: idx, path, error: "image introuvable" }); continue; }
+    const pageImg = await decodePage(new Uint8Array(await dl.data.arrayBuffer()));
+    const fname = path.split("/").pop() ?? "";
+    const frameMemo = new Map<string, number[]>();
+    for (const c of cs) {
+      const frame0 = c.image_box.slice(0, 4).map(Number), key0 = frame0.join(",");
+      const masks0 = groups(c.image_box.slice(4));
+      const memo = frameMemo.get(key0);
+      const startFrame = memo && masks0.every((b) => b[0] >= memo[0] - 20 && b[1] >= memo[1] - 20 && b[2] <= memo[2] + 20 && b[3] <= memo[3] + 20) ? memo : frame0;
+      const res = await checkCroppedSchema({
+        frame: startFrame,
+        masks: masks0,
+        front: c.front,
+        back: c.back,
+        renderCrop: (f: number[], m: number[][]) => renderCropB64(pageImg, f, m),
+        askGemini: (prompt: string, imgB64: string) => geminiJson(sa, token, [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: imgB64 } }], "low"),
+      });
+      if (res.tightened) frameMemo.set(key0, res.frame);
+      const tightened = res.frame.join(",") !== frame0.join(",");
+      const twinIds = todo.filter((t) => t.id === c.id || (fname && String(t.image_path).endsWith("/" + fname) && t.front === c.front)).map((t) => t.id);
+      if (!dry && JSON.stringify(res.box) !== JSON.stringify(c.image_box)) {
+        await admin.from("cards").update({ image_box: res.box }).in("id", twinIds);
+      }
+      out.push({
+        id: c.id,
+        copies: twinIds.length,
+        f: String(c.front).slice(0, 60),
+        avant: frame0,
+        apres: res.frame,
+        resserre: tightened,
+        essais: res.tries,
+        cases: res.masks.length,
+        dos: res.masks.length === 0,
+        ou: res.lastRes?.ou || "",
+        err: res.err || "",
+      });
     }
-    out.push({
-      id: c.id,
-      copies: twinIds.length,
-      f: String(c.front).slice(0, 60),
-      avant: frame0,
-      apres: res.frame,
-      resserre: tightened,
-      essais: res.tries,
-      cases: res.masks.length,
-      dos: res.masks.length === 0,
-      ou: res.lastRes?.ou || "",
-      err: res.err || "",
-    });
+    const pr = { only: idx, pages: pages.length, path, dry, resserres: out.filter((x) => x.resserre).length, out };
+    console.log("schema_recheck " + JSON.stringify(pr));
+    results.push(pr);
   }
-  return { only, pages: pages.length, path, dry, resserres: out.filter((x) => x.resserre).length, out };
+  return end === only ? results[0] : { pages: pages.length, dry, from: only, to: results.at(-1)?.only ?? only, resserres: results.reduce((s, r) => s + (r.resserres || 0), 0), results };
 }
 
 // Cadre d'un schéma (mêmes règles que studio/schemas.mjs : assez grand, marge de 2,5 %).
@@ -237,18 +245,7 @@ Deno.serve(async (req) => {
   // { action: "sign", paths: [...] } : liens temporaires (10 min) vers des pages de cours, pour relire un schéma à l'œil.
   if (body.action === "sign") { for (const p of (body.paths ?? []).slice(0, 20)) { const { data: u } = await admin.storage.from("cours").createSignedUrl(String(p), 600); console.log("sign " + p + " " + (u?.signedUrl ?? "")); } return J({ ok: true }); }
   if (body.action === "schema_recheck") {
-    const r = await schemaRecheck(Number.isInteger(body.only) ? body.only : -1, !!body.dry);
-    console.log("schema_recheck " + JSON.stringify(r));
-    const next = Array.isArray(body.next) ? body.next.map(Number).filter(Number.isInteger) : [];
-    if (next.length) {
-      const p = fetch(`${URL_}/functions/v1/diag`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-cron-secret": data.value },
-        body: JSON.stringify({ action: "schema_recheck", only: next[0], next: next.slice(1), dry: !!body.dry }),
-      }).catch(console.error);
-      const er = (globalThis as Any).EdgeRuntime;
-      if (er?.waitUntil) er.waitUntil(p);
-    }
+    const r = await schemaRecheck(Number.isInteger(body.only) ? body.only : -1, !!body.dry, Number.isInteger(body.to) ? body.to : undefined);
     return J(r);
   }
   if (body.action === "schema_add") { const r = await schemaAdd((body.chapters ?? []).map(String), Number.isInteger(body.only) ? body.only : -1, !!body.dry); console.log("schema_add " + JSON.stringify(r)); return J(r); }
