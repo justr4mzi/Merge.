@@ -1851,4 +1851,5 @@ details.drop#tools[open],details.drop#cardsdrop[open]{padding-bottom:14px}
 .summodes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .summodes .btn.sm{padding:0 10px;font-size:.86rem;white-space:nowrap}
 .note:empty{display:none}
+#msg{animation:none}
 @media (min-width:700px){.summodes{grid-template-columns:repeat(4,minmax(0,1fr))}}

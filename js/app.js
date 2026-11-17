@@ -1760,14 +1760,26 @@
           if (!state.offline) sb.from("summaries").update({ markdown: sum.markdown, updated_at: new Date().toISOString() }).eq("chapter_id", id);
           view(); return;
         }
-        if (sum.edited_by_user && $("msg").dataset.ok !== mode) { $("msg").dataset.ok = mode; $("msg").textContent = "Tu as modifié ce résumé. Appuie encore une fois pour le remplacer."; return; }
-        setBtns(true); $("msg").className = "note"; $("msg").textContent = "L'IA prépare cette version (1 appel)…";
+        if (sum.edited_by_user && $("msg").dataset.ok !== mode) { $("msg").dataset.ok = mode; $("msg").className = "note"; $("msg").textContent = "Tu as modifié ce résumé. Appuie encore une fois pour le remplacer."; return; }
+        setBtns(true);
+        const stepTxt = (p) => p < 35 ? "Lecture de ton cours…" : p < 75 ? (mode === "detailler" ? "Rédaction du cours complet…" : mode === "ultracourt" ? "Sélection des points essentiels…" : "Rédaction du résumé…") : "Mise en forme finale…";
+        $("msg").className = "card pad stack";
+        $("msg").innerHTML = `<div class="bar big"><i id="sprog" style="width:8%"></i></div><div class="row between small muted"><span id="sstat" role="status">${stepTxt(8)}</span><b id="spct">8 %</b></div>`;
+        const t0 = Date.now(), tau = mode === "detailler" ? 10000 : 6000;
+        const timer = setInterval(() => {
+          const p = Math.min(94, Math.round(8 + 86 * (1 - Math.exp(-(Date.now() - t0) / tau))));
+          if ($("sprog")) $("sprog").style.width = p + "%";
+          if ($("spct")) $("spct").textContent = p + " %";
+          if ($("sstat")) $("sstat").textContent = stepTxt(p);
+        }, 250);
         try {
           const text = await courseText(id); if (!text.trim()) throw new Error("Le texte du cours n'est plus disponible.");
           const r = await ai({ action: "summary", mode, text });
+          clearInterval(timer);
+          if ($("sprog")) { $("sprog").style.width = "100%"; if ($("spct")) $("spct").textContent = "100 %"; }
           const up = await sb.from("summaries").update({ markdown: r.summary, edited_by_user: false, updated_at: new Date().toISOString() }).eq("chapter_id", id); if (up.error) throw up.error;
           sum.markdown = r.summary; sum.edited_by_user = false; curMode = mode; vers[mode] = r.summary; vers.active = mode; jset(vk, vers); offlineKeep("merge.sum." + id, sum); view();
-        } catch (e) { showErr($("msg"), e); setBtns(false); }
+        } catch (e) { clearInterval(timer); $("msg").className = "note"; showErr($("msg"), e); setBtns(false); }
       };
       app.querySelectorAll("[data-sm]").forEach(b => b.onclick = () => regen(b.dataset.sm));
     }

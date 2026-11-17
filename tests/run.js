@@ -533,10 +533,15 @@ async function methodeBac(browser) {
   ok(await page.evaluate(() => window.__notifs.some(n => n.title === "Sujet prêt" && /SVT/.test(n.body))), "sujets : notification envoyée à la fin du chargement");
   await page.click("[data-k]"); await page.waitForTimeout(150); ok((await txt(page)).includes("Correction"), "sujets : correction affichée");
   let sm = await small(page); ok(!sm.length, "sujets : boutons de 44 px minimum", sm.join(" | ")); let o = await overflow(page); ok(o.sw <= o.iw, "sujets : pas de débordement", JSON.stringify(o));
-  // Résumé : 4 types (Cours complet, Résumé, Plus court, Encore plus court) et mise en cache de chaque version.
+  // Résumé : 4 types (Cours complet, Résumé, Plus court, Encore plus court), barre de progression et mise en cache de chaque version.
   await go(page, "#resume-c1", 300);
   ok(await page.locator(".summodes [data-sm]").count() === 4 && await page.locator('#norm[aria-pressed="true"]').count() === 1, "résumé : 4 boutons de format, « Résumé » actif par défaut");
-  await page.click("#long"); await page.waitForTimeout(250);
+  await page.evaluate(() => { window.__fake.sumDelay = 220; });
+  await page.click("#long"); await page.waitForTimeout(40);
+  ok(await page.locator("#sprog").count() === 1 && (await page.locator("#sstat").innerText()).includes("Lecture de ton cours"), "résumé : barre de progression affichée pendant la génération");
+  await page.screenshot({ path: path.join(SHOTS, "393-resume-prog.png") });
+  await page.waitForTimeout(300);
+  await page.evaluate(() => { window.__fake.sumDelay = 0; });
   ok((await page.locator("#sumbox").innerText()).includes("Résumé detailler") && await page.locator('#long[aria-pressed="true"]').count() === 1, "résumé : bouton « Cours complet »");
   await page.click("#short"); await page.waitForTimeout(250);
   ok((await page.locator("#sumbox").innerText()).includes("Résumé raccourcir") && await page.locator('#short[aria-pressed="true"]').count() === 1, "résumé : bouton « Plus court »");
