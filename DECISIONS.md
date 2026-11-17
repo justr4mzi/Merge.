@@ -656,3 +656,8 @@ Ramzi a choisi les propositions A pour les trois écrans.
 - **Prof, écran vide** : sans cours lié, les 3 derniers chapitres travaillés s'affichent en pastilles ; un geste les lie à la discussion.
 - **Planning (journée) sur PC** : une colonne à droite résume la journée (cours, révisions faites, temps libre, bouton Réviser) et liste les prochains contrôles ; les créneaux deviennent des cartes sur toute la largeur. Rien ne change sur téléphone.
 - **Matière : bouton Réviser** identique à celui de l'accueil (grand bouton blanc sur toute la largeur), sans la ligne « N cartes · environ X min » déjà écrite juste au-dessus.
+- **Fluidité des menus sur PC** : plus de flou derrière les fenêtres et le menu latéral (il se recalculait à chaque survol, d'où le lag) ; fond sombre opaque à la place.
+- **Réglages sur PC** : deux colonnes, la liste à gauche et la section ouverte à droite (Profil par défaut).
+- **Pomodoro et minuteur** : le temps est dans un anneau qui se remplit au fil des minutes (vert pendant la pause).
+- **Carte de schéma montrée seulement au dos** : la question ne dit plus « Sur ce schéma, … » (le schéma n'est pas sur la question).
+- Cadres resserrés à la main sur la page « plantes » (arbre, schéma fonctionnel) chez Déborah et Esteban : plus de titre ni de texte autour.

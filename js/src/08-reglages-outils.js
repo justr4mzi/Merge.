@@ -53,9 +53,12 @@
       <div class="card pad stack" data-sec-card="archives"><h2>Archives</h2><p class="muted">En fin d'année, range tes anciennes matières. Elles restent consultables et tu peux les restaurer.</p><div class="row" style="flex-wrap:wrap"><button class="btn sm ghost" id="archShow">Voir mes archives</button><a class="btn sm ghost" href="#corbeille">Corbeille</a><button class="btn sm ghost" id="archAll">Archiver toutes mes matières</button></div><div id="archBox" class="stack"></div></div>
       <div class="card pad stack" data-sec-card="donnees"><h2>Supprimer mes données</h2><p class="muted">Efface définitivement tes matières, chapitres, cartes, résumés, notes et statistiques. Impossible à annuler.</p><div class="field"><label for="delw">Écris SUPPRIMER pour confirmer</label><input id="delw" type="text" autocomplete="off"></div><button class="btn sm peach" id="delall">Supprimer toutes mes données</button></div>
 `;
-    const openSec = (k, keep) => { if (k) app.dataset.sec = k; else app.removeAttribute("data-sec"); app.querySelectorAll("[data-sec-card]").forEach(c => c.classList.toggle("on", c.dataset.secCard === k)); if (!keep) window.scrollTo(0, 0); };
+    // Grand écran (17 nov.) : la liste à gauche, la section à droite (Profil par défaut), comme les réglages d'un ordinateur.
+    const wide = () => matchMedia("(min-width:1100px)").matches;
+    const mark = k => { app.querySelectorAll("[data-sec-card]").forEach(c => c.classList.toggle("on", c.dataset.secCard === k)); app.querySelectorAll(".setmenu [data-open]").forEach(b => b.classList.toggle("cur", b.dataset.open === k)); };
+    const openSec = (k, keep) => { if (k) app.dataset.sec = k; else app.removeAttribute("data-sec"); mark(k || (wide() ? "profil" : null)); if (!keep && !wide()) window.scrollTo(0, 0); };
     // Un réglage changé redessine l'écran : la section ouverte reste ouverte, à la même hauteur.
-    if (app.dataset.sec) openSec(app.dataset.sec, true);
+    if (app.dataset.sec) openSec(app.dataset.sec, true); else mark(wide() ? "profil" : null);
     app.querySelectorAll("[data-open]").forEach(b => b.onclick = () => openSec(b.dataset.open));
     $("setback").onclick = () => openSec(null);
     let kind = p.daily_goal_kind;

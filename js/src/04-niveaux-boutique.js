@@ -431,6 +431,7 @@
     const k = document.getElementById("pclock");
     if (k) {
       k.textContent = fmtT(pomo.left);
+      const ring = document.getElementById("pring"); if (ring) { ring.style.setProperty("--p", ((1 - pomo.left / full) * 100).toFixed(1) + "%"); ring.classList.toggle("pause", pomo.phase === "pause" && c.mode !== "timer"); document.getElementById("pringl").textContent = c.mode === "timer" ? "Minuteur" : pomo.phase === "pause" ? "Pause" : "Travail"; }
       document.getElementById("pphase").textContent = c.mode === "timer" ? `Minuteur de ${c.timer} minute${c.timer > 1 ? "s" : ""}.` : pomo.phase === "work" ? `Travail : ${c.work} minutes sans distraction.` : `Pause : ${c.brk} minute${c.brk > 1 ? "s" : ""}. Lève-toi, bois un verre d'eau.`;
       document.getElementById("pgo").textContent = pomo.on ? "Mettre en pause" : pomo.left < full ? "Reprendre" : "Démarrer";
       document.querySelectorAll("#pomoset button").forEach(b => { b.disabled = pomo.on; });
@@ -458,7 +459,7 @@
       : [[25, 5, "25 / 5"], [50, 10, "50 / 10"], [15, 3, "15 / 3"], [45, 15, "45 / 15"]].map(p => `<button class="chip" data-pp="${p[0]}-${p[1]}" aria-pressed="${c.work === p[0] && c.brk === p[1]}">${p[2]}</button>`).join("");
     sheet(`<div class="row"><span class="mico big">${I.clock}</span><h1>${c.mode === "timer" ? "Minuteur" : "Pomodoro"}</h1></div>
       <div class="seg" role="tablist" aria-label="Type de minuteur"><button role="tab" data-pmode="pomo" aria-selected="${c.mode === "pomo"}">Pomodoro</button><button role="tab" data-pmode="timer" aria-selected="${c.mode === "timer"}">Minuteur</button></div>
-      <div class="big pclock" id="pclock">${fmtT(pomo.left)}</div><p class="muted" id="pphase"></p>
+      <div class="pring" id="pring" style="--p:${((1 - pomo.left / pomoFull()) * 100).toFixed(1)}%"><div class="pringin"><div class="big pclock" id="pclock">${fmtT(pomo.left)}</div><span class="small muted" id="pringl">${c.mode === "timer" ? "Minuteur" : pomo.phase === "pause" ? "Pause" : "Travail"}</span></div></div><p class="muted" id="pphase"></p>
       <div class="row"><button class="btn grow" id="pgo">Démarrer</button><button class="btn ghost" id="prs">Remettre à zéro</button></div>
       <div class="stack" id="pomoset">${c.mode === "timer" ? step("timer", "Durée", c.timer, "min") : step("work", "Travail", c.work, "min") + step("brk", "Pause", c.brk, "min")}<div class="chips">${presets}</div></div>
       ${c.mode === "pomo" ? `<button class="switch" id="pmute" role="switch" aria-checked="${jget("merge.pomomute", true)}"><i></i>Couper la musique pendant la pause</button>` : ""}

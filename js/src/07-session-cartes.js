@@ -195,7 +195,10 @@
   // « Sur ce schéma S1 de… » : l'identifiant interne S1 n'a rien à faire dans la question.
   const cleanFront = t => String(t == null ? "" : t).replace(/(sch[ée]mas?)\s+S\d+\b/gi, "$1");
   // Question d'une carte : son schéma (s'il y en a un) puis le texte. small = petite vignette dans les listes.
-  function cfront(c, small) { return (schOnFront(c) ? schemaHtml(c, small, "hide") : "") + mx(cleanFront(c.front)); }
+  // Carte de schéma sans légende à cacher : le schéma n'est qu'au dos. La question ne doit donc pas dire « sur ce schéma »
+  // (on aurait cherché un schéma absent) : on retire ce bout de phrase, le schéma arrive avec la réponse.
+  const noSchRef = t => { const o = String(t || ""), r = o.replace(/^\s*(sur|d'après|d’après|dans|selon|d'apr[eè]s)\s+(ce|le|cet)\s+(sch[ée]ma|document|dessin|illustration)\s*,?\s*/i, "").replace(/\s*,?\s*(sur|dans|d'après|d’après)\s+(ce|le)\s+sch[ée]ma(\s+ci-dessus|\s+ci-dessous)?/gi, ""); return r === o || r.length < 6 ? o : r.charAt(0).toUpperCase() + r.slice(1); };
+  function cfront(c, small) { return schOnFront(c) ? schemaHtml(c, small, "hide") + mx(cleanFront(c.front)) : mx(cleanFront(schBox(c) ? noSchRef(c.front) : c.front)); }
   // Vraie taille de la photo connue : on corrige le rapport du cadre pour que le schéma ne soit pas déformé.
   document.addEventListener("load", e => {
     const im = e.target; if (!im || !im.classList) return;

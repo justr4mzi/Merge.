@@ -1312,6 +1312,7 @@
     const k = document.getElementById("pclock");
     if (k) {
       k.textContent = fmtT(pomo.left);
+      const ring = document.getElementById("pring"); if (ring) { ring.style.setProperty("--p", ((1 - pomo.left / full) * 100).toFixed(1) + "%"); ring.classList.toggle("pause", pomo.phase === "pause" && c.mode !== "timer"); document.getElementById("pringl").textContent = c.mode === "timer" ? "Minuteur" : pomo.phase === "pause" ? "Pause" : "Travail"; }
       document.getElementById("pphase").textContent = c.mode === "timer" ? `Minuteur de ${c.timer} minute${c.timer > 1 ? "s" : ""}.` : pomo.phase === "work" ? `Travail : ${c.work} minutes sans distraction.` : `Pause : ${c.brk} minute${c.brk > 1 ? "s" : ""}. Lève-toi, bois un verre d'eau.`;
       document.getElementById("pgo").textContent = pomo.on ? "Mettre en pause" : pomo.left < full ? "Reprendre" : "Démarrer";
       document.querySelectorAll("#pomoset button").forEach(b => { b.disabled = pomo.on; });
@@ -1339,7 +1340,7 @@
       : [[25, 5, "25 / 5"], [50, 10, "50 / 10"], [15, 3, "15 / 3"], [45, 15, "45 / 15"]].map(p => `<button class="chip" data-pp="${p[0]}-${p[1]}" aria-pressed="${c.work === p[0] && c.brk === p[1]}">${p[2]}</button>`).join("");
     sheet(`<div class="row"><span class="mico big">${I.clock}</span><h1>${c.mode === "timer" ? "Minuteur" : "Pomodoro"}</h1></div>
       <div class="seg" role="tablist" aria-label="Type de minuteur"><button role="tab" data-pmode="pomo" aria-selected="${c.mode === "pomo"}">Pomodoro</button><button role="tab" data-pmode="timer" aria-selected="${c.mode === "timer"}">Minuteur</button></div>
-      <div class="big pclock" id="pclock">${fmtT(pomo.left)}</div><p class="muted" id="pphase"></p>
+      <div class="pring" id="pring" style="--p:${((1 - pomo.left / pomoFull()) * 100).toFixed(1)}%"><div class="pringin"><div class="big pclock" id="pclock">${fmtT(pomo.left)}</div><span class="small muted" id="pringl">${c.mode === "timer" ? "Minuteur" : pomo.phase === "pause" ? "Pause" : "Travail"}</span></div></div><p class="muted" id="pphase"></p>
       <div class="row"><button class="btn grow" id="pgo">Démarrer</button><button class="btn ghost" id="prs">Remettre à zéro</button></div>
       <div class="stack" id="pomoset">${c.mode === "timer" ? step("timer", "Durée", c.timer, "min") : step("work", "Travail", c.work, "min") + step("brk", "Pause", c.brk, "min")}<div class="chips">${presets}</div></div>
       ${c.mode === "pomo" ? `<button class="switch" id="pmute" role="switch" aria-checked="${jget("merge.pomomute", true)}"><i></i>Couper la musique pendant la pause</button>` : ""}
@@ -2367,7 +2368,10 @@
   // « Sur ce schéma S1 de… » : l'identifiant interne S1 n'a rien à faire dans la question.
   const cleanFront = t => String(t == null ? "" : t).replace(/(sch[ée]mas?)\s+S\d+\b/gi, "$1");
   // Question d'une carte : son schéma (s'il y en a un) puis le texte. small = petite vignette dans les listes.
-  function cfront(c, small) { return (schOnFront(c) ? schemaHtml(c, small, "hide") : "") + mx(cleanFront(c.front)); }
+  // Carte de schéma sans légende à cacher : le schéma n'est qu'au dos. La question ne doit donc pas dire « sur ce schéma »
+  // (on aurait cherché un schéma absent) : on retire ce bout de phrase, le schéma arrive avec la réponse.
+  const noSchRef = t => { const o = String(t || ""), r = o.replace(/^\s*(sur|d'après|d’après|dans|selon|d'apr[eè]s)\s+(ce|le|cet)\s+(sch[ée]ma|document|dessin|illustration)\s*,?\s*/i, "").replace(/\s*,?\s*(sur|dans|d'après|d’après)\s+(ce|le)\s+sch[ée]ma(\s+ci-dessus|\s+ci-dessous)?/gi, ""); return r === o || r.length < 6 ? o : r.charAt(0).toUpperCase() + r.slice(1); };
+  function cfront(c, small) { return schOnFront(c) ? schemaHtml(c, small, "hide") + mx(cleanFront(c.front)) : mx(cleanFront(schBox(c) ? noSchRef(c.front) : c.front)); }
   // Vraie taille de la photo connue : on corrige le rapport du cadre pour que le schéma ne soit pas déformé.
   document.addEventListener("load", e => {
     const im = e.target; if (!im || !im.classList) return;
@@ -2473,9 +2477,12 @@
       <div class="card pad stack" data-sec-card="archives"><h2>Archives</h2><p class="muted">En fin d'année, range tes anciennes matières. Elles restent consultables et tu peux les restaurer.</p><div class="row" style="flex-wrap:wrap"><button class="btn sm ghost" id="archShow">Voir mes archives</button><a class="btn sm ghost" href="#corbeille">Corbeille</a><button class="btn sm ghost" id="archAll">Archiver toutes mes matières</button></div><div id="archBox" class="stack"></div></div>
       <div class="card pad stack" data-sec-card="donnees"><h2>Supprimer mes données</h2><p class="muted">Efface définitivement tes matières, chapitres, cartes, résumés, notes et statistiques. Impossible à annuler.</p><div class="field"><label for="delw">Écris SUPPRIMER pour confirmer</label><input id="delw" type="text" autocomplete="off"></div><button class="btn sm peach" id="delall">Supprimer toutes mes données</button></div>
 `;
-    const openSec = (k, keep) => { if (k) app.dataset.sec = k; else app.removeAttribute("data-sec"); app.querySelectorAll("[data-sec-card]").forEach(c => c.classList.toggle("on", c.dataset.secCard === k)); if (!keep) window.scrollTo(0, 0); };
+    // Grand écran (17 nov.) : la liste à gauche, la section à droite (Profil par défaut), comme les réglages d'un ordinateur.
+    const wide = () => matchMedia("(min-width:1100px)").matches;
+    const mark = k => { app.querySelectorAll("[data-sec-card]").forEach(c => c.classList.toggle("on", c.dataset.secCard === k)); app.querySelectorAll(".setmenu [data-open]").forEach(b => b.classList.toggle("cur", b.dataset.open === k)); };
+    const openSec = (k, keep) => { if (k) app.dataset.sec = k; else app.removeAttribute("data-sec"); mark(k || (wide() ? "profil" : null)); if (!keep && !wide()) window.scrollTo(0, 0); };
     // Un réglage changé redessine l'écran : la section ouverte reste ouverte, à la même hauteur.
-    if (app.dataset.sec) openSec(app.dataset.sec, true);
+    if (app.dataset.sec) openSec(app.dataset.sec, true); else mark(wide() ? "profil" : null);
     app.querySelectorAll("[data-open]").forEach(b => b.onclick = () => openSec(b.dataset.open));
     $("setback").onclick = () => openSec(null);
     let kind = p.daily_goal_kind;
