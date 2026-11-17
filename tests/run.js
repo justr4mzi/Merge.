@@ -697,6 +697,21 @@ async function schemaPlat(browser) {
   ok(!page.errors.length, "schéma à plat : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
 }
 
+// Prof : joindre un fichier de cours (PDF, PowerPoint, Word, texte…), lu sur l'appareil comme à l'import, puis envoyé au prof.
+async function profFichier(browser) {
+  const page = await open(browser, { w: 390, h: 844, theme: "dark" });
+  await go(page, "#exos", 500);
+  ok((await page.locator("#exfile").getAttribute("accept")).includes(".pdf") && (await page.locator("#exfile").getAttribute("accept")).includes(".pptx"), "prof fichier : PDF, PowerPoint, Word… acceptés");
+  await page.setInputFiles("#exfile", { name: "cours-loi-ohm.txt", mimeType: "text/plain", buffer: Buffer.from("La loi d'Ohm : U = R × I. U en volts, R en ohms, I en ampères. Loi des mailles : la somme des tensions dans une maille est nulle.") });
+  await page.waitForTimeout(400);
+  ok((await page.locator("#eximg").innerText()).includes("cours-loi-ohm.txt"), "prof fichier : le fichier joint s'affiche");
+  await page.fill("#exq", "Fais-moi 3 questions sur ce document"); await page.click("#exsend"); await page.waitForTimeout(600);
+  const b = await page.evaluate(() => window.__fake.exo);
+  ok(b && b.doc && b.doc.name === "cours-loi-ohm.txt" && b.doc.text.includes("loi d'Ohm"), "prof fichier : le texte du document part avec le message", JSON.stringify(b && b.doc).slice(0, 200));
+  ok((await page.locator("#exth").innerText()).includes("cours-loi-ohm.txt"), "prof fichier : le message rappelle le fichier envoyé");
+  ok(!page.errors.length, "prof fichier : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+}
+
 async function voixMerge(browser) {
   const page = await open(browser, { w: 390, h: 844, theme: "dark" });
   await go(page, "#reglages", 300); await page.click('[data-open="revision"]'); await page.waitForTimeout(150);
@@ -1865,7 +1880,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => only ? only.includes(n) : n !== "chasse" && n !== "apercu";
     if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
-    const SUITES = { apercu, schemaPlat, ongletRetour, paris, adminPage, schemasAnciens, cartesFormules, chronoBlanc, plusOptions, refonte, multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
+    const SUITES = { apercu, profFichier, schemaPlat, ongletRetour, paris, adminPage, schemasAnciens, cartesFormules, chronoBlanc, plusOptions, refonte, multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
     for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();

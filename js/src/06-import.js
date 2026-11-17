@@ -159,54 +159,9 @@
   window.addEventListener("beforeunload", e => { if (Object.values(IMPORTS).some(v => v.busy && v.local)) { e.preventDefault(); e.returnValue = ""; } });
   window.addEventListener("hashchange", () => chipUpdate());
 
-  function screenImport(id) {
-    const ch = state.chapters.find(c => c.id === id); if (!ch) { location.hash = "#accueil"; return; }
-    tabs.hidden = true;
-    const d = IMPORTS[id] || (IMPORTS[id] = newImp(ch));
-    function draw() {
-      if (d.busy) { app.innerHTML = impBusyHtml(d, ch.name); chipUpdate(); if ($("askn")) $("askn").onclick = async () => { const ok = await ensurePush(true); if (!ok) toast("Notifications impossibles sur cet appareil ou refusées."); if (d.busy && onImport(id)) draw(); }; return; }
-      if (d.doneHtml) { const h = d.doneHtml; d.doneHtml = null; d.ready = false; d.files = []; d.shots = []; app.innerHTML = h; chipUpdate(); confetti(); return; }
-      app.innerHTML = `<div class="row"><a class="iconbtn" href="#chapitre-${id}" aria-label="Retour au chapitre">${I.back}</a><span class="small muted">${esc(ch.name)}</span></div>
-        <h1>Importer un cours</h1>
-        <div class="seg" role="group" aria-label="Type d'import"><button data-tab="files" aria-pressed="${d.tab === "files"}">Fichiers et photos</button><button data-tab="text" aria-pressed="${d.tab === "text"}">Texte</button></div>
-        ${d.tab === "files" ? `<div class="drop" id="drop">${I.up}<p><b>Glisse tes fichiers ici</b></p><p class="small muted">PDF, photos de cahier (iPhone compris), PowerPoint (.pptx, .ppt), LibreOffice (.odp, .odt), Word (.docx), texte (.txt, .rtf). Ajoute autant de fichiers que tu veux : tout est converti et lu en entier, images des diapositives comprises. Un Genially ? Fais une capture d'écran de chaque page et ajoute-les ici : l'IA lit les textes et les schémas.</p>
-          <div class="row" style="flex-wrap:wrap;justify-content:center"><label class="btn sm ghost" for="pick">Parcourir les fichiers</label><label class="btn sm ghost" for="cam">Prendre une photo</label></div>
-          <button class="switch" id="redsw" role="switch" aria-checked="${safeGet("merge.redresse") !== "0"}" type="button"><i></i>Redresser et recadrer les photos de feuilles</button>
-          <input id="pick" type="file" multiple accept=".pdf,.pptx,.ppsx,.ppt,.pps,.odp,.docx,.odt,.rtf,.txt,.md,.csv,image/*" hidden><input id="cam" type="file" accept="image/*" capture="environment" hidden></div>
-          <div class="filelist">${d.files.map((f, i) => `<div><span>${esc(f.name)}</span><button class="mini" data-rm="${i}" aria-label="Retirer ${esc(f.name)}">Retirer</button></div>`).join("")}</div>`
-          : `<div class="field"><label for="txt">Texte du cours</label><textarea id="txt" placeholder="Colle ton cours ici">${esc(d.text)}</textarea></div>${shotsHtml()}`}
-        <div class="field"><label for="n">${cardsOf(id).length ? "Combien de nouvelles flashcards ajouter ?" : "Combien de flashcards ?"} <b id="nv">${autoN() ? "auto" : d.n}</b></label>${cardsOf(id).length ? `<p class="small muted">Tu as déjà ${plural(cardsOf(id).length, "carte", "cartes")} dans ce chapitre : les nouvelles s'ajoutent à elles, sans refaire celles que tu as déjà.</p>` : ""}<input id="n" type="range" min="10" max="${C.CARTES_MAX}" step="5" value="${d.n}"${autoN() ? " disabled" : ""}></div>
-        <button class="switch" id="nauto" role="switch" aria-checked="${autoN()}" type="button"><i></i>Laisser l'IA choisir le nombre : juste ce qu'il faut pour couvrir tout le cours</button>
-        <button class="btn" id="go">Créer le résumé et les cartes</button>
-        <div id="status" class="note" role="status">Les cartes viennent uniquement de ton cours. Chaque carte garde la phrase du cours qui la justifie.</div>`;
-      app.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { keep(); d.tab = b.dataset.tab; draw(); });
-      app.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { d.files.splice(+b.dataset.rm, 1); draw(); });
-      app.querySelectorAll("[data-rms]").forEach(b => b.onclick = () => { keep(); d.shots.splice(+b.dataset.rms, 1); draw(); });
-      if ($("shotpick")) $("shotpick").onchange = e => { keep(); d.shots.push(...e.target.files); draw(); };
-      $("n").oninput = () => { d.n = +$("n").value; $("nv").textContent = d.n; };
-      $("nauto").onclick = () => { const on = !autoN(); safeSet("merge.autoN", on ? "1" : "0"); $("nauto").setAttribute("aria-checked", on); $("n").disabled = on; $("nv").textContent = on ? "auto" : d.n; };
-      const add = (list) => { d.files.push(...list); draw(); };
-      if ($("redsw")) $("redsw").onclick = () => { const on = safeGet("merge.redresse") === "0"; safeSet("merge.redresse", on ? "1" : "0"); $("redsw").setAttribute("aria-checked", on); };
-      if ($("pick")) { $("pick").onchange = e => add([...e.target.files]); $("cam").onchange = e => add([...e.target.files]);
-        const z = $("drop"); z.ondragover = e => { e.preventDefault(); }; z.ondrop = e => { e.preventDefault(); add([...e.dataTransfer.files]); }; }
-      $("go").onclick = run;
-      if (d.failed) {
-        const s = $("status"), e = d.failed; showErr(s, e); d.failed = null; if (d.jobId) safeSet("merge.jobseen." + d.jobId, "1");
-        if (d.jobId && d.canResume) { s.insertAdjacentHTML("beforeend", `<p class="note">${e.code === "quota" ? "Ce qui a déjà été lu est gardé : reprends l'import demain, sans rien renvoyer." : "Ce qui a déjà été lu est gardé."}</p><button class="btn sm" id="resume">Reprendre l'import</button>`);
-          $("resume").onclick = async () => { $("resume").disabled = true; try { await ai({ action: "import_resume", job_id: d.jobId }, "studio"); d.busy = true; d.local = false; d.canResume = false; d.t0 = Date.now(); d.msg = "Reprise de l'import…"; impTimer(d); watchJob(id); draw(); } catch (er) { d.canResume = er.code === "quota"; showErr(s, er); } }; }
-      }
-      chipUpdate();
-    }
-    // Schémas et images : un texte collé ne donne que du texte. On y ajoute des captures d'écran,
-    // lues par l'IA comme les photos (elle décrit chaque schéma), dans le même import.
-    function shotsHtml() {
-      return `<div class="card pad stack shots"><b>Schémas, images, tableaux</b><p class="small muted">Ton texte a des schémas à côté ? Ajoute des captures d'écran : l'IA les lit et décrit chaque schéma, comme pour une photo de cours.</p>
-        ${d.shots.length ? `<div class="filelist">${d.shots.map((f, i) => `<div><span>${esc(f.name)}</span><button class="mini" data-rms="${i}" aria-label="Retirer ${esc(f.name)}">Retirer</button></div>`).join("")}</div>` : ""}
-        <label class="btn sm ghost" for="shotpick" style="align-self:flex-start">Ajouter des captures</label><input id="shotpick" type="file" multiple accept="image/*,.pdf" hidden></div>`;
-    }
-    function keep() { if ($("txt")) d.text = $("txt").value; }
-    const say = (m) => { d.msg = m; impPaint(d); };
-
+  // Lecture des fichiers de cours, partagée par l'import et le Prof (17 nov.) : PDF, PowerPoint (pptx, ppt), Word, LibreOffice,
+  // texte, RTF et photos (HEIC compris). d = état de l'écran qui lit (progression), say = message de progression.
+  function fileReaders(d, say) {
     async function imageToJpeg(file, scan) {
       let bmp;
       try { bmp = await createImageBitmap(file); }
@@ -226,7 +181,7 @@
       await needPdf(); const lib = window.pdfjsLib; lib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js";
       const doc = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
       for (let i = 1; i <= doc.numPages; i++) {
-        if (budget.pages >= C.PAGES_MAX_PAR_IMPORT) { budget.cut = true; break; }
+        if (budget.pages >= (budget.max || C.PAGES_MAX_PAR_IMPORT)) { budget.cut = true; break; }
         budget.pages++; say("Lecture de « " + file.name + " » : page " + i + " sur " + doc.numPages + "…"); impProg(d, "read", 0.6 * ((d.fi || 0) + i / doc.numPages) / (d.fn || 1));
         const page = await doc.getPage(i);
         const txt = (await page.getTextContent()).items.map(t => t.str).join(" ").replace(/\s+/g, " ").trim();
@@ -252,7 +207,7 @@
     async function zipImages(zip, names, out, budget) {
       for (const n of names) {
         const f = zip.files[n]; if (!f || !IMG_EXT.test(n)) continue;
-        if (budget.pages >= C.PAGES_MAX_PAR_IMPORT) { budget.cut = true; return; }
+        if (budget.pages >= (budget.max || C.PAGES_MAX_PAR_IMPORT)) { budget.cut = true; return; }
         try { const blob = await f.async("blob"); if (blob.size < 20000) continue; const ext = n.split(".").pop().toLowerCase(); out.push({ img: await imageToJpeg(new File([blob], n.split("/").pop(), { type: "image/" + (ext === "jpg" ? "jpeg" : ext) })) }); budget.pages++; }
         catch (e) { /* image illisible : ignorée */ }
       }
@@ -323,6 +278,72 @@
       t = rtf ? rtfText(t) : t.trim();
       for (let k = 0; k < t.length; k += 12000) segs.push({ text: t.slice(k, k + 12000) });
     }
+    // Un fichier, quel que soit son format : ajoute ses morceaux (texte ou image) dans fs. Renvoie false si le format n'est pas lu.
+    async function readOne(f, fs, budget, notes, scan) {
+      const name = f.name.toLowerCase();
+      if (name.endsWith(".pdf") || f.type === "application/pdf") await readPdf(f, fs, budget);
+      else if (/\.(pptx|ppsx|potx)$/.test(name)) { say("Lecture du diaporama « " + f.name + " »…"); await readPptx(f, fs, budget); }
+      else if (/\.(docx|dotx)$/.test(name)) { say("Lecture de « " + f.name + " »…"); await readDocx(f, fs, budget); }
+      else if (/\.(odp|odt|otp|ott)$/.test(name)) { say("Lecture de « " + f.name + " »…"); await readOdf(f, fs, budget); }
+      else if (/\.(ppt|pps)$/.test(name)) { say("Lecture de « " + f.name + " »…"); await readPpt(f, fs); notes.push("« " + f.name + " » est un ancien PowerPoint : son texte est lu, pas ses images. Enregistre-le en .pptx pour tout garder."); }
+      else if (/\.(txt|md|markdown|csv|tex|rtf)$/.test(name) || f.type.startsWith("text/")) { say("Lecture de « " + f.name + " »…"); await readText(f, fs, name.endsWith(".rtf")); }
+      else if (/\.(doc|key|pages|odg|xlsx?|ods)$/.test(name)) { notes.push("« " + f.name + " » : ce format ne se lit pas directement. Exporte-le en PDF (Fichier, Exporter en PDF) et envoie le PDF."); return false; }
+      else if (f.type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif)$/.test(name)) { if (budget.pages >= (budget.max || C.PAGES_MAX_PAR_IMPORT)) { budget.cut = true; return true; } budget.pages++; say("Préparation de « " + f.name + " »…"); fs.push({ img: await imageToJpeg(f, scan) }); }
+      else { notes.push("« " + f.name + " » n'est pas un format accepté. Exporte-le en PDF et envoie le PDF."); return false; }
+      return true;
+    }
+    return { imageToJpeg, readPdf, readPptx, readDocx, readOdf, readPpt, readText, readOne };
+  }
+  const FILE_ACCEPT = ".pdf,.pptx,.ppsx,.ppt,.pps,.odp,.docx,.odt,.rtf,.txt,.md,.csv,image/*";
+  function screenImport(id) {
+    const ch = state.chapters.find(c => c.id === id); if (!ch) { location.hash = "#accueil"; return; }
+    tabs.hidden = true;
+    const d = IMPORTS[id] || (IMPORTS[id] = newImp(ch));
+    function draw() {
+      if (d.busy) { app.innerHTML = impBusyHtml(d, ch.name); chipUpdate(); if ($("askn")) $("askn").onclick = async () => { const ok = await ensurePush(true); if (!ok) toast("Notifications impossibles sur cet appareil ou refusées."); if (d.busy && onImport(id)) draw(); }; return; }
+      if (d.doneHtml) { const h = d.doneHtml; d.doneHtml = null; d.ready = false; d.files = []; d.shots = []; app.innerHTML = h; chipUpdate(); confetti(); return; }
+      app.innerHTML = `<div class="row"><a class="iconbtn" href="#chapitre-${id}" aria-label="Retour au chapitre">${I.back}</a><span class="small muted">${esc(ch.name)}</span></div>
+        <h1>Importer un cours</h1>
+        <div class="seg" role="group" aria-label="Type d'import"><button data-tab="files" aria-pressed="${d.tab === "files"}">Fichiers et photos</button><button data-tab="text" aria-pressed="${d.tab === "text"}">Texte</button></div>
+        ${d.tab === "files" ? `<div class="drop" id="drop">${I.up}<p><b>Glisse tes fichiers ici</b></p><p class="small muted">PDF, photos de cahier (iPhone compris), PowerPoint (.pptx, .ppt), LibreOffice (.odp, .odt), Word (.docx), texte (.txt, .rtf). Ajoute autant de fichiers que tu veux : tout est converti et lu en entier, images des diapositives comprises. Un Genially ? Fais une capture d'écran de chaque page et ajoute-les ici : l'IA lit les textes et les schémas.</p>
+          <div class="row" style="flex-wrap:wrap;justify-content:center"><label class="btn sm ghost" for="pick">Parcourir les fichiers</label><label class="btn sm ghost" for="cam">Prendre une photo</label></div>
+          <button class="switch" id="redsw" role="switch" aria-checked="${safeGet("merge.redresse") !== "0"}" type="button"><i></i>Redresser et recadrer les photos de feuilles</button>
+          <input id="pick" type="file" multiple accept=".pdf,.pptx,.ppsx,.ppt,.pps,.odp,.docx,.odt,.rtf,.txt,.md,.csv,image/*" hidden><input id="cam" type="file" accept="image/*" capture="environment" hidden></div>
+          <div class="filelist">${d.files.map((f, i) => `<div><span>${esc(f.name)}</span><button class="mini" data-rm="${i}" aria-label="Retirer ${esc(f.name)}">Retirer</button></div>`).join("")}</div>`
+          : `<div class="field"><label for="txt">Texte du cours</label><textarea id="txt" placeholder="Colle ton cours ici">${esc(d.text)}</textarea></div>${shotsHtml()}`}
+        <div class="field"><label for="n">${cardsOf(id).length ? "Combien de nouvelles flashcards ajouter ?" : "Combien de flashcards ?"} <b id="nv">${autoN() ? "auto" : d.n}</b></label>${cardsOf(id).length ? `<p class="small muted">Tu as déjà ${plural(cardsOf(id).length, "carte", "cartes")} dans ce chapitre : les nouvelles s'ajoutent à elles, sans refaire celles que tu as déjà.</p>` : ""}<input id="n" type="range" min="10" max="${C.CARTES_MAX}" step="5" value="${d.n}"${autoN() ? " disabled" : ""}></div>
+        <button class="switch" id="nauto" role="switch" aria-checked="${autoN()}" type="button"><i></i>Laisser l'IA choisir le nombre : juste ce qu'il faut pour couvrir tout le cours</button>
+        <button class="btn" id="go">Créer le résumé et les cartes</button>
+        <div id="status" class="note" role="status">Les cartes viennent uniquement de ton cours. Chaque carte garde la phrase du cours qui la justifie.</div>`;
+      app.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { keep(); d.tab = b.dataset.tab; draw(); });
+      app.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { d.files.splice(+b.dataset.rm, 1); draw(); });
+      app.querySelectorAll("[data-rms]").forEach(b => b.onclick = () => { keep(); d.shots.splice(+b.dataset.rms, 1); draw(); });
+      if ($("shotpick")) $("shotpick").onchange = e => { keep(); d.shots.push(...e.target.files); draw(); };
+      $("n").oninput = () => { d.n = +$("n").value; $("nv").textContent = d.n; };
+      $("nauto").onclick = () => { const on = !autoN(); safeSet("merge.autoN", on ? "1" : "0"); $("nauto").setAttribute("aria-checked", on); $("n").disabled = on; $("nv").textContent = on ? "auto" : d.n; };
+      const add = (list) => { d.files.push(...list); draw(); };
+      if ($("redsw")) $("redsw").onclick = () => { const on = safeGet("merge.redresse") === "0"; safeSet("merge.redresse", on ? "1" : "0"); $("redsw").setAttribute("aria-checked", on); };
+      if ($("pick")) { $("pick").onchange = e => add([...e.target.files]); $("cam").onchange = e => add([...e.target.files]);
+        const z = $("drop"); z.ondragover = e => { e.preventDefault(); }; z.ondrop = e => { e.preventDefault(); add([...e.dataTransfer.files]); }; }
+      $("go").onclick = run;
+      if (d.failed) {
+        const s = $("status"), e = d.failed; showErr(s, e); d.failed = null; if (d.jobId) safeSet("merge.jobseen." + d.jobId, "1");
+        if (d.jobId && d.canResume) { s.insertAdjacentHTML("beforeend", `<p class="note">${e.code === "quota" ? "Ce qui a déjà été lu est gardé : reprends l'import demain, sans rien renvoyer." : "Ce qui a déjà été lu est gardé."}</p><button class="btn sm" id="resume">Reprendre l'import</button>`);
+          $("resume").onclick = async () => { $("resume").disabled = true; try { await ai({ action: "import_resume", job_id: d.jobId }, "studio"); d.busy = true; d.local = false; d.canResume = false; d.t0 = Date.now(); d.msg = "Reprise de l'import…"; impTimer(d); watchJob(id); draw(); } catch (er) { d.canResume = er.code === "quota"; showErr(s, er); } }; }
+      }
+      chipUpdate();
+    }
+    // Schémas et images : un texte collé ne donne que du texte. On y ajoute des captures d'écran,
+    // lues par l'IA comme les photos (elle décrit chaque schéma), dans le même import.
+    function shotsHtml() {
+      return `<div class="card pad stack shots"><b>Schémas, images, tableaux</b><p class="small muted">Ton texte a des schémas à côté ? Ajoute des captures d'écran : l'IA les lit et décrit chaque schéma, comme pour une photo de cours.</p>
+        ${d.shots.length ? `<div class="filelist">${d.shots.map((f, i) => `<div><span>${esc(f.name)}</span><button class="mini" data-rms="${i}" aria-label="Retirer ${esc(f.name)}">Retirer</button></div>`).join("")}</div>` : ""}
+        <label class="btn sm ghost" for="shotpick" style="align-self:flex-start">Ajouter des captures</label><input id="shotpick" type="file" multiple accept="image/*,.pdf" hidden></div>`;
+    }
+    function keep() { if ($("txt")) d.text = $("txt").value; }
+    const say = (m) => { d.msg = m; impPaint(d); };
+
+    const R = fileReaders(d, say), { imageToJpeg, readPdf, readPptx, readDocx, readOdf, readPpt, readText } = R;
     async function run() {
       if (d.busy) return; keep();
       if (d.tab === "files" && !d.files.length) return toast("Ajoute au moins un fichier ou une photo.");
@@ -347,7 +368,7 @@
           else if (/\.(ppt|pps)$/.test(name)) { say("Lecture de « " + f.name + " »…"); await readPpt(f, fs); notes.push("« " + f.name + " » est un ancien PowerPoint : son texte est lu, pas ses images. Enregistre-le en .pptx pour tout garder."); }
           else if (/\.(txt|md|markdown|csv|tex|rtf)$/.test(name) || f.type.startsWith("text/")) { say("Lecture de « " + f.name + " »…"); await readText(f, fs, name.endsWith(".rtf")); }
           else if (/\.(doc|key|pages|odg|xlsx?|ods)$/.test(name)) { notes.push("« " + f.name + " » : ce format ne se lit pas directement. Exporte-le en PDF (Fichier, Exporter en PDF) et importe le PDF."); continue; }
-          else if (f.type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif)$/.test(name)) { if (budget.pages >= C.PAGES_MAX_PAR_IMPORT) { budget.cut = true; continue; } budget.pages++; say("Préparation de « " + f.name + " »…"); fs.push({ img: await imageToJpeg(f, true) }); }
+          else if (f.type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif)$/.test(name)) { if (budget.pages >= (budget.max || C.PAGES_MAX_PAR_IMPORT)) { budget.cut = true; continue; } budget.pages++; say("Préparation de « " + f.name + " »…"); fs.push({ img: await imageToJpeg(f, true) }); }
           else { notes.push("« " + f.name + " » n'est pas un format accepté. Exporte-le en PDF et importe le PDF."); continue; }
           if (budget.cut === before) d.cache[key] = fs;
           segs.push(...fs); impProg(d, "read", 0.6 * (fi + 1) / d.fn);

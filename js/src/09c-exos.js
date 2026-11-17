@@ -51,9 +51,9 @@
     // Sur grand écran (PC) : historique toujours visible à gauche, conversation sur tout le reste.
     app.innerHTML = `<aside class="pside" aria-label="Mes discussions"><button class="btn" id="psnew">${I.plus}Nouvelle discussion</button><div class="pdlist">${histRows(p)}</div></aside><div class="pmain"><div class="row profhead"><button class="iconbtn flat" id="phist" aria-label="Mes discussions" title="Mes discussions">${I.menu}</button><h1 class="grow ptitle">${esc(conv.t || "Prof")}</h1><button class="iconbtn flat" id="pnew" aria-label="Nouvelle discussion" title="Nouvelle discussion">${I.edit}</button></div>
       <div class="pctx">${ctxChips(conv.ctx)}<button class="pchip add" id="pctx">${I.book}${linked ? "Modifier" : "Lier un cours"}</button></div>
-      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") : md(m.t) + qcmHtml(m, i) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.prof}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur les cours liés en haut. " : "Pour que je m'appuie sur ton cours, touche « Lier un cours » : un ou plusieurs chapitres, ou des matières entières. "}Demande un exercice, une explication, ou envoie la photo de ta copie avec le bouton +.</p><div class="chips exquick">${EXO_QUICK.map((q, i) => `<button class="chip" data-q="${i}">${q[0]}</button>`).join("")}</div><p class="small muted">${linked ? "Le prof s'appuie sur les cours liés" : "Sans cours lié, le prof répond avec ses connaissances de lycée"} ; il peut se tromper sur un calcul. 1 message = 1 appel IA.</p></div>`}</div>
+      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") + (m.doc ? `<span class="small muted"> · ${esc(m.doc)}</span>` : "") : md(m.t) + qcmHtml(m, i) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.prof}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur les cours liés en haut. " : "Pour que je m'appuie sur ton cours, touche « Lier un cours » : un ou plusieurs chapitres, ou des matières entières. "}Demande un exercice, une explication, ou envoie la photo de ta copie avec le bouton +.</p><div class="chips exquick">${EXO_QUICK.map((q, i) => `<button class="chip" data-q="${i}">${q[0]}</button>`).join("")}</div><p class="small muted">${linked ? "Le prof s'appuie sur les cours liés" : "Sans cours lié, le prof répond avec ses connaissances de lycée"} ; il peut se tromper sur un calcul. 1 message = 1 appel IA.</p></div>`}</div>
       <div class="pcomp"><div id="eximg" class="pimg" hidden></div><div class="pbar"><button class="iconbtn flat" id="pplus" aria-label="Ajouter une photo, un cours ou une demande rapide">${I.plus}</button><textarea id="exq" rows="1" maxlength="2000" placeholder="Écris ton message…"></textarea>${canDictate() ? `<button class="iconbtn flat" id="exmic" aria-label="Dicter">${I.mic}</button>` : ""}<button class="iconbtn psend" id="exsend" aria-label="Envoyer">${I.send}</button></div>
-      <input id="exphoto" type="file" accept="image/*" capture="environment" hidden><input id="exfile" type="file" accept="image/*" hidden></div></div>`;
+      <input id="exphoto" type="file" accept="image/*" capture="environment" hidden><input id="exfile" type="file" accept="${FILE_ACCEPT}" multiple hidden></div></div>`;
     const save = () => { conv.at = Date.now(); profSave(p); };
     // Cours liés.
     app.querySelectorAll("[data-unctx]").forEach(b => b.onclick = () => { const [k, id] = b.dataset.unctx.split(":"); conv.ctx[k === "s" ? "s" : "ch"] = conv.ctx[k === "s" ? "s" : "ch"].filter(x => x !== id); save(); screenExos(); });
@@ -92,11 +92,28 @@
     q.addEventListener("blur", () => setTimeout(() => { if (document.activeElement !== q) document.body.classList.remove("typing"); }, 100));
     q.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && matchMedia("(hover: hover)").matches) { e.preventDefault(); send(); } };
     // Photo jointe (bouton +) : aperçu au-dessus du champ, retirable.
-    let img = null;
+    let img = null, docImgs = []; // docImgs : pages en image du fichier joint, envoyées avec le prochain message (pas gardées sur l'appareil)
     const showImg = () => { const el = $("eximg"); el.hidden = !img; el.innerHTML = img ? `<img src="data:image/jpeg;base64,${img.data}" alt="Photo jointe"><span class="small">Photo prête</span><button class="iconbtn flat" id="pimgx" aria-label="Retirer la photo">${I.x}</button>` : ""; if (img) $("pimgx").onclick = () => { img = null; showImg(); }; };
     const onPhoto = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; try { img = await shrinkImage(f); showImg(); if (!q.value.trim()) q.value = "Voici ma copie : dis-moi ce qui est juste dans mon raisonnement et où je me suis trompé."; grow(); } catch (er) { toast("Photo illisible."); } };
-    $("exphoto").onchange = onPhoto; $("exfile").onchange = onPhoto;
-    $("pplus").onclick = () => sheet(`<h1>Ajouter</h1><div class="actgrid"><button class="actbtn" id="pa-cam">${I.cam}<span>Prendre une photo</span></button><button class="actbtn" id="pa-img">${I.img}<span>Choisir une photo</span></button><button class="actbtn" id="pa-ctx">${I.book}<span>Lier un cours</span></button></div><span class="label">Demandes rapides</span><div class="pqchips">${EXO_QUICK.map((x, i) => x[1] ? `<button class="chip" data-pq="${i}">${x[0]}</button>` : "").join("")}</div>`, el => {
+    // Fichiers joints (17 nov.) : tous les formats de l'import (PDF, PowerPoint, Word, LibreOffice, texte, photos), lus sur
+    // l'appareil avec les mêmes lecteurs. Le texte est gardé dans la discussion (le prof s'en sert à chaque message) ;
+    // les pages en image (scans, schémas) partent avec le message suivant. Une seule photo = comme avant (copie à corriger).
+    const showDoc = m => { const el = $("eximg"); el.hidden = !conv.doc && !m; el.innerHTML = m ? `<span class="spin" aria-hidden="true"></span><span class="small">${esc(m)}</span>` : conv.doc ? `<span class="mico">${I.book}</span><span class="small grow"><b>${esc(conv.doc.name)}</b><br>${docImgs.length ? plural(docImgs.length, "page en image", "pages en image") + " · " : ""}lu par le prof dans cette discussion</span><button class="iconbtn flat" id="pdocx" aria-label="Retirer le fichier">${I.x}</button>` : ""; if ($("pdocx")) $("pdocx").onclick = () => { delete conv.doc; docImgs = []; save(); showDoc(); }; };
+    const onFiles = async e => {
+      const files = [...e.target.files]; e.target.value = ""; if (!files.length) return;
+      if (files.length === 1 && (files[0].type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif)$/i.test(files[0].name))) return onPhoto({ target: { files, value: "" } });
+      const fs = [], notes = [], budget = { pages: 0, max: 12, cut: false }, R = fileReaders({}, m => showDoc(m));
+      try { for (const f of files) await R.readOne(f, fs, budget, notes, false); }
+      catch (er) { showDoc(); return toast(er.message || "Fichier illisible."); }
+      const text = fs.filter(x => x.text).map(x => x.text).join("\n\n").slice(0, 60000), pend = fs.filter(x => x.img).map(x => x.img).slice(0, 8);
+      if (!text.trim() && !pend.length) { showDoc(); return toast(notes[0] || "Je n'ai rien trouvé à lire dans ce fichier."); }
+      conv.doc = { name: files.map(f => f.name).join(", ").slice(0, 120), text, fresh: true }; docImgs = pend; save(); showDoc();
+      if (budget.cut || notes.length) toast(budget.cut ? "Seules les 12 premières pages en image sont envoyées." : notes[0]);
+      if (!q.value.trim()) { q.value = "Voici mon document : "; grow(); q.focus(); }
+    };
+    $("exphoto").onchange = onPhoto; $("exfile").onchange = onFiles;
+    if (conv.doc) showDoc();
+    $("pplus").onclick = () => sheet(`<h1>Ajouter</h1><div class="actgrid"><button class="actbtn" id="pa-cam">${I.cam}<span>Prendre une photo</span></button><button class="actbtn" id="pa-img">${I.up}<span>Joindre un fichier<small>PDF, PowerPoint, Word, photo…</small></span></button><button class="actbtn" id="pa-ctx">${I.book}<span>Lier un cours</span></button></div><span class="label">Demandes rapides</span><div class="pqchips">${EXO_QUICK.map((x, i) => x[1] ? `<button class="chip" data-pq="${i}">${x[0]}</button>` : "").join("")}</div>`, el => {
       el.querySelectorAll("[data-pq]").forEach(b => b.onclick = () => { closeSheet(); q.value = EXO_QUICK[+b.dataset.pq][1]; send(); });
       el.querySelector("#pa-cam").onclick = () => { closeSheet(); $("exphoto").click(); };
       el.querySelector("#pa-img").onclick = () => { closeSheet(); $("exfile").click(); };
@@ -106,16 +123,17 @@
     app.querySelectorAll("[data-q]").forEach(b => b.onclick = () => { const x = EXO_QUICK[+b.dataset.q]; if (!x[1]) { $("pplus").click(); return; } q.value = x[1]; send(); });
     $("exsend").onclick = () => send();
     async function send() {
-      const t = q.value.trim(); if (!t && !img) return toast("Écris ton message.");
+      const t = q.value.trim(); if (!t && !img && !(conv.doc && conv.doc.fresh)) return toast("Écris ton message.");
       if (state.offline) return toast("Il faut être connecté à Internet pour l'IA.");
-      const mine = { r: "u", t: t || "Voici ma copie.", img: !!img }; msgs.push(mine); if (!conv.t) conv.t = mine.t.slice(0, 60); save();
+      const docNew = conv.doc && conv.doc.fresh ? conv.doc : null, mine = Object.assign({ r: "u", t: t || "Voici ma copie.", img: !!img }, docNew ? { doc: conv.doc.name } : {}); msgs.push(mine); if (!conv.t) conv.t = mine.t.slice(0, 60); save();
       $("exsend").disabled = true; q.value = ""; grow();
       const pe = th.querySelector(".pempty"); if (pe) pe.remove();
       th.insertAdjacentHTML("beforeend", `<div class="exmsg me">${esc(mine.t).replace(/\n/g, "<br>")}${img ? '<span class="small muted"> · photo envoyée</span>' : ""}</div><div class="exmsg ai wait"><span class="spin" aria-hidden="true"></span> Je réfléchis…</div>`); th.scrollTop = th.scrollHeight;
       const photo = img; img = null; showImg();
       try {
         const subjNames = conv.ctx.s.map(id => (state.subjects.find(x => x.id === id) || {}).name).filter(Boolean);
-        const r = await ai({ action: "exochat", want_title: !conv.named, chapter_ids: ctxChapters(conv.ctx), matieres: subjNames, messages: msgs.slice(-12).map(m => ({ r: m.r, t: m.t })), image: photo }, "studio");
+        const r = await ai({ action: "exochat", want_title: !conv.named, chapter_ids: ctxChapters(conv.ctx), matieres: subjNames, messages: msgs.slice(-12).map(m => ({ r: m.r, t: m.t })), image: photo, doc: conv.doc ? { name: conv.doc.name, text: conv.doc.text, images: docImgs } : undefined }, "studio");
+        if (conv.doc && conv.doc.fresh) { delete conv.doc.fresh; docImgs = []; save(); showDoc(); }
         if (!conv.named && r.title) { conv.t = String(r.title).slice(0, 60); conv.named = true; }
         const qcm = cleanQcm(r.qcm);
         msgs.push(Object.assign({ r: "a", t: String(r.answer || "").slice(0, 8000) }, qcm.length ? { q: qcm } : Array.isArray(r.fields) && r.fields.length ? { f: r.fields.map(x => String(x).slice(0, 120)).slice(0, 6) } : {})); save();

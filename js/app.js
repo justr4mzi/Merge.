@@ -1926,54 +1926,9 @@
   window.addEventListener("beforeunload", e => { if (Object.values(IMPORTS).some(v => v.busy && v.local)) { e.preventDefault(); e.returnValue = ""; } });
   window.addEventListener("hashchange", () => chipUpdate());
 
-  function screenImport(id) {
-    const ch = state.chapters.find(c => c.id === id); if (!ch) { location.hash = "#accueil"; return; }
-    tabs.hidden = true;
-    const d = IMPORTS[id] || (IMPORTS[id] = newImp(ch));
-    function draw() {
-      if (d.busy) { app.innerHTML = impBusyHtml(d, ch.name); chipUpdate(); if ($("askn")) $("askn").onclick = async () => { const ok = await ensurePush(true); if (!ok) toast("Notifications impossibles sur cet appareil ou refusées."); if (d.busy && onImport(id)) draw(); }; return; }
-      if (d.doneHtml) { const h = d.doneHtml; d.doneHtml = null; d.ready = false; d.files = []; d.shots = []; app.innerHTML = h; chipUpdate(); confetti(); return; }
-      app.innerHTML = `<div class="row"><a class="iconbtn" href="#chapitre-${id}" aria-label="Retour au chapitre">${I.back}</a><span class="small muted">${esc(ch.name)}</span></div>
-        <h1>Importer un cours</h1>
-        <div class="seg" role="group" aria-label="Type d'import"><button data-tab="files" aria-pressed="${d.tab === "files"}">Fichiers et photos</button><button data-tab="text" aria-pressed="${d.tab === "text"}">Texte</button></div>
-        ${d.tab === "files" ? `<div class="drop" id="drop">${I.up}<p><b>Glisse tes fichiers ici</b></p><p class="small muted">PDF, photos de cahier (iPhone compris), PowerPoint (.pptx, .ppt), LibreOffice (.odp, .odt), Word (.docx), texte (.txt, .rtf). Ajoute autant de fichiers que tu veux : tout est converti et lu en entier, images des diapositives comprises. Un Genially ? Fais une capture d'écran de chaque page et ajoute-les ici : l'IA lit les textes et les schémas.</p>
-          <div class="row" style="flex-wrap:wrap;justify-content:center"><label class="btn sm ghost" for="pick">Parcourir les fichiers</label><label class="btn sm ghost" for="cam">Prendre une photo</label></div>
-          <button class="switch" id="redsw" role="switch" aria-checked="${safeGet("merge.redresse") !== "0"}" type="button"><i></i>Redresser et recadrer les photos de feuilles</button>
-          <input id="pick" type="file" multiple accept=".pdf,.pptx,.ppsx,.ppt,.pps,.odp,.docx,.odt,.rtf,.txt,.md,.csv,image/*" hidden><input id="cam" type="file" accept="image/*" capture="environment" hidden></div>
-          <div class="filelist">${d.files.map((f, i) => `<div><span>${esc(f.name)}</span><button class="mini" data-rm="${i}" aria-label="Retirer ${esc(f.name)}">Retirer</button></div>`).join("")}</div>`
-          : `<div class="field"><label for="txt">Texte du cours</label><textarea id="txt" placeholder="Colle ton cours ici">${esc(d.text)}</textarea></div>${shotsHtml()}`}
-        <div class="field"><label for="n">${cardsOf(id).length ? "Combien de nouvelles flashcards ajouter ?" : "Combien de flashcards ?"} <b id="nv">${autoN() ? "auto" : d.n}</b></label>${cardsOf(id).length ? `<p class="small muted">Tu as déjà ${plural(cardsOf(id).length, "carte", "cartes")} dans ce chapitre : les nouvelles s'ajoutent à elles, sans refaire celles que tu as déjà.</p>` : ""}<input id="n" type="range" min="10" max="${C.CARTES_MAX}" step="5" value="${d.n}"${autoN() ? " disabled" : ""}></div>
-        <button class="switch" id="nauto" role="switch" aria-checked="${autoN()}" type="button"><i></i>Laisser l'IA choisir le nombre : juste ce qu'il faut pour couvrir tout le cours</button>
-        <button class="btn" id="go">Créer le résumé et les cartes</button>
-        <div id="status" class="note" role="status">Les cartes viennent uniquement de ton cours. Chaque carte garde la phrase du cours qui la justifie.</div>`;
-      app.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { keep(); d.tab = b.dataset.tab; draw(); });
-      app.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { d.files.splice(+b.dataset.rm, 1); draw(); });
-      app.querySelectorAll("[data-rms]").forEach(b => b.onclick = () => { keep(); d.shots.splice(+b.dataset.rms, 1); draw(); });
-      if ($("shotpick")) $("shotpick").onchange = e => { keep(); d.shots.push(...e.target.files); draw(); };
-      $("n").oninput = () => { d.n = +$("n").value; $("nv").textContent = d.n; };
-      $("nauto").onclick = () => { const on = !autoN(); safeSet("merge.autoN", on ? "1" : "0"); $("nauto").setAttribute("aria-checked", on); $("n").disabled = on; $("nv").textContent = on ? "auto" : d.n; };
-      const add = (list) => { d.files.push(...list); draw(); };
-      if ($("redsw")) $("redsw").onclick = () => { const on = safeGet("merge.redresse") === "0"; safeSet("merge.redresse", on ? "1" : "0"); $("redsw").setAttribute("aria-checked", on); };
-      if ($("pick")) { $("pick").onchange = e => add([...e.target.files]); $("cam").onchange = e => add([...e.target.files]);
-        const z = $("drop"); z.ondragover = e => { e.preventDefault(); }; z.ondrop = e => { e.preventDefault(); add([...e.dataTransfer.files]); }; }
-      $("go").onclick = run;
-      if (d.failed) {
-        const s = $("status"), e = d.failed; showErr(s, e); d.failed = null; if (d.jobId) safeSet("merge.jobseen." + d.jobId, "1");
-        if (d.jobId && d.canResume) { s.insertAdjacentHTML("beforeend", `<p class="note">${e.code === "quota" ? "Ce qui a déjà été lu est gardé : reprends l'import demain, sans rien renvoyer." : "Ce qui a déjà été lu est gardé."}</p><button class="btn sm" id="resume">Reprendre l'import</button>`);
-          $("resume").onclick = async () => { $("resume").disabled = true; try { await ai({ action: "import_resume", job_id: d.jobId }, "studio"); d.busy = true; d.local = false; d.canResume = false; d.t0 = Date.now(); d.msg = "Reprise de l'import…"; impTimer(d); watchJob(id); draw(); } catch (er) { d.canResume = er.code === "quota"; showErr(s, er); } }; }
-      }
-      chipUpdate();
-    }
-    // Schémas et images : un texte collé ne donne que du texte. On y ajoute des captures d'écran,
-    // lues par l'IA comme les photos (elle décrit chaque schéma), dans le même import.
-    function shotsHtml() {
-      return `<div class="card pad stack shots"><b>Schémas, images, tableaux</b><p class="small muted">Ton texte a des schémas à côté ? Ajoute des captures d'écran : l'IA les lit et décrit chaque schéma, comme pour une photo de cours.</p>
-        ${d.shots.length ? `<div class="filelist">${d.shots.map((f, i) => `<div><span>${esc(f.name)}</span><button class="mini" data-rms="${i}" aria-label="Retirer ${esc(f.name)}">Retirer</button></div>`).join("")}</div>` : ""}
-        <label class="btn sm ghost" for="shotpick" style="align-self:flex-start">Ajouter des captures</label><input id="shotpick" type="file" multiple accept="image/*,.pdf" hidden></div>`;
-    }
-    function keep() { if ($("txt")) d.text = $("txt").value; }
-    const say = (m) => { d.msg = m; impPaint(d); };
-
+  // Lecture des fichiers de cours, partagée par l'import et le Prof (17 nov.) : PDF, PowerPoint (pptx, ppt), Word, LibreOffice,
+  // texte, RTF et photos (HEIC compris). d = état de l'écran qui lit (progression), say = message de progression.
+  function fileReaders(d, say) {
     async function imageToJpeg(file, scan) {
       let bmp;
       try { bmp = await createImageBitmap(file); }
@@ -1993,7 +1948,7 @@
       await needPdf(); const lib = window.pdfjsLib; lib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js";
       const doc = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
       for (let i = 1; i <= doc.numPages; i++) {
-        if (budget.pages >= C.PAGES_MAX_PAR_IMPORT) { budget.cut = true; break; }
+        if (budget.pages >= (budget.max || C.PAGES_MAX_PAR_IMPORT)) { budget.cut = true; break; }
         budget.pages++; say("Lecture de « " + file.name + " » : page " + i + " sur " + doc.numPages + "…"); impProg(d, "read", 0.6 * ((d.fi || 0) + i / doc.numPages) / (d.fn || 1));
         const page = await doc.getPage(i);
         const txt = (await page.getTextContent()).items.map(t => t.str).join(" ").replace(/\s+/g, " ").trim();
@@ -2019,7 +1974,7 @@
     async function zipImages(zip, names, out, budget) {
       for (const n of names) {
         const f = zip.files[n]; if (!f || !IMG_EXT.test(n)) continue;
-        if (budget.pages >= C.PAGES_MAX_PAR_IMPORT) { budget.cut = true; return; }
+        if (budget.pages >= (budget.max || C.PAGES_MAX_PAR_IMPORT)) { budget.cut = true; return; }
         try { const blob = await f.async("blob"); if (blob.size < 20000) continue; const ext = n.split(".").pop().toLowerCase(); out.push({ img: await imageToJpeg(new File([blob], n.split("/").pop(), { type: "image/" + (ext === "jpg" ? "jpeg" : ext) })) }); budget.pages++; }
         catch (e) { /* image illisible : ignorée */ }
       }
@@ -2090,6 +2045,72 @@
       t = rtf ? rtfText(t) : t.trim();
       for (let k = 0; k < t.length; k += 12000) segs.push({ text: t.slice(k, k + 12000) });
     }
+    // Un fichier, quel que soit son format : ajoute ses morceaux (texte ou image) dans fs. Renvoie false si le format n'est pas lu.
+    async function readOne(f, fs, budget, notes, scan) {
+      const name = f.name.toLowerCase();
+      if (name.endsWith(".pdf") || f.type === "application/pdf") await readPdf(f, fs, budget);
+      else if (/\.(pptx|ppsx|potx)$/.test(name)) { say("Lecture du diaporama « " + f.name + " »…"); await readPptx(f, fs, budget); }
+      else if (/\.(docx|dotx)$/.test(name)) { say("Lecture de « " + f.name + " »…"); await readDocx(f, fs, budget); }
+      else if (/\.(odp|odt|otp|ott)$/.test(name)) { say("Lecture de « " + f.name + " »…"); await readOdf(f, fs, budget); }
+      else if (/\.(ppt|pps)$/.test(name)) { say("Lecture de « " + f.name + " »…"); await readPpt(f, fs); notes.push("« " + f.name + " » est un ancien PowerPoint : son texte est lu, pas ses images. Enregistre-le en .pptx pour tout garder."); }
+      else if (/\.(txt|md|markdown|csv|tex|rtf)$/.test(name) || f.type.startsWith("text/")) { say("Lecture de « " + f.name + " »…"); await readText(f, fs, name.endsWith(".rtf")); }
+      else if (/\.(doc|key|pages|odg|xlsx?|ods)$/.test(name)) { notes.push("« " + f.name + " » : ce format ne se lit pas directement. Exporte-le en PDF (Fichier, Exporter en PDF) et envoie le PDF."); return false; }
+      else if (f.type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif)$/.test(name)) { if (budget.pages >= (budget.max || C.PAGES_MAX_PAR_IMPORT)) { budget.cut = true; return true; } budget.pages++; say("Préparation de « " + f.name + " »…"); fs.push({ img: await imageToJpeg(f, scan) }); }
+      else { notes.push("« " + f.name + " » n'est pas un format accepté. Exporte-le en PDF et envoie le PDF."); return false; }
+      return true;
+    }
+    return { imageToJpeg, readPdf, readPptx, readDocx, readOdf, readPpt, readText, readOne };
+  }
+  const FILE_ACCEPT = ".pdf,.pptx,.ppsx,.ppt,.pps,.odp,.docx,.odt,.rtf,.txt,.md,.csv,image/*";
+  function screenImport(id) {
+    const ch = state.chapters.find(c => c.id === id); if (!ch) { location.hash = "#accueil"; return; }
+    tabs.hidden = true;
+    const d = IMPORTS[id] || (IMPORTS[id] = newImp(ch));
+    function draw() {
+      if (d.busy) { app.innerHTML = impBusyHtml(d, ch.name); chipUpdate(); if ($("askn")) $("askn").onclick = async () => { const ok = await ensurePush(true); if (!ok) toast("Notifications impossibles sur cet appareil ou refusées."); if (d.busy && onImport(id)) draw(); }; return; }
+      if (d.doneHtml) { const h = d.doneHtml; d.doneHtml = null; d.ready = false; d.files = []; d.shots = []; app.innerHTML = h; chipUpdate(); confetti(); return; }
+      app.innerHTML = `<div class="row"><a class="iconbtn" href="#chapitre-${id}" aria-label="Retour au chapitre">${I.back}</a><span class="small muted">${esc(ch.name)}</span></div>
+        <h1>Importer un cours</h1>
+        <div class="seg" role="group" aria-label="Type d'import"><button data-tab="files" aria-pressed="${d.tab === "files"}">Fichiers et photos</button><button data-tab="text" aria-pressed="${d.tab === "text"}">Texte</button></div>
+        ${d.tab === "files" ? `<div class="drop" id="drop">${I.up}<p><b>Glisse tes fichiers ici</b></p><p class="small muted">PDF, photos de cahier (iPhone compris), PowerPoint (.pptx, .ppt), LibreOffice (.odp, .odt), Word (.docx), texte (.txt, .rtf). Ajoute autant de fichiers que tu veux : tout est converti et lu en entier, images des diapositives comprises. Un Genially ? Fais une capture d'écran de chaque page et ajoute-les ici : l'IA lit les textes et les schémas.</p>
+          <div class="row" style="flex-wrap:wrap;justify-content:center"><label class="btn sm ghost" for="pick">Parcourir les fichiers</label><label class="btn sm ghost" for="cam">Prendre une photo</label></div>
+          <button class="switch" id="redsw" role="switch" aria-checked="${safeGet("merge.redresse") !== "0"}" type="button"><i></i>Redresser et recadrer les photos de feuilles</button>
+          <input id="pick" type="file" multiple accept=".pdf,.pptx,.ppsx,.ppt,.pps,.odp,.docx,.odt,.rtf,.txt,.md,.csv,image/*" hidden><input id="cam" type="file" accept="image/*" capture="environment" hidden></div>
+          <div class="filelist">${d.files.map((f, i) => `<div><span>${esc(f.name)}</span><button class="mini" data-rm="${i}" aria-label="Retirer ${esc(f.name)}">Retirer</button></div>`).join("")}</div>`
+          : `<div class="field"><label for="txt">Texte du cours</label><textarea id="txt" placeholder="Colle ton cours ici">${esc(d.text)}</textarea></div>${shotsHtml()}`}
+        <div class="field"><label for="n">${cardsOf(id).length ? "Combien de nouvelles flashcards ajouter ?" : "Combien de flashcards ?"} <b id="nv">${autoN() ? "auto" : d.n}</b></label>${cardsOf(id).length ? `<p class="small muted">Tu as déjà ${plural(cardsOf(id).length, "carte", "cartes")} dans ce chapitre : les nouvelles s'ajoutent à elles, sans refaire celles que tu as déjà.</p>` : ""}<input id="n" type="range" min="10" max="${C.CARTES_MAX}" step="5" value="${d.n}"${autoN() ? " disabled" : ""}></div>
+        <button class="switch" id="nauto" role="switch" aria-checked="${autoN()}" type="button"><i></i>Laisser l'IA choisir le nombre : juste ce qu'il faut pour couvrir tout le cours</button>
+        <button class="btn" id="go">Créer le résumé et les cartes</button>
+        <div id="status" class="note" role="status">Les cartes viennent uniquement de ton cours. Chaque carte garde la phrase du cours qui la justifie.</div>`;
+      app.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { keep(); d.tab = b.dataset.tab; draw(); });
+      app.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { d.files.splice(+b.dataset.rm, 1); draw(); });
+      app.querySelectorAll("[data-rms]").forEach(b => b.onclick = () => { keep(); d.shots.splice(+b.dataset.rms, 1); draw(); });
+      if ($("shotpick")) $("shotpick").onchange = e => { keep(); d.shots.push(...e.target.files); draw(); };
+      $("n").oninput = () => { d.n = +$("n").value; $("nv").textContent = d.n; };
+      $("nauto").onclick = () => { const on = !autoN(); safeSet("merge.autoN", on ? "1" : "0"); $("nauto").setAttribute("aria-checked", on); $("n").disabled = on; $("nv").textContent = on ? "auto" : d.n; };
+      const add = (list) => { d.files.push(...list); draw(); };
+      if ($("redsw")) $("redsw").onclick = () => { const on = safeGet("merge.redresse") === "0"; safeSet("merge.redresse", on ? "1" : "0"); $("redsw").setAttribute("aria-checked", on); };
+      if ($("pick")) { $("pick").onchange = e => add([...e.target.files]); $("cam").onchange = e => add([...e.target.files]);
+        const z = $("drop"); z.ondragover = e => { e.preventDefault(); }; z.ondrop = e => { e.preventDefault(); add([...e.dataTransfer.files]); }; }
+      $("go").onclick = run;
+      if (d.failed) {
+        const s = $("status"), e = d.failed; showErr(s, e); d.failed = null; if (d.jobId) safeSet("merge.jobseen." + d.jobId, "1");
+        if (d.jobId && d.canResume) { s.insertAdjacentHTML("beforeend", `<p class="note">${e.code === "quota" ? "Ce qui a déjà été lu est gardé : reprends l'import demain, sans rien renvoyer." : "Ce qui a déjà été lu est gardé."}</p><button class="btn sm" id="resume">Reprendre l'import</button>`);
+          $("resume").onclick = async () => { $("resume").disabled = true; try { await ai({ action: "import_resume", job_id: d.jobId }, "studio"); d.busy = true; d.local = false; d.canResume = false; d.t0 = Date.now(); d.msg = "Reprise de l'import…"; impTimer(d); watchJob(id); draw(); } catch (er) { d.canResume = er.code === "quota"; showErr(s, er); } }; }
+      }
+      chipUpdate();
+    }
+    // Schémas et images : un texte collé ne donne que du texte. On y ajoute des captures d'écran,
+    // lues par l'IA comme les photos (elle décrit chaque schéma), dans le même import.
+    function shotsHtml() {
+      return `<div class="card pad stack shots"><b>Schémas, images, tableaux</b><p class="small muted">Ton texte a des schémas à côté ? Ajoute des captures d'écran : l'IA les lit et décrit chaque schéma, comme pour une photo de cours.</p>
+        ${d.shots.length ? `<div class="filelist">${d.shots.map((f, i) => `<div><span>${esc(f.name)}</span><button class="mini" data-rms="${i}" aria-label="Retirer ${esc(f.name)}">Retirer</button></div>`).join("")}</div>` : ""}
+        <label class="btn sm ghost" for="shotpick" style="align-self:flex-start">Ajouter des captures</label><input id="shotpick" type="file" multiple accept="image/*,.pdf" hidden></div>`;
+    }
+    function keep() { if ($("txt")) d.text = $("txt").value; }
+    const say = (m) => { d.msg = m; impPaint(d); };
+
+    const R = fileReaders(d, say), { imageToJpeg, readPdf, readPptx, readDocx, readOdf, readPpt, readText } = R;
     async function run() {
       if (d.busy) return; keep();
       if (d.tab === "files" && !d.files.length) return toast("Ajoute au moins un fichier ou une photo.");
@@ -2114,7 +2135,7 @@
           else if (/\.(ppt|pps)$/.test(name)) { say("Lecture de « " + f.name + " »…"); await readPpt(f, fs); notes.push("« " + f.name + " » est un ancien PowerPoint : son texte est lu, pas ses images. Enregistre-le en .pptx pour tout garder."); }
           else if (/\.(txt|md|markdown|csv|tex|rtf)$/.test(name) || f.type.startsWith("text/")) { say("Lecture de « " + f.name + " »…"); await readText(f, fs, name.endsWith(".rtf")); }
           else if (/\.(doc|key|pages|odg|xlsx?|ods)$/.test(name)) { notes.push("« " + f.name + " » : ce format ne se lit pas directement. Exporte-le en PDF (Fichier, Exporter en PDF) et importe le PDF."); continue; }
-          else if (f.type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif)$/.test(name)) { if (budget.pages >= C.PAGES_MAX_PAR_IMPORT) { budget.cut = true; continue; } budget.pages++; say("Préparation de « " + f.name + " »…"); fs.push({ img: await imageToJpeg(f, true) }); }
+          else if (f.type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif)$/.test(name)) { if (budget.pages >= (budget.max || C.PAGES_MAX_PAR_IMPORT)) { budget.cut = true; continue; } budget.pages++; say("Préparation de « " + f.name + " »…"); fs.push({ img: await imageToJpeg(f, true) }); }
           else { notes.push("« " + f.name + " » n'est pas un format accepté. Exporte-le en PDF et importe le PDF."); continue; }
           if (budget.cut === before) d.cache[key] = fs;
           segs.push(...fs); impProg(d, "read", 0.6 * (fi + 1) / d.fn);
@@ -3604,9 +3625,9 @@
     // Sur grand écran (PC) : historique toujours visible à gauche, conversation sur tout le reste.
     app.innerHTML = `<aside class="pside" aria-label="Mes discussions"><button class="btn" id="psnew">${I.plus}Nouvelle discussion</button><div class="pdlist">${histRows(p)}</div></aside><div class="pmain"><div class="row profhead"><button class="iconbtn flat" id="phist" aria-label="Mes discussions" title="Mes discussions">${I.menu}</button><h1 class="grow ptitle">${esc(conv.t || "Prof")}</h1><button class="iconbtn flat" id="pnew" aria-label="Nouvelle discussion" title="Nouvelle discussion">${I.edit}</button></div>
       <div class="pctx">${ctxChips(conv.ctx)}<button class="pchip add" id="pctx">${I.book}${linked ? "Modifier" : "Lier un cours"}</button></div>
-      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") : md(m.t) + qcmHtml(m, i) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.prof}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur les cours liés en haut. " : "Pour que je m'appuie sur ton cours, touche « Lier un cours » : un ou plusieurs chapitres, ou des matières entières. "}Demande un exercice, une explication, ou envoie la photo de ta copie avec le bouton +.</p><div class="chips exquick">${EXO_QUICK.map((q, i) => `<button class="chip" data-q="${i}">${q[0]}</button>`).join("")}</div><p class="small muted">${linked ? "Le prof s'appuie sur les cours liés" : "Sans cours lié, le prof répond avec ses connaissances de lycée"} ; il peut se tromper sur un calcul. 1 message = 1 appel IA.</p></div>`}</div>
+      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") + (m.doc ? `<span class="small muted"> · ${esc(m.doc)}</span>` : "") : md(m.t) + qcmHtml(m, i) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.prof}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur les cours liés en haut. " : "Pour que je m'appuie sur ton cours, touche « Lier un cours » : un ou plusieurs chapitres, ou des matières entières. "}Demande un exercice, une explication, ou envoie la photo de ta copie avec le bouton +.</p><div class="chips exquick">${EXO_QUICK.map((q, i) => `<button class="chip" data-q="${i}">${q[0]}</button>`).join("")}</div><p class="small muted">${linked ? "Le prof s'appuie sur les cours liés" : "Sans cours lié, le prof répond avec ses connaissances de lycée"} ; il peut se tromper sur un calcul. 1 message = 1 appel IA.</p></div>`}</div>
       <div class="pcomp"><div id="eximg" class="pimg" hidden></div><div class="pbar"><button class="iconbtn flat" id="pplus" aria-label="Ajouter une photo, un cours ou une demande rapide">${I.plus}</button><textarea id="exq" rows="1" maxlength="2000" placeholder="Écris ton message…"></textarea>${canDictate() ? `<button class="iconbtn flat" id="exmic" aria-label="Dicter">${I.mic}</button>` : ""}<button class="iconbtn psend" id="exsend" aria-label="Envoyer">${I.send}</button></div>
-      <input id="exphoto" type="file" accept="image/*" capture="environment" hidden><input id="exfile" type="file" accept="image/*" hidden></div></div>`;
+      <input id="exphoto" type="file" accept="image/*" capture="environment" hidden><input id="exfile" type="file" accept="${FILE_ACCEPT}" multiple hidden></div></div>`;
     const save = () => { conv.at = Date.now(); profSave(p); };
     // Cours liés.
     app.querySelectorAll("[data-unctx]").forEach(b => b.onclick = () => { const [k, id] = b.dataset.unctx.split(":"); conv.ctx[k === "s" ? "s" : "ch"] = conv.ctx[k === "s" ? "s" : "ch"].filter(x => x !== id); save(); screenExos(); });
@@ -3645,11 +3666,28 @@
     q.addEventListener("blur", () => setTimeout(() => { if (document.activeElement !== q) document.body.classList.remove("typing"); }, 100));
     q.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && matchMedia("(hover: hover)").matches) { e.preventDefault(); send(); } };
     // Photo jointe (bouton +) : aperçu au-dessus du champ, retirable.
-    let img = null;
+    let img = null, docImgs = []; // docImgs : pages en image du fichier joint, envoyées avec le prochain message (pas gardées sur l'appareil)
     const showImg = () => { const el = $("eximg"); el.hidden = !img; el.innerHTML = img ? `<img src="data:image/jpeg;base64,${img.data}" alt="Photo jointe"><span class="small">Photo prête</span><button class="iconbtn flat" id="pimgx" aria-label="Retirer la photo">${I.x}</button>` : ""; if (img) $("pimgx").onclick = () => { img = null; showImg(); }; };
     const onPhoto = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; try { img = await shrinkImage(f); showImg(); if (!q.value.trim()) q.value = "Voici ma copie : dis-moi ce qui est juste dans mon raisonnement et où je me suis trompé."; grow(); } catch (er) { toast("Photo illisible."); } };
-    $("exphoto").onchange = onPhoto; $("exfile").onchange = onPhoto;
-    $("pplus").onclick = () => sheet(`<h1>Ajouter</h1><div class="actgrid"><button class="actbtn" id="pa-cam">${I.cam}<span>Prendre une photo</span></button><button class="actbtn" id="pa-img">${I.img}<span>Choisir une photo</span></button><button class="actbtn" id="pa-ctx">${I.book}<span>Lier un cours</span></button></div><span class="label">Demandes rapides</span><div class="pqchips">${EXO_QUICK.map((x, i) => x[1] ? `<button class="chip" data-pq="${i}">${x[0]}</button>` : "").join("")}</div>`, el => {
+    // Fichiers joints (17 nov.) : tous les formats de l'import (PDF, PowerPoint, Word, LibreOffice, texte, photos), lus sur
+    // l'appareil avec les mêmes lecteurs. Le texte est gardé dans la discussion (le prof s'en sert à chaque message) ;
+    // les pages en image (scans, schémas) partent avec le message suivant. Une seule photo = comme avant (copie à corriger).
+    const showDoc = m => { const el = $("eximg"); el.hidden = !conv.doc && !m; el.innerHTML = m ? `<span class="spin" aria-hidden="true"></span><span class="small">${esc(m)}</span>` : conv.doc ? `<span class="mico">${I.book}</span><span class="small grow"><b>${esc(conv.doc.name)}</b><br>${docImgs.length ? plural(docImgs.length, "page en image", "pages en image") + " · " : ""}lu par le prof dans cette discussion</span><button class="iconbtn flat" id="pdocx" aria-label="Retirer le fichier">${I.x}</button>` : ""; if ($("pdocx")) $("pdocx").onclick = () => { delete conv.doc; docImgs = []; save(); showDoc(); }; };
+    const onFiles = async e => {
+      const files = [...e.target.files]; e.target.value = ""; if (!files.length) return;
+      if (files.length === 1 && (files[0].type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif)$/i.test(files[0].name))) return onPhoto({ target: { files, value: "" } });
+      const fs = [], notes = [], budget = { pages: 0, max: 12, cut: false }, R = fileReaders({}, m => showDoc(m));
+      try { for (const f of files) await R.readOne(f, fs, budget, notes, false); }
+      catch (er) { showDoc(); return toast(er.message || "Fichier illisible."); }
+      const text = fs.filter(x => x.text).map(x => x.text).join("\n\n").slice(0, 60000), pend = fs.filter(x => x.img).map(x => x.img).slice(0, 8);
+      if (!text.trim() && !pend.length) { showDoc(); return toast(notes[0] || "Je n'ai rien trouvé à lire dans ce fichier."); }
+      conv.doc = { name: files.map(f => f.name).join(", ").slice(0, 120), text, fresh: true }; docImgs = pend; save(); showDoc();
+      if (budget.cut || notes.length) toast(budget.cut ? "Seules les 12 premières pages en image sont envoyées." : notes[0]);
+      if (!q.value.trim()) { q.value = "Voici mon document : "; grow(); q.focus(); }
+    };
+    $("exphoto").onchange = onPhoto; $("exfile").onchange = onFiles;
+    if (conv.doc) showDoc();
+    $("pplus").onclick = () => sheet(`<h1>Ajouter</h1><div class="actgrid"><button class="actbtn" id="pa-cam">${I.cam}<span>Prendre une photo</span></button><button class="actbtn" id="pa-img">${I.up}<span>Joindre un fichier<small>PDF, PowerPoint, Word, photo…</small></span></button><button class="actbtn" id="pa-ctx">${I.book}<span>Lier un cours</span></button></div><span class="label">Demandes rapides</span><div class="pqchips">${EXO_QUICK.map((x, i) => x[1] ? `<button class="chip" data-pq="${i}">${x[0]}</button>` : "").join("")}</div>`, el => {
       el.querySelectorAll("[data-pq]").forEach(b => b.onclick = () => { closeSheet(); q.value = EXO_QUICK[+b.dataset.pq][1]; send(); });
       el.querySelector("#pa-cam").onclick = () => { closeSheet(); $("exphoto").click(); };
       el.querySelector("#pa-img").onclick = () => { closeSheet(); $("exfile").click(); };
@@ -3659,16 +3697,17 @@
     app.querySelectorAll("[data-q]").forEach(b => b.onclick = () => { const x = EXO_QUICK[+b.dataset.q]; if (!x[1]) { $("pplus").click(); return; } q.value = x[1]; send(); });
     $("exsend").onclick = () => send();
     async function send() {
-      const t = q.value.trim(); if (!t && !img) return toast("Écris ton message.");
+      const t = q.value.trim(); if (!t && !img && !(conv.doc && conv.doc.fresh)) return toast("Écris ton message.");
       if (state.offline) return toast("Il faut être connecté à Internet pour l'IA.");
-      const mine = { r: "u", t: t || "Voici ma copie.", img: !!img }; msgs.push(mine); if (!conv.t) conv.t = mine.t.slice(0, 60); save();
+      const docNew = conv.doc && conv.doc.fresh ? conv.doc : null, mine = Object.assign({ r: "u", t: t || "Voici ma copie.", img: !!img }, docNew ? { doc: conv.doc.name } : {}); msgs.push(mine); if (!conv.t) conv.t = mine.t.slice(0, 60); save();
       $("exsend").disabled = true; q.value = ""; grow();
       const pe = th.querySelector(".pempty"); if (pe) pe.remove();
       th.insertAdjacentHTML("beforeend", `<div class="exmsg me">${esc(mine.t).replace(/\n/g, "<br>")}${img ? '<span class="small muted"> · photo envoyée</span>' : ""}</div><div class="exmsg ai wait"><span class="spin" aria-hidden="true"></span> Je réfléchis…</div>`); th.scrollTop = th.scrollHeight;
       const photo = img; img = null; showImg();
       try {
         const subjNames = conv.ctx.s.map(id => (state.subjects.find(x => x.id === id) || {}).name).filter(Boolean);
-        const r = await ai({ action: "exochat", want_title: !conv.named, chapter_ids: ctxChapters(conv.ctx), matieres: subjNames, messages: msgs.slice(-12).map(m => ({ r: m.r, t: m.t })), image: photo }, "studio");
+        const r = await ai({ action: "exochat", want_title: !conv.named, chapter_ids: ctxChapters(conv.ctx), matieres: subjNames, messages: msgs.slice(-12).map(m => ({ r: m.r, t: m.t })), image: photo, doc: conv.doc ? { name: conv.doc.name, text: conv.doc.text, images: docImgs } : undefined }, "studio");
+        if (conv.doc && conv.doc.fresh) { delete conv.doc.fresh; docImgs = []; save(); showDoc(); }
         if (!conv.named && r.title) { conv.t = String(r.title).slice(0, 60); conv.named = true; }
         const qcm = cleanQcm(r.qcm);
         msgs.push(Object.assign({ r: "a", t: String(r.answer || "").slice(0, 8000) }, qcm.length ? { q: qcm } : Array.isArray(r.fields) && r.fields.length ? { f: r.fields.map(x => String(x).slice(0, 120)).slice(0, 6) } : {})); save();
