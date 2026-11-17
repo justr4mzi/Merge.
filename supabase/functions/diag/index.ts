@@ -2,6 +2,7 @@
 // Protégée par le secret `cron` de la table app_secrets.
 //  - { urls: [...] } : récupère des images (ex. pages de test du dépôt GitHub) et les envoie à `studio` (action `schema_test`).
 //  - { action: "bac_test", ... } : transmis à `studio`.
+//  - { action: "schema_recheck", only: n, dry?: true } : revérifie les cartes de schéma déjà créées (comme l'étape « schcheck » de studio).
 //  - { action: "schema_add", chapters: [ids], only: n, dry?: true } : ajoute des cartes « légende cachée » à des chapitres déjà faits.
 //  - { action: "schema_fix", only: 0, dry?: true } (17 nov.) : répare les cartes de schéma faites avant les légendes (image_box à 4 nombres,
 //    rien de caché). Chaque page est relue une fois par Gemini : légendes du schéma + celle(s) qui donnent la réponse de chaque carte.
@@ -133,6 +134,44 @@ async function schemaAdd(ids: string[], only: number, dry: boolean) {
   if (rows.length && !dry) { const ins = await admin.from("cards").insert(rows); if (ins.error) return { path, error: ins.error.message }; }
   return { pages: pages.length, path, chapitre: ch.name, cartes: made };
 }
+// Revérification des cartes de schéma déjà créées (17 nov.), comme l'étape « schcheck » de studio pour les nouveaux imports.
+// { action: "schema_recheck", only: n, dry?: true } : n = numéro de la page (toutes les photos qui ont des cartes de schéma).
+// Pour chaque carte : réponse vraiment cachée ? écrite ailleurs dans le cadre ? cadre qui déborde ? question qui colle ?
+// On ajoute des cases, on resserre le cadre ; une carte impossible à rendre sûre garde seulement son schéma au verso (rien de supprimé).
+const groups = (b: Any[]) => { const r: number[][] = []; for (let i = 0; i < b.length; i++) { if (Array.isArray(b[i])) r.push(b[i].map(Number)); else if (i + 3 < b.length && !b.slice(i, i + 4).some(Array.isArray)) { r.push(b.slice(i, i + 4).map(Number)); i += 3; } } return r.filter((m) => m.length === 4 && m.every(Number.isFinite)); };
+async function schemaRecheck(only: number, dry: boolean) {
+  const { data: rows } = await admin.from("cards").select("id,front,back,image_path,image_box").not("image_box", "is", null).limit(2000);
+  const todo = ((rows ?? []) as Any[]).filter((c) => Array.isArray(c.image_box) && c.image_box.length >= 4 && c.image_path);
+  const byPage = new Map<string, Any[]>();
+  for (const c of todo) { if (!byPage.has(c.image_path)) byPage.set(c.image_path, []); byPage.get(c.image_path)!.push(c); }
+  const pages = [...byPage].sort((a, b) => a[0].localeCompare(b[0]));
+  if (only < 0 || only >= pages.length) return { pages: pages.length, cartes: todo.length };
+  const [path, cs] = pages[only];
+  const raw = Deno.env.get("GCP_SERVICE_ACCOUNT_JSON");
+  if (!raw) return { error: "GCP_SERVICE_ACCOUNT_JSON absent" };
+  const sa = JSON.parse(raw), token = await accessToken(sa), out: Any[] = [];
+  const dl = await admin.storage.from("cours").download(path);
+  if (dl.error || !dl.data) return { path, error: "image introuvable" };
+  const lines = cs.map((c, i) => { const f = c.image_box.slice(0, 4), h = groups(c.image_box.slice(4)); return `${i + 1}. cadre ${f.join(",")} | cases cachées : ${h.length ? h.map((m) => "[" + m.join(",") + "]").join(" ") : "aucune"} | question : ${String(c.front).replace(/\s+/g, " ")} | réponse : ${String(c.back).replace(/\s+/g, " ")}`; }).join("\n");
+  const j = await geminiJson(sa, token, [{ text: "Tu vérifies des cartes de révision faites à partir des schémas d'un cours. Tu es très exigeant : une carte dont la réponse se lit sur l'image est inutile.\nVoici la photo d'une page de cours et des cartes de révision sur ses schémas. Pour chaque carte, l'élève voit côté question seulement le CADRE (ymin,xmin,ymax,xmax de 0 à 1000 sur la page, 0,0 = coin en haut à gauche), avec les CASES CACHÉES recouvertes par un « ? ». Vérifie chaque carte avec soin :\n1) Avec ces cases cachées, la réponse (ou un mot qui la donne) se lit-elle encore QUELQUE PART dans le cadre : une autre légende, la même légende écrite deux fois, un titre, une phrase, une note ? Si oui, donne dans \"cacher\" le cadre SERRÉ de chaque endroit à cacher en plus (même repère).\n2) Si la réponse est une légende du schéma : chaque case cachée recouvre-t-elle bien toute cette légende ? Sinon (ou s'il n'y a aucune case), donne dans \"cacher\" le bon cadre serré de la légende réponse.\n3) Le cadre contient-il du texte qui n'appartient pas au schéma (titre du document, paragraphe, autre schéma) ? Si oui, donne dans \"cadre\" un cadre plus serré qui garde tout le dessin et toutes ses légendes ; sinon \"cadre\" = null.\n4) La question correspond-elle à la légende cachée, et la réponse est-elle juste d'après la page ?\n\"garder\" = false si la carte ne peut pas être rendue sûre côté question (réponse lisible ailleurs qu'on ne peut pas cacher sans détruire le schéma, question qui ne correspond pas, réponse fausse, réponse qui n'est pas écrite sur le schéma). Ne garde jamais une carte douteuse.\nRéponds en JSON : {\"cartes\":[{\"n\":1,\"garder\":true,\"cadre\":null,\"cacher\":[[0,0,0,0]],\"raison\":\"courte\"}]}\n\nCartes :\n" + lines }, { inlineData: { mimeType: "image/jpeg", data: b64(new Uint8Array(await dl.data.arrayBuffer())) } }]);
+  for (const x of (j.cartes ?? []) as Any[]) {
+    const c = cs[(+x.n || 0) - 1]; if (!c) continue;
+    let frame = c.image_box.slice(0, 4).map(Number);
+    const hid0 = groups(c.image_box.slice(4));
+    // Carte qui ne peut pas être rendue sûre : on retire les cases → l'appli ne montre plus le schéma que sur la réponse.
+    if (x.garder === false) { if (!dry) await admin.from("cards").update({ image_box: frame }).eq("id", c.id); out.push({ id: c.id, f: String(c.front).slice(0, 70), garder: false, raison: x.raison }); continue; }
+    const nf = x.cadre ? cleanFrame(x.cadre) : null;
+    const extra = ((x.cacher ?? []) as Any[]).map((b) => cleanLabelBox(b)).filter(Boolean) as number[][];
+    const all = [...hid0, ...extra.filter((b) => !hid0.some((h) => h.join() === b.join()))];
+    if (nf && all.every((b) => b[0] >= nf[0] - 5 && b[1] >= nf[1] - 5 && b[2] <= nf[2] + 5 && b[3] <= nf[3] + 5)) frame = nf;
+    const keep = all.filter((b) => b[0] >= frame[0] - 30 && b[1] >= frame[1] - 30 && b[2] <= frame[2] + 30 && b[3] <= frame[3] + 30);
+    const box = [...frame, ...keep];
+    if (!dry && JSON.stringify(box) !== JSON.stringify(c.image_box)) await admin.from("cards").update({ image_box: box }).eq("id", c.id);
+    out.push({ id: c.id, f: String(c.front).slice(0, 70), cadre: !!nf, ajout: extra.length, cases: keep.length, raison: x.raison });
+  }
+  return { pages: pages.length, path, dry, out };
+}
+
 // Cadre d'un schéma (mêmes règles que studio/schemas.mjs : assez grand, marge de 2,5 %).
 function cleanFrame(raw: unknown) {
   const n = (Array.isArray(raw) ? raw : String(raw ?? "").split(/[,;\s]+/)).filter((x) => x !== "").map(Number);
@@ -148,6 +187,7 @@ Deno.serve(async (req) => {
   const { data } = await admin.from("app_secrets").select("value").eq("name", "cron").maybeSingle();
   if (!data?.value || req.headers.get("x-cron-secret") !== data.value) return new Response("interdit", { status: 401 });
   const body = await req.json();
+  if (body.action === "schema_recheck") { const r = await schemaRecheck(Number.isInteger(body.only) ? body.only : -1, !!body.dry); console.log("schema_recheck " + JSON.stringify(r)); return J(r); }
   if (body.action === "schema_add") { const r = await schemaAdd((body.chapters ?? []).map(String), Number.isInteger(body.only) ? body.only : -1, !!body.dry); console.log("schema_add " + JSON.stringify(r)); return J(r); }
   if (body.action === "schema_fix") { const r = await schemaFix(!!body.dry, Number.isInteger(body.only) ? body.only : -1); console.log("schema_fix " + JSON.stringify(r)); return J(r); }
   // Recherche d'un vrai sujet d'examen : { action: "bac_test", classe, matiere, annee }.

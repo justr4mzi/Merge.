@@ -1753,3 +1753,12 @@ details.drop#tools[open],details.drop#cardsdrop[open]{padding-bottom:14px}
 .chline .small{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
 @media (max-width:379px){.hidexs{display:none}}
 #addG{min-width:44px;justify-content:center}
+
+/* Favoris (17 nov.) : un mode mis en favori quitte « Plus d'outils » et rejoint les raccourcis, avec son étoile pour l'en retirer. */
+.shortw{position:relative;display:flex}.shortw>.short{flex:1;min-width:0;padding-right:48px}
+.shortw.wide{grid-column:1/-1}
+.shortw .sfav{position:absolute;top:50%;right:4px;transform:translateY(-50%)}
+.short.justfav{outline:2px solid var(--accent);outline-offset:2px;transition:outline-color 1.2s}
+/* « Ou réviser toute la matière » : un peu d'air sous le bouton Réviser. */
+.todaycard .revall{margin-top:10px}
+@media (min-width:900px){.shorts .shortw.wide{grid-column:auto}}

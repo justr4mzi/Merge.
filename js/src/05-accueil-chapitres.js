@@ -286,7 +286,10 @@
       if (k === "resume" && hasSum) sub = "L'essentiel";
       if (k === "quiz") sub = "QCM"; if (k === "interro") sub = "Tu écris, il corrige"; if (k === "prof") sub = "Une question, un exercice, un quiz… ce que tu veux";
       if (k === "controle") { icon = m >= 100 ? I.check : I.lock; sub = m >= 100 ? "Débloqué" : "À 100 %"; }
-      return `<a class="short${k === "prof" && odd ? " wide" : ""}" href="${href}"><span class="mico">${icon}</span><span class="mtxt"><b>${M.n}</b><span class="small">${sub}</span></span></a>`;
+      const fv = !MODE_MAIN.includes(k) && k !== "schema" && favs().includes(k);
+      const a = `<a class="short${k === "prof" && odd ? " wide" : ""}" href="${href}" data-k="${k}"><span class="mico">${icon}</span><span class="mtxt"><b>${M.n}</b><span class="small">${sub}</span></span></a>`;
+      // Favori ajouté depuis « Plus d'outils » : il vit ici, avec une étoile pour le renvoyer dans « Plus d'outils ».
+      return fv ? `<div class="shortw${k === "prof" && odd ? " wide" : ""}">${a}<button class="mbtn star sfav" data-fav="${k}" aria-pressed="true" aria-label="Retirer des favoris : ${M.n}">${I.star}</button></div>` : a;
     };
     const revMin = Math.max(1, Math.round((due || Math.min(20, meta.length)) * 0.5));
     // Raccourcis : sur téléphone 2 colonnes (« Demander au prof » en large s'il est seul sur sa ligne) ; sur PC, une grille
@@ -297,10 +300,13 @@
       + (hard ? `<a class="mvar solo" href="#difficiles-${id}">${I.bolt}Seulement les difficiles · ${hard}</a>` : "")
       + shortsHtml()
       + `<a class="mvar solo" href="#blanc-${id}">${I.clock}Interro chronométrée, comme le jour J</a>`
-      + `<details class="moremodes"${safeGet("merge.moremodes") === "1" ? " open" : ""}><summary><span class="mico big">${I.grid}</span><span class="grow mtxt"><b>Plus d'outils</b><span class="small">${MODE_CATS.reduce((a, c) => a + c[1].length, 0)} façons de réviser : fiches, jeux, oral, examen blanc…</span></span></summary><div class="stack modesbox">${MODE_CATS.map(c => sect(c[0], c[1])).join("")}</div></details>`;
+      + `<details class="moremodes"${safeGet("merge.moremodes") === "1" ? " open" : ""}><summary><span class="mico big">${I.grid}</span><span class="grow mtxt"><b>Plus d'outils</b><span class="small">${MODE_CATS.reduce((a, c) => a + c[1].filter(k => !favs().includes(k)).length, 0)} façons de réviser : fiches, jeux, oral, examen blanc…</span></span></summary><div class="stack modesbox">${MODE_CATS.map(c => [c[0], c[1].filter(k => !favs().includes(k))]).filter(c => c[1].length).map(c => sect(c[0], c[1])).join("")}</div></details>`;
     function wireModes() {
       const mm = app.querySelector(".moremodes"); if (mm) mm.ontoggle = () => safeSet("merge.moremodes", mm.open ? "1" : "0");
-      app.querySelectorAll("[data-fav]").forEach(b => b.onclick = () => { const k = b.dataset.fav, f = favs(), i = f.indexOf(k); if (i >= 0) f.splice(i, 1); else f.unshift(k); safeSet("merge.fav", JSON.stringify(f.slice(0, 12))); $("modesbox").innerHTML = modesHtml(); wireModes(); toast(i >= 0 ? "Retiré des favoris." : MODES[k].n + " ajouté à tes favoris."); });
+      app.querySelectorAll("[data-fav]").forEach(b => b.onclick = () => { const k = b.dataset.fav, f = favs(), i = f.indexOf(k); if (i >= 0) f.splice(i, 1); else f.unshift(k); safeSet("merge.fav", JSON.stringify(f.slice(0, 12))); $("modesbox").innerHTML = modesHtml(); wireModes();
+        // Le favori monte dans les raccourcis en haut (et quitte « Plus d'outils ») : on le montre.
+        if (i < 0) { const t = app.querySelector(`.short[data-k="${k}"]`); if (t) { t.scrollIntoView({ behavior: "smooth", block: "center" }); t.classList.add("justfav"); setTimeout(() => t.classList.remove("justfav"), 1600); } }
+        toast(i >= 0 ? MODES[k].n + " est retourné dans « Plus d'outils »." : MODES[k].n + " est maintenant dans tes raccourcis, en haut."); });
       app.querySelectorAll("[data-info]").forEach(b => b.onclick = () => { const k = b.dataset.info, M = MODES[k], t = b.parentElement.querySelector(".mmain");
         sheet(`<div class="row"><span class="mico big">${I[M.i]}</span><h1>${M.n}</h1></div><p>${M.a}</p><p class="note">${IA_NOTE[M.ia]} Tout vient uniquement de ton cours.</p><div class="row"><a class="btn grow" href="${t.getAttribute("href")}" data-close>Commencer</a><button class="btn ghost" data-close>Fermer</button></div>`); });
     }

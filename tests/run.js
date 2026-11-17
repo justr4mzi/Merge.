@@ -274,6 +274,10 @@ async function v8(browser) {
   await page.keyboard.press("Escape"); ok(await page.locator("#sheet").count() === 0, "v8 chapitre : Échap ferme l'explication");
   await page.click('[data-fav="boss"]'); await page.waitForTimeout(150);
   ok(await page.locator('.shorts a[href="#boss-c1"]').count() === 1, "v8 chapitre : un favori rejoint les raccourcis");
+  ok(await page.locator('.moremodes [data-fav="boss"]').count() === 0, "v8 chapitre : le favori quitte « Plus d'outils »");
+  await page.click('.shorts [data-fav="boss"]'); await page.waitForTimeout(150);
+  ok(await page.locator('.shorts a[href="#boss-c1"]').count() === 0 && await page.locator('.moremodes [data-fav="boss"]').count() === 1, "v8 chapitre : l'étoile du raccourci le renvoie dans « Plus d'outils »");
+  await page.click('[data-fav="boss"]'); await page.waitForTimeout(150);
   let o = await overflow(page); ok(o.sw <= o.iw, "v8 chapitre : pas de débordement", JSON.stringify(o));
   let sm = await small(page); ok(!sm.length, "v8 chapitre : boutons de 44 px minimum", sm.join(" | "));
   await go(page, "#libre-c1", 300); await page.click('[data-idea="1"]'); await page.click("#lsend"); await page.waitForTimeout(400);
