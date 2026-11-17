@@ -35,16 +35,16 @@ Fonctions principales : matières → chapitres → import de cours (PDF, PowerP
    - Tout passe en environ 13 min (environ 1 518 vérifications).
    - Ne PAS l'entourer de `timeout` : ça tue le navigateur et donne un faux échec « Target closed ».
    - Sous-ensembles : `ONLY=suite1,suite2 node tests/run.js`.
-   - Captures d'écran à regarder : `ONLY=apercu ROUTES=accueil,journee,reglages SHOTS=/tmp/x node tests/run.js` (sort du 393 px et du 1440 px). Options : `EDT=1` (emploi du temps de test), `FAKE=...`, `DBG='expression JS'` (affiche le résultat).
-3. Incrémenter le nom du cache dans `sw.js` (`merge-shell-v108` actuellement → v109…), sinon les téléphones gardent l'ancienne version.
-4. Ajouter une ligne dans `DECISIONS.md` (en français, ce qui change et pourquoi) ; mettre à jour `README.md` si une fonction visible change.
+   - Captures d'écran à regarder : `ONLY=apercu ROUTES=accueil,journee,reglages SHOTS=/tmp/x node tests/run.js` (sort du 393 px, du 1440 px et du 1920 px). Options : `EDT=1` (emploi du temps de test), `FAKE=...`, `DBG='expression JS'` (affiche le résultat).
+3. Incrémenter le nom du cache dans `sw.js` (`merge-shell-v109` actuellement → v110…), sinon les téléphones gardent l'ancienne version.
+4. Ajouter une ligne dans `DECISIONS.md` (en français, ce qui change et pourquoi) ; mettre à jour `README.md` et `HANDOFF.md` si une fonction visible change.
 5. Push. Le message « repository moved » est sans importance.
 
 **Design**
 - Thème sombre, violet `#4b39c8` / `#9483ff`, police Nunito.
 - Boutons d'au moins 44 px (un test le vérifie).
 - Pas d'emoji dans les boutons, pas de néon ni de glow.
-- Toujours vérifier téléphone **393×852** ET PC **1440×900**. Sur PC, il y a un menu latéral à gauche ; Ramzi se plaint quand un écran PC laisse la moitié de l'écran vide.
+- Toujours vérifier téléphone **393×852** (iPhone 2556×1179 à l'échelle `@3x`), PC **1440×900** ET **1920×1080**. Sur PC, il y a un menu latéral à gauche ; Ramzi se plaint quand un écran PC laisse la moitié de l'écran vide.
 - Pas de `backdrop-filter` (flou) sur de grandes surfaces : ça faisait laguer les menus au survol.
 
 **Base de données / Supabase**
@@ -139,23 +139,18 @@ Il veut des tests à chaque fois (« je t'ai dit de faire des tests »).
 - Dans `diag`, garder le mode `dry: true`, qui affiche les changements dans les logs sans écrire. Lancer d'abord en `dry` sur 3 pages, regarder, puis en vrai.
 - Page de test connue : `1794679952176-5.jpg` (arbre / sève). Les cadres corrigés à la main sont `[510,42,735,478]` (arbre) et `[279,551,493,932]` (schéma fonctionnel). Le nouveau code ne doit pas les abîmer.
 
-## 8. TÂCHE N°2 : écran Prof sur téléphone (captures de Ramzi, 17 nov.)
+## 8. TÂCHE N°2 : écran Prof sur téléphone (FAIT le 17 nov.)
 
 Fichiers : `js/src/09c-exos.js` (fonctions `screenExos` et `recentChips`, constante `EXO_QUICK`) et `css/app.css`.
 
-1. **Écran vide trop chargé sur téléphone.** On ne voit plus le haut : trop de texte et trop de suggestions.
-   - Enlever le long paragraphe « Pour que je m'appuie sur ton cours… » et la phrase du bas « Sans cours lié… 1 message = 1 appel IA ».
-   - Garder l'icône, le titre et une phrase courte.
-   - **Enlever les 6 demandes rapides de l'écran vide** : elles restent dans le menu « + » (rubrique « Demandes rapides »).
-   - Garder les pastilles des chapitres récents. Elles sont trop grosses : en faire des pastilles plus petites, sur une ligne si possible, avec le nom coupé par « … ».
-   - **Première visite seulement** : afficher une petite bulle ou fenêtre « Lie un chapitre pour que le prof s'appuie sur ton cours » avec un bouton « Lier un cours ». Elle ne revient plus ensuite (`localStorage` `merge.profTip`).
-2. **Menu « + » (fenêtre « Ajouter »).**
-   - Le sous-titre de « Joindre un fichier » (PDF, PowerPoint, Word, photo…) passe sur 3 lignes et décale tout. Mettre le sous-titre sur une seule ligne, coupée par « … », ou enlever le sous-titre sur téléphone.
-   - « Lier un cours » est seul sur sa ligne : soit le passer en pleine largeur, soit mettre les 3 boutons en une colonne.
-   - Les demandes rapides du menu sont sur 2 lignes chacune : texte plus petit ou une colonne.
-3. Vérifier en 393×852 et en 1440×900 :
-   `ONLY=apercu ROUTES=exos SHOTS=/tmp/x node tests/run.js`.
-   Puis lancer `ONLY=profPc,profFichier,ongletRetour node tests/run.js` et la suite complète. Ensuite bump de `sw.js`, `DECISIONS.md`, commit, push.
+1. **Écran vide allégé sur téléphone et PC.**
+   - Long paragraphe du haut et phrase du bas retirés ; restent l'icône, le titre et une phrase courte.
+   - Les 6 demandes rapides sont retirées de l'écran vide et restent dans le menu « + » (rubrique « Demandes rapides »).
+   - Pastilles des chapitres récents plus petites, sur une seule ligne, avec le nom coupé par « … » (`.rct`).
+   - Première visite seulement (`localStorage` `merge.profTip`, synchronisé) : bulle « Lie un chapitre pour que le prof s'appuie sur ton cours. » avec le bouton « Lier un cours ».
+2. **Menu « + » (fenêtre « Ajouter ») rangé.**
+   - Les 3 boutons (`Prendre une photo`, `Joindre un fichier`, `Lier un cours`) sont en une colonne (`.actgrid.pact`), avec le sous-titre sur une seule ligne coupée par « … ».
+   - Les demandes rapides du menu tiennent sur une seule ligne chacune.
 
 ## 9. Tout le reste à savoir (détails)
 

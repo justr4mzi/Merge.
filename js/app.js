@@ -208,7 +208,7 @@
   function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   // Ces clés sont gardées sur l'appareil ET dans le compte (table user_kv) : on retrouve la même chose sur téléphone et sur PC.
   // Restent sur l'appareil seulement : kvts (horodatages), file (révisions en attente d'envoi), cache.* et gen.* (copies de la base), erreurs.* (copie de secours de la table mistakes). Le thème est dans le profil.
-  const SYNC = /^merge\.(paris|fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|controles|boostnext|boostj|journee|exo\..+|prof|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
+  const SYNC = /^merge\.(paris|fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|profTip|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|controles|boostnext|boostj|journee|exo\..+|prof|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
   let kvTs = {}, kvQueue = {}, kvTimer = null, kvOff = false, kvAt = 0;
   try { kvTs = JSON.parse(localStorage.getItem("merge.kvts") || "{}") || {}; } catch (e) { kvTs = {}; }
   const kvSaveTs = () => { try { localStorage.setItem("merge.kvts", JSON.stringify(kvTs)); } catch (e) { /* rien */ } };
@@ -3639,7 +3639,7 @@
   function recentChips() {
     const r = state.chapters.filter(c => cardsOf(c.id).length).slice(-3).reverse();
     if (!r.length) return "";
-    return `<div class="precent"><span class="small muted">Travailler sur un de tes chapitres :</span><div class="chips">${r.map(c => { const s = state.subjects.find(x => x.id === c.subject_id) || {}; return `<button class="chip pchip" data-rch="${c.id}" style="--c:${esc(s.color || "#9483ff")}"><span class="dot"></span>${esc(c.name)}</button>`; }).join("")}</div></div>`;
+    return `<div class="precent"><span class="small muted">Tes derniers chapitres :</span><div class="chips">${r.map(c => { const s = state.subjects.find(x => x.id === c.subject_id) || {}; return `<button class="chip pchip" data-rch="${c.id}" style="--c:${esc(s.color || "#9483ff")}"><span class="dot"></span><span class="rct">${esc(c.name)}</span></button>`; }).join("")}</div></div>`;
   }
   function screenExos(arg) {
     drawTabs("exos");
@@ -3651,11 +3651,13 @@
       c.ctx.ch.push(arg); c.at = Date.now(); profSave(p);
     }
     const conv = curConv(p), msgs = conv.m, linked = conv.ctx.ch.length + conv.ctx.s.length;
+    const showTip = !linked && !msgs.length && !safeGet("merge.profTip");
+    if (showTip) safeSet("merge.profTip", "1");
     app.classList.add("profmode");
     // Sur grand écran (PC) : historique toujours visible à gauche, conversation sur tout le reste.
     app.innerHTML = `<aside class="pside" aria-label="Mes discussions"><button class="btn" id="psnew">${I.plus}Nouvelle discussion</button><div class="pdlist">${histRows(p)}</div></aside><div class="pmain"><div class="row profhead"><button class="iconbtn flat" id="phist" aria-label="Mes discussions" title="Mes discussions">${I.menu}</button><h1 class="grow ptitle">${esc(conv.t || "Prof")}</h1><button class="iconbtn flat" id="pnew" aria-label="Nouvelle discussion" title="Nouvelle discussion">${I.edit}</button></div>
       <div class="pctx">${ctxChips(conv.ctx)}<button class="pchip add" id="pctx">${I.book}${linked ? "Modifier" : "Lier un cours"}</button></div>
-      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") + (m.doc ? `<span class="small muted"> · ${esc(m.doc)}</span>` : "") : md(m.t) + qcmHtml(m, i) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.prof}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur les cours liés en haut. " : "Pour que je m'appuie sur ton cours, touche « Lier un cours » : un ou plusieurs chapitres, ou des matières entières. "}Demande un exercice, une explication, ou joins ta copie, un PDF, un PowerPoint ou une photo avec le bouton +.</p>${linked ? "" : recentChips()}<div class="chips exquick">${EXO_QUICK.map((q, i) => `<button class="chip" data-q="${i}">${q[0]}</button>`).join("")}</div><p class="small muted">${linked ? "Le prof s'appuie sur les cours liés" : "Sans cours lié, le prof répond avec ses connaissances de lycée"} ; il peut se tromper sur un calcul. 1 message = 1 appel IA.</p></div>`}</div>
+      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") + (m.doc ? `<span class="small muted"> · ${esc(m.doc)}</span>` : "") : md(m.t) + qcmHtml(m, i) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.prof}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur tes cours liés." : "Un exercice, une explication ou un fichier joint avec +."}</p>${showTip ? `<div class="ptip" id="ptip"><span class="small grow">Lie un chapitre pour que le prof s'appuie sur ton cours.</span><button class="btn sm" id="ptipgo">Lier un cours</button><button class="iconbtn flat" id="ptipx" aria-label="Fermer">${I.x}</button></div>` : ""}${linked ? "" : recentChips()}</div>`}</div>
       <div class="pcomp"><div id="eximg" class="pimg" hidden></div><div class="pbar"><button class="iconbtn flat" id="pplus" aria-label="Ajouter une photo, un cours ou une demande rapide">${I.plus}</button><textarea id="exq" rows="1" maxlength="2000" placeholder="Écris ton message…"></textarea>${canDictate() ? `<button class="iconbtn flat" id="exmic" aria-label="Dicter">${I.mic}</button>` : ""}<button class="iconbtn psend" id="exsend" aria-label="Envoyer">${I.send}</button></div>
       <input id="exphoto" type="file" accept="image/*" capture="environment" hidden><input id="exfile" type="file" accept="${FILE_ACCEPT}" multiple hidden></div></div>`;
     const save = () => { conv.at = Date.now(); profSave(p); };
@@ -3663,6 +3665,8 @@
     app.querySelectorAll("[data-unctx]").forEach(b => b.onclick = () => { const [k, id] = b.dataset.unctx.split(":"); conv.ctx[k === "s" ? "s" : "ch"] = conv.ctx[k === "s" ? "s" : "ch"].filter(x => x !== id); save(); screenExos(); });
     app.querySelectorAll("[data-rch]").forEach(b => b.onclick = () => { if (!conv.ctx.ch.includes(b.dataset.rch)) conv.ctx.ch.push(b.dataset.rch); save(); screenExos(); });
     $("pctx").onclick = () => ctxSheet(conv, () => { save(); screenExos(); });
+    if ($("ptipgo")) $("ptipgo").onclick = () => { if ($("ptip")) $("ptip").remove(); $("pctx").click(); };
+    if ($("ptipx")) $("ptipx").onclick = () => { if ($("ptip")) $("ptip").remove(); };
     $("pnew").onclick = () => { if (!msgs.length && !linked) return toast("Tu es déjà dans une nouvelle discussion."); const c = newConv(); p.convs.unshift(c); p.cur = c.id; profSave(p); screenExos(); };
     $("phist").onclick = () => histDrawer(p);
     $("psnew").onclick = () => $("pnew").click();
@@ -3718,7 +3722,7 @@
     };
     $("exphoto").onchange = onPhoto; $("exfile").onchange = onFiles;
     if (conv.doc) showDoc();
-    $("pplus").onclick = () => sheet(`<h1>Ajouter</h1><div class="actgrid"><button class="actbtn" id="pa-cam">${I.cam}<span>Prendre une photo</span></button><button class="actbtn" id="pa-img">${I.up}<span>Joindre un fichier<small>PDF, PowerPoint, Word, photo…</small></span></button><button class="actbtn" id="pa-ctx">${I.book}<span>Lier un cours</span></button></div><span class="label">Demandes rapides</span><div class="pqchips">${EXO_QUICK.map((x, i) => x[1] ? `<button class="chip" data-pq="${i}">${x[0]}</button>` : "").join("")}</div>`, el => {
+    $("pplus").onclick = () => sheet(`<h1>Ajouter</h1><div class="actgrid pact"><button class="actbtn" id="pa-cam">${I.cam}<span>Prendre une photo</span></button><button class="actbtn" id="pa-img">${I.up}<span>Joindre un fichier<small>PDF, PowerPoint, Word, photo…</small></span></button><button class="actbtn" id="pa-ctx">${I.book}<span>Lier un cours</span></button></div><span class="label">Demandes rapides</span><div class="pqchips">${EXO_QUICK.map((x, i) => x[1] ? `<button class="chip" data-pq="${i}">${x[0]}</button>` : "").join("")}</div>`, el => {
       el.querySelectorAll("[data-pq]").forEach(b => b.onclick = () => { closeSheet(); q.value = EXO_QUICK[+b.dataset.pq][1]; send(); });
       el.querySelector("#pa-cam").onclick = () => { closeSheet(); $("exphoto").click(); };
       el.querySelector("#pa-img").onclick = () => { closeSheet(); $("exfile").click(); };

@@ -560,12 +560,13 @@ async function petitEcran(browser) {
 
 // Captures pour relecture visuelle (pas lancée par défaut) : ONLY=apercu SHOTS=/tmp/shots node tests/run.js
 async function apercu(browser) {
-  for (const [w, h] of [[393, 852], [1440, 900]]) {
+  for (const [w, h] of [[393, 852], [1440, 900], [1920, 1080]]) {
     const page = await open(browser, { w, h, theme: "dark", extra: process.env.FAKE ? Object.fromEntries(process.env.FAKE.split(",").map(x => [x, "1"])) : undefined });
     if (process.env.EDT) { await page.evaluate(() => { const d = (new Date().getDay() + 6) % 7; localStorage.setItem("merge.edt", JSON.stringify({ slots: [["07:55", "09:50", "SVT"], ["10:10", "11:10", "Physique-chimie"], ["13:10", "15:05", "SVT"], ["15:25", "17:25", "Physique-chimie"]].map(([a, b, s]) => ({ day: d, start: a, end: b, subject: s, room: "B12", week: "" })), ab: false })); }); await page.evaluate(() => location.reload()); await page.waitForSelector("#app > *"); }
     for (const r of (process.env.ROUTES || "accueil,matieres,matiere-s1,chapitre-c1,reglages,progres,exos-c1,flash-c1,associer-c1,ecouter-c1,bus-c1,interro-c1,blanc-c1,cartes-c1,journee").split(",")) {
       await go(page, "#" + r, 500); const later = page.locator("button", { hasText: "Plus tard" }); if (await later.count()) { await later.first().click(); await page.waitForTimeout(300); }
       await page.screenshot({ path: path.join(SHOTS, w + "-" + r + ".png"), fullPage: r !== "journee" });
+      if (r === "exos" && await page.locator("#pplus").count()) { await page.click("#pplus"); await page.waitForTimeout(250); await page.screenshot({ path: path.join(SHOTS, w + "-exos-plus.png") }); await page.keyboard.press("Escape"); await page.waitForTimeout(150); }
       if (process.env.DBG) console.log(w, r, JSON.stringify(await page.evaluate(process.env.DBG)));
     }
     ok(!page.errors.length, "apercu " + w + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
@@ -1612,13 +1613,19 @@ async function refonte(browser) {
       ok(await page.locator('#sheet a[href="#stats-c1"]').count() === 1, tag + " : statistiques par chapitre dans Progrès");
       await page.keyboard.press("Escape");
     }
-    // Réglages : liste, une section à la fois.
+    // Réglages : liste et une section à la fois sur téléphone ; 2 colonnes (liste + section à droite) sur PC.
     await go(page, "#reglages", 300);
-    ok(await page.locator(".setmenu .setrow").count() >= 7 && await page.locator("[data-sec-card]:visible").count() === 0, tag + " : Réglages en liste");
-    await page.click('[data-open="apparence"]'); await page.waitForTimeout(150);
-    ok(await page.locator('[data-sec-card="apparence"]').isVisible() && await page.locator(".setmenu").isHidden() && await page.locator("#setback").isVisible(), tag + " : une section s'ouvre seule");
-    await page.click("#setback"); await page.waitForTimeout(150);
-    ok(await page.locator(".setmenu").isVisible(), tag + " : retour à la liste");
+    if (w < 1100) {
+      ok(await page.locator(".setmenu .setrow").count() >= 7 && await page.locator("[data-sec-card]:visible").count() === 0, tag + " : Réglages en liste");
+      await page.click('[data-open="apparence"]'); await page.waitForTimeout(150);
+      ok(await page.locator('[data-sec-card="apparence"]').isVisible() && await page.locator(".setmenu").isHidden() && await page.locator("#setback").isVisible(), tag + " : une section s'ouvre seule");
+      await page.click("#setback"); await page.waitForTimeout(150);
+      ok(await page.locator(".setmenu").isVisible(), tag + " : retour à la liste");
+    } else {
+      ok(await page.locator(".setmenu .setrow").count() >= 7 && await page.locator('[data-sec-card="profil"]').isVisible() && await page.locator("[data-sec-card]:visible").count() === 1, tag + " : Réglages en 2 colonnes (liste + Profil par défaut)");
+      await page.click('[data-open="apparence"]'); await page.waitForTimeout(150);
+      ok(await page.locator('[data-sec-card="apparence"]').isVisible() && await page.locator(".setmenu").isVisible() && await page.locator("[data-sec-card]:visible").count() === 1, tag + " : la section choisie s'affiche à droite de la liste");
+    }
     o = await overflow(page); ok(o.sw <= o.iw, tag + " : Réglages sans débordement", JSON.stringify(o));
     await page.screenshot({ path: path.join(SHOTS, "refonte-reglages-" + w + ".png") });
     ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
@@ -1635,18 +1642,19 @@ async function exos(browser) {
     const page = await open(browser, { w, h, theme: "dark" }), tag = "prof " + w;
     await go(page, "#accueil", 300);
     ok((await page.locator('#tabs a[href="#exos"]').innerText()).includes("Prof"), tag + " : onglet Prof");
-    // Chat libre : pas besoin de choisir un chapitre.
+    // Chat libre : pas besoin de choisir un chapitre. Bulle d'aide seulement à la 1re visite, pas de 6 suggestions sur l'écran vide.
     await go(page, "#exos", 300);
     ok(await page.locator(".pempty").count() === 1 && await page.locator("#pplus").count() === 1 && await page.locator("#exsend").count() === 1 && (await txt(page)).includes("Lier un cours"), tag + " : chat libre ouvert directement, + et envoi");
+    ok(await page.locator("#ptip").count() === 1 && await page.evaluate(() => localStorage.getItem("merge.profTip") === "1") && await page.locator(".pempty [data-q]").count() === 0 && await page.locator(".precent [data-rch] .rct").count() >= 1, tag + " : bulle 1re visite, 6 suggestions retirées de l'écran vide, pastille chapitre compacte");
     await page.fill("#exq", "Comment bien réviser ?"); await page.click("#exsend"); await page.waitForTimeout(400);
     ok(await page.evaluate(() => window.__fake.exo.chapter_ids.length === 0 && window.__fake.exo.messages.length === 1) && await page.locator(".exmsg.ai").count() === 1, tag + " : message sans cours lié");
     ok(await page.evaluate(() => window.__fake.exo.want_title === true) && (await page.locator(".ptitle").innerText()) === "Vitesse moyenne", tag + " : discussion nommée automatiquement");
-    // Nouvelle discussion, puis lier un chapitre.
-    await page.click("#pnew"); await page.waitForTimeout(150); ok(await page.locator(".exmsg").count() === 0, tag + " : nouvelle discussion");
+    // Nouvelle discussion, puis lier un chapitre (la bulle d'aide ne revient plus).
+    await page.click("#pnew"); await page.waitForTimeout(150); ok(await page.locator(".exmsg").count() === 0 && await page.locator("#ptip").count() === 0, tag + " : nouvelle discussion, la bulle ne revient plus");
     await page.click("#pctx"); await page.waitForTimeout(150); ok(await page.locator("#sheet [data-cc]").count() >= 1 && await page.locator("#sheet [data-cs]").count() >= 1, tag + " : choix des chapitres et matières");
     await page.click('#sheet [data-cc="c1"]'); await page.click("#pctxok"); await page.waitForTimeout(150);
     ok(await page.locator('[data-unctx="c:c1"]').count() === 1, tag + " : chapitre lié affiché");
-    await page.click('[data-q="0"]'); await page.waitForTimeout(400);
+    await page.click("#pplus"); await page.waitForTimeout(150); await page.click('[data-pq="0"]'); await page.waitForTimeout(400);
     ok(await page.locator(".exmsg.me").count() === 1 && await page.locator(".exmsg.ai .katex").count() >= 1, tag + " : exercice demandé, réponse avec formule");
     ok(await page.evaluate(() => JSON.stringify(window.__fake.exo.chapter_ids) === '["c1"]' && window.__fake.exo.messages.length === 1 && window.__mergeSync.synced("merge.prof")), tag + " : envoyé avec le chapitre lié, discussion gardée");
     // Réponse dans la bulle de l'exercice.
