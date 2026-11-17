@@ -3639,7 +3639,7 @@
   function recentChips() {
     const r = state.chapters.filter(c => cardsOf(c.id).length).slice(-3).reverse();
     if (!r.length) return "";
-    return `<div class="precent"><span class="small muted">Tes derniers chapitres :</span><div class="chips">${r.map(c => { const s = state.subjects.find(x => x.id === c.subject_id) || {}; return `<button class="chip pchip" data-rch="${c.id}" style="--c:${esc(s.color || "#9483ff")}"><span class="dot"></span><span class="rct">${esc(c.name)}</span></button>`; }).join("")}</div></div>`;
+    return `<div class="precent"><span class="small muted">Tes derniers chapitres :</span><div class="chips">${r.map(c => { const s = state.subjects.find(x => x.id === c.subject_id) || {}; return `<button class="chip pchip" data-rch="${c.id}" style="--c:${esc(s.color || "#9483ff")}"><span class="rpill"><span class="dot"></span><span class="rct">${esc(c.name)}</span></span></button>`; }).join("")}</div></div>`;
   }
   function screenExos(arg) {
     drawTabs("exos");

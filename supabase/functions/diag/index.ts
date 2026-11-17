@@ -71,6 +71,10 @@ async function geminiJson(sa: Any, token: string, parts: Any[]) {
   let res = await send();
   let data = await res.json();
   if (res.status === 400 && /thinking/i.test(JSON.stringify(data))) { delete body.generationConfig.thinkingConfig; res = await send(); data = await res.json(); }
+  for (let r = 0; !res.ok && (res.status === 403 || res.status === 429 || res.status >= 500) && r < 2; r++) {
+    await new Promise((ok) => setTimeout(ok, 1500));
+    res = await send(); data = await res.json();
+  }
   if (!res.ok) throw new Error("vertex: " + JSON.stringify(data).slice(0, 300));
   const t = (data.candidates?.[0]?.content?.parts ?? []).map((p: Any) => p.text ?? "").join("").trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
   return JSON.parse(t);

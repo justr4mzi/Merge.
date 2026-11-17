@@ -1834,10 +1834,11 @@ details.drop#tools[open],details.drop#cardsdrop[open]{padding-bottom:14px}
 .ptip .btn{flex:none;white-space:nowrap}
 .ptip .iconbtn{flex:none;width:38px;min-width:38px}
 @media (max-width:359px){.ptip{flex-wrap:wrap}}
-.pempty .precent{margin-top:6px;gap:6px}
-.pempty .precent .chips{display:flex;flex-wrap:nowrap;justify-content:center;gap:6px;width:100%;max-width:100%;overflow:hidden}
-.pempty .precent .pchip{flex:0 1 auto;min-width:0;max-width:min(210px,46vw);min-height:44px;padding:0 11px;gap:6px;font-size:.8rem;overflow:hidden}
-.pempty .precent .pchip .dot{flex:none;width:7px;height:7px}
+.pempty .precent{margin-top:6px;gap:2px}
+.pempty .precent .chips{display:flex;flex-wrap:wrap;justify-content:center;column-gap:6px;row-gap:0;width:100%;max-width:100%}
+.pempty .precent .pchip{flex:0 1 auto;min-width:0;max-width:100%;min-height:44px;padding:6px 0;background:transparent;border:0;overflow:hidden}
+.pempty .precent .rpill{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:999px;background:color-mix(in srgb,var(--c,#9483ff) 16%,transparent);border:1px solid color-mix(in srgb,var(--c,#9483ff) 40%,transparent);font-size:.73rem;font-weight:700;max-width:100%;overflow:hidden;box-sizing:border-box}
+.pempty .precent .pchip .dot{flex:none;width:6px;height:6px}
 .pempty .precent .pchip .rct{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .actgrid.pact{grid-template-columns:1fr}
 .actgrid.pact .actbtn>span{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
