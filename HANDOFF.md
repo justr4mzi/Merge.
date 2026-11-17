@@ -156,3 +156,59 @@ Fichiers : `js/src/09c-exos.js` (fonctions `screenExos` et `recentChips`, consta
 3. Vérifier en 393×852 et en 1440×900 :
    `ONLY=apercu ROUTES=exos SHOTS=/tmp/x node tests/run.js`.
    Puis lancer `ONLY=profPc,profFichier,ongletRetour node tests/run.js` et la suite complète. Ensuite bump de `sw.js`, `DECISIONS.md`, commit, push.
+
+## 9. Tout le reste à savoir (détails)
+
+### Comment travailler avec Ramzi
+- Il écrit vite, souvent en dictée vocale, avec des fautes : reformule sa demande dans ta tête, et ne lui pose une question que si c'est vraiment ambigu.
+- Il veut du **vérifié**, pas des suppositions. Si tu n'as pas testé, dis-le.
+- Il envoie des captures téléphone (iPhone, environ 393 px de large) et PC (Windows, appli installée, 1920×1080 avec mise à l'échelle). Corrige toujours **les deux** formats, pas seulement celui de la capture.
+- Il n'aime pas le terminal : ne lui demande jamais de lancer une commande. Une seule exception, le SQL qu'il colle lui-même dans l'éditeur Supabase.
+- Fin de chaque tour : un résumé court en français simple (ce qui a changé, ce qu'il doit tester), puis « ferme et rouvre l'appli » (à cause du cache).
+- Les utilisateurs réels sont Ramzi, Déborah (sa copine, Terminale générale, SVT) et Esteban (il a des copies des cours de Déborah), plus quelques autres. **Leurs données sont précieuses** : ne jamais rien casser ni supprimer.
+
+### Données (Supabase)
+- Tables principales : `profiles` (clé `user_id` : `display_name`, `classe`, `theme`, `text_size`, `daily_goal_kind`, `daily_goal_value`, `reminders_enabled`, `reminder_time`, `quiet_weekend`, `quiet_holidays`, `holiday_zone`, `sounds`…), `subjects` (matières : `color`, `exam_date`…), `chapters` (`subject_id`), `cards` (`front`, `back`, `chapter_id`, `user_id`, `image_path`, `image_box`), `app_secrets` (`name`, `value` : secret `cron` notamment ; ne jamais l'afficher).
+- Le reste (jobs d'import, sessions, résumés, etc.) : regarde les migrations dans `supabase/` et le faux backend `tests/fake-supabase.js`, qui reproduit toutes les tables utilisées.
+- Stockage : bucket privé `cours`. Pages d'import en JPG, chemin `<user_id>/<import_id>/<horodatage>-<n>.jpg`. On les ouvre avec un lien signé (`createSignedUrl`).
+- RLS activé : chaque élève ne voit que ses données. Les fonctions serveur utilisent la clé service.
+
+### Stockage local du navigateur (`localStorage`)
+- `merge.prof` : discussions du Prof (`{cur, convs:[{id,t,ctx:{ch,s},m:[{r:"u"|"a",t,img?,doc?}],at}]}`, 20 maximum).
+- `merge.jview` : vue du planning (`lvl` jour/mois). `merge.edt` : emploi du temps (`slots: [{day,start,end,subject,room,week}]`, `ab`).
+- `merge.pomocfg` : réglages du pomodoro (`mode`, `work`, `brk`, `timer`). `merge.pomomute` : couper la musique pendant la pause. `merge.boostj` : jours de révision intensive avant un contrôle.
+- Les tests modifient ces clés pour préparer un état. Garde les mêmes noms.
+
+### Le client (détails utiles)
+- Routeur par `location.hash` (`#accueil`, `#matieres`, `#matiere-<id>`, `#chapitre-<id>`, `#cartes-<id>`, `#cartes-jour`, `#exos`, `#calendrier`, `#mois`, `#reglages`, `#revision-<subjectId>`, `#methode-…`, `#bac-…`…). `app` = `#app`, le conteneur de l'écran.
+- Onglets : `drawTabs(nom)`. Toucher l'onglet de l'écran où on est déjà enlève `data-sec` (Réglages revient à la liste) et envoie l'évènement `merge:tabagain` (le Prof repart sur une nouvelle discussion).
+- Fenêtres : `sheet(html, el => {...})`. Messages : `toast("…")`. Icônes SVG : objet `I` (`I.plus`, `I.back`, `I.play`, `I.spark`, `I.clock`…). Échappement HTML : `esc()`. Pluriel : `plural(n, "carte", "cartes")`. Raccourci `$("id")` = `getElementById`.
+- **Pièges connus :**
+  - Une classe CSS déjà utilisée ailleurs (exemple `.stile`) a cassé la grille des matières. Avant d'ajouter une classe, cherche-la avec `grep` dans `css/app.css`.
+  - Les règles écrites en bas de `app.css` écrasent celles du haut : ajoute plutôt que de modifier les anciennes.
+  - Sur PC, on cible souvent un écran avec `.app:has(> .classe)` dans `@media (min-width:1100px)` ou `(min-width:1200px)`.
+  - Le test « boutons de 44 px minimum » échoue si un bouton est trop petit.
+  - Le test « pas de débordement horizontal » à 320 px échoue si un texte ne passe pas à la ligne ; utilise `.hidexs` pour cacher un libellé sur les petits écrans.
+
+### Les tests (`tests/run.js`)
+- Chaque suite est une fonction `async function nom(browser)` listée dans le tableau des suites ; `ONLY=nom` lance seulement celle-là.
+- Aides : `open(browser,{w,h,theme,extra})` ouvre l'appli avec le faux backend, `go(page,"#route",attente)`, `txt(page)` donne le texte visible, `ok(condition,"libellé",détail)`, `jm(page,"#jadd")` ouvre le menu + du planning et clique un choix.
+- Le faux backend se règle avec `localStorage fake.*` (option `extra`). Par exemple, `schema: "3"` donne des cartes de schéma au format « à plat ».
+- Suites récentes : `apercu` (captures), `ongletRetour`, `profPc`, `profFichier`, `schemaPlat`, `schemasServeur` (teste `studio/schemas.mjs` directement), `v8` (favoris), `v10`, `flows`.
+- Une vraie régression = un test rouge. Ne supprime jamais un test pour le faire passer : corrige le code, ou mets le test à jour seulement si le comportement voulu a changé (et note-le dans `DECISIONS.md`).
+
+### Imports côté serveur (studio), plus en détail
+- Le client lit le fichier sur l'appareil (`fileReaders` dans `06-import.js` : pdf.js pour les PDF, décompression pour pptx/docx/odf, HEIC vers JPEG). Il envoie le texte et les images de pages. Le serveur crée un job et enchaîne les étapes.
+- `img` repère les schémas sur chaque page (prompt LECTURE : cadre serré, chaque légende avec sa position).
+- `gen` écrit les cartes (prompt « RÈGLES STRICTES » : la réponse n'est jamais lisible, la question ne contient pas la réponse, une légende = une carte).
+- `schcheck` fait revérifier chaque carte de schéma par Gemini (`{n, garder, cadre, cacher, raison}`).
+- `save` enregistre : `image_box = [...cadre, ...masques]`.
+- `verify` contrôle le résultat.
+- L'état du job est dans `state` (`st.pi` = page en cours, `st.pitry` = essais). Une étape = un appel qui se relance lui-même. Un cron relance un job bloqué depuis 3 min.
+- Limite de la fonction : erreur 546 si une photo est trop lourde. Réduis toujours les images avant de les traiter.
+
+### Choses à NE PAS faire
+- Modifier `js/app.js` à la main ; oublier de bump `sw.js` ; pousser sans tests.
+- Supprimer des cartes, des chapitres ou des comptes ; afficher un secret ; mettre l'URL du site dans un message public.
+- Ajouter des emojis dans les boutons, du néon, du flou plein écran.
+- Mettre une mention d'IA dans un commit ou dans le README.
