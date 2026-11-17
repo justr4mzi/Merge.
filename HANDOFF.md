@@ -125,3 +125,34 @@ Méthode qui marche :
 5. Bump de `sw.js`, `DECISIONS.md`, commit, push.
 
 Il veut des tests à chaque fois (« je t'ai dit de faire des tests »).
+
+## 7. Détails en plus pour la TÂCHE N°1 (Gemini)
+
+- Fichiers : `supabase/functions/studio/index.ts` (cherche `schcheck`) et `supabase/functions/diag/index.ts` (fonction `schemaRecheck`). La logique pure va dans `studio/schemas.mjs`, avec des tests dans la suite `schemasServeur` de `tests/run.js`.
+- Appel Gemini existant : la fonction `gemini(...)` de studio (image en base64 + prompt, réponse JSON). Dans studio, on appelle `gemini(..., true, 0, "high")` (n'est pas compté dans le quota de l'élève).
+- Conversion des coordonnées : cadre `[y0,x0,y1,x1]` sur 0–1000, donc en pixels `x = x0 * largeur / 1000`, `y = y0 * hauteur / 1000`. Le `nouveau_cadre` renvoyé par Gemini est relatif à l'image découpée : le reconvertir en coordonnées de la page entière avant d'enregistrer.
+- Les masques sont aussi sur 0–1000 de la page entière. Pour les dessiner sur la découpe : `(mx - x0) / (x1 - x0) * largeurDécoupe`.
+- Garde-fous :
+  - ne jamais agrandir le cadre ;
+  - refuser un cadre plus petit que 15 % de l'ancien ;
+  - si Gemini se trompe ou répond mal, garder l'ancien cadre.
+- Dans `diag`, garder le mode `dry: true`, qui affiche les changements dans les logs sans écrire. Lancer d'abord en `dry` sur 3 pages, regarder, puis en vrai.
+- Page de test connue : `1794679952176-5.jpg` (arbre / sève). Les cadres corrigés à la main sont `[510,42,735,478]` (arbre) et `[279,551,493,932]` (schéma fonctionnel). Le nouveau code ne doit pas les abîmer.
+
+## 8. TÂCHE N°2 : écran Prof sur téléphone (captures de Ramzi, 17 nov.)
+
+Fichiers : `js/src/09c-exos.js` (fonctions `screenExos` et `recentChips`, constante `EXO_QUICK`) et `css/app.css`.
+
+1. **Écran vide trop chargé sur téléphone.** On ne voit plus le haut : trop de texte et trop de suggestions.
+   - Enlever le long paragraphe « Pour que je m'appuie sur ton cours… » et la phrase du bas « Sans cours lié… 1 message = 1 appel IA ».
+   - Garder l'icône, le titre et une phrase courte.
+   - **Enlever les 6 demandes rapides de l'écran vide** : elles restent dans le menu « + » (rubrique « Demandes rapides »).
+   - Garder les pastilles des chapitres récents. Elles sont trop grosses : en faire des pastilles plus petites, sur une ligne si possible, avec le nom coupé par « … ».
+   - **Première visite seulement** : afficher une petite bulle ou fenêtre « Lie un chapitre pour que le prof s'appuie sur ton cours » avec un bouton « Lier un cours ». Elle ne revient plus ensuite (`localStorage` `merge.profTip`).
+2. **Menu « + » (fenêtre « Ajouter »).**
+   - Le sous-titre de « Joindre un fichier » (PDF, PowerPoint, Word, photo…) passe sur 3 lignes et décale tout. Mettre le sous-titre sur une seule ligne, coupée par « … », ou enlever le sous-titre sur téléphone.
+   - « Lier un cours » est seul sur sa ligne : soit le passer en pleine largeur, soit mettre les 3 boutons en une colonne.
+   - Les demandes rapides du menu sont sur 2 lignes chacune : texte plus petit ou une colonne.
+3. Vérifier en 393×852 et en 1440×900 :
+   `ONLY=apercu ROUTES=exos SHOTS=/tmp/x node tests/run.js`.
+   Puis lancer `ONLY=profPc,profFichier,ongletRetour node tests/run.js` et la suite complète. Ensuite bump de `sw.js`, `DECISIONS.md`, commit, push.
