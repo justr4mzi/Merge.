@@ -1772,3 +1772,32 @@ details.drop#tools[open],details.drop#cardsdrop[open]{padding-bottom:14px}
 }
 /* Bouton « Joindre un fichier » du Prof : le sous-titre (formats acceptés) sur sa propre ligne, en petit. */
 .actbtn span small{display:block;margin-top:2px;font-size:.76rem;font-weight:600;line-height:1.25;color:var(--muted)}
+/* Prof, écran vide : les derniers chapitres, un geste pour les lier. */
+.pempty .precent{display:flex;flex-direction:column;align-items:center;gap:6px;margin:6px 0 4px;width:100%}
+.pempty .precent .chips{flex-wrap:wrap;justify-content:center;gap:8px}
+.pempty .precent .pchip{padding:0 14px;cursor:pointer;color:var(--fg);font:inherit;font-weight:700;font-size:.88rem;max-width:100%}
+/* Planning (journée) sur grand écran : la journée à gauche, une colonne résumé à droite (avant, la moitié de l'écran restait vide). */
+.jside{display:none}
+@media (min-width:1100px){
+  .app:has(> .jside){max-width:1180px;display:grid;grid-template-columns:minmax(0,1fr) 320px;column-gap:40px;align-content:start}
+  .app:has(> .jside)>*{grid-column:1}
+  .app:has(> .jside)>.jside{display:flex;flex-direction:column;gap:16px;grid-column:2;grid-row:1 / span 8;align-self:start;position:sticky;top:24px}
+  .jside h3{margin:0;font-size:1.05rem}
+  .jsl{display:flex;align-items:center;gap:12px}
+  .jsl>span:last-child{display:flex;flex-direction:column}
+  .jsi{width:40px;height:40px;flex:none;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 16%,transparent);color:#9483ff}
+  .jsi svg{width:20px;height:20px}
+  .jsctl{display:flex;align-items:center;gap:10px;min-height:52px;padding:6px 10px;margin-inline:-10px;border-radius:12px;color:var(--fg);text-decoration:none}
+  .jsctl:hover{background:color-mix(in srgb,var(--fg) 6%,transparent)}
+  .jsctl .dot{background:var(--c);flex:none}
+  .jsctl .grow{display:flex;flex-direction:column;min-width:0}
+  /* Les créneaux prennent la largeur : une carte par ligne au lieu d'un texte perdu à gauche. */
+  .app:has(> .jside) .jrow .jtxt{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 16px}
+  .app:has(> .jside) .jrow.school .jtxt{background:transparent}
+}
+/* Matière (17 nov.) : le bouton Réviser reprend celui de l'accueil (grand bouton blanc sur toute la largeur), sans la ligne
+   « N cartes · environ X min » puisque la carte l'indique déjà juste au-dessus. */
+.todaycard .todogo{min-height:88px;border-radius:24px;gap:14px;padding:10px 20px;margin-top:14px;max-width:none}
+.todaycard .todogo svg{width:28px;height:28px;flex:none}
+.todaycard .todogo b{font-size:1.6rem;font-weight:900;color:inherit}
+@media (min-width:900px){.todaycard .todogo{min-height:104px;max-width:none}.todaycard .todogo b{font-size:1.9rem}}

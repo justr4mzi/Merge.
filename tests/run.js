@@ -566,6 +566,7 @@ async function apercu(browser) {
     for (const r of (process.env.ROUTES || "accueil,matieres,matiere-s1,chapitre-c1,reglages,progres,exos-c1,flash-c1,associer-c1,ecouter-c1,bus-c1,interro-c1,blanc-c1,cartes-c1,journee").split(",")) {
       await go(page, "#" + r, 500); const later = page.locator("button", { hasText: "Plus tard" }); if (await later.count()) { await later.first().click(); await page.waitForTimeout(300); }
       await page.screenshot({ path: path.join(SHOTS, w + "-" + r + ".png"), fullPage: r !== "journee" });
+      if (process.env.DBG) console.log(w, r, JSON.stringify(await page.evaluate(process.env.DBG)));
     }
     ok(!page.errors.length, "apercu " + w + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
   }
@@ -685,6 +686,13 @@ async function ongletRetour(browser) {
     ok(await page.evaluate(() => document.getElementById("app").dataset.sec === "apparence"), tag + " : catégorie Apparence ouverte");
     await page.click('#tabs a[href="#reglages"]'); await page.waitForTimeout(300);
     ok(await page.evaluate(() => !document.getElementById("app").dataset.sec) && await page.locator('[data-open="apparence"]').isVisible(), tag + " : l'onglet Réglages revient à la liste");
+    // Retoucher l'onglet Prof : nouvelle discussion (l'ancienne reste dans l'historique).
+    await go(page, "#exos", 300);
+    await page.evaluate(k => localStorage.setItem(k, JSON.stringify({ cur: "pold", convs: [{ id: "pold", t: "Ancienne question", ctx: { ch: [], s: [] }, m: [{ r: "u", t: "Ancienne question" }, { r: "a", t: "Réponse du prof" }], at: Date.now() }] })), "merge.prof");
+    await go(page, "#accueil", 200); await go(page, "#exos", 300);
+    ok((await txt(page)).includes("Réponse du prof"), tag + " : la discussion en cours est affichée");
+    await page.click('#tabs a[href="#exos"]'); await page.waitForTimeout(400);
+    ok(await page.locator(".pempty").count() === 1 && !(await page.locator(".exthread").innerText()).includes("Réponse du prof"), tag + " : retoucher Prof ouvre une nouvelle discussion");
     ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
   }
 }

@@ -117,7 +117,7 @@
       const h = a.getAttribute("href");
       if (h === "#calendrier") jset("merge.jview", { lvl: "jour", day: localDay(), hours: false });
       // (Réglages : ferme la catégorie ouverte et revient à la liste.)
-      if (location.hash === h) { e.preventDefault(); app.removeAttribute("data-sec"); route(); window.scrollTo(0, 0); }
+      if (location.hash === h) { e.preventDefault(); app.removeAttribute("data-sec"); document.dispatchEvent(new CustomEvent("merge:tabagain", { detail: h })); route(); window.scrollTo(0, 0); }
     }));
     // Pastille sur l'icône de l'appli installée : nombre de cartes à revoir.
     try { if (navigator.setAppBadge) { if (due) navigator.setAppBadge(due).catch(() => {}); else navigator.clearAppBadge().catch(() => {}); } } catch (e) { /* non géré */ }

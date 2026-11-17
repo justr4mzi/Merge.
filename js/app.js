@@ -792,7 +792,7 @@
       const h = a.getAttribute("href");
       if (h === "#calendrier") jset("merge.jview", { lvl: "jour", day: localDay(), hours: false });
       // (Réglages : ferme la catégorie ouverte et revient à la liste.)
-      if (location.hash === h) { e.preventDefault(); app.removeAttribute("data-sec"); route(); window.scrollTo(0, 0); }
+      if (location.hash === h) { e.preventDefault(); app.removeAttribute("data-sec"); document.dispatchEvent(new CustomEvent("merge:tabagain", { detail: h })); route(); window.scrollTo(0, 0); }
     }));
     // Pastille sur l'icône de l'appli installée : nombre de cartes à revoir.
     try { if (navigator.setAppBadge) { if (due) navigator.setAppBadge(due).catch(() => {}); else navigator.clearAppBadge().catch(() => {}); } } catch (e) { /* non géré */ }
@@ -1483,7 +1483,7 @@
     const head = isFree(s) ? "Révision libre" : ups.length ? (daysUntil(ups[0].d) === 0 ? "Contrôle aujourd'hui" : `Contrôle dans ${plural(daysUntil(ups[0].d), "jour", "jours")}`) : "Pas de contrôle prévu";
     app.innerHTML = `<div class="row"><a class="iconbtn" href="#matieres" aria-label="Retour aux matières">${I.back}</a><span class="grow"></span><button class="iconbtn flat" id="sSet" aria-label="Réglages et outils de la matière" title="Réglages">${I.gear}</button></div>
       <div class="subhead" style="--c:${esc(s.color)}"><span class="hsico big">${ic || esc(s.name.slice(0, 2).toUpperCase())}</span><div class="grow" style="min-width:0"><h1>${esc(s.name)}</h1><p class="small muted">${head} · ${plural(chs.length, "chapitre", "chapitres")}</p></div></div>
-      ${todo ? `<div class="card todaycard"><span class="small">À réviser aujourd'hui</span><b>${esc(todo.c.name)}</b><span class="small">${todo.due ? plural(todo.due, "carte à revoir", "cartes à revoir") : "Entraînement"} · ${Math.max(0, todo.m)} % maîtrisé</span><a class="btn todogo" href="#cartes-${todo.c.id}">${I.play}Réviser</a>${chs.filter(c => cardsOf(c.id).length).length > 1 ? `<a class="revall" href="#revision-${id}">${I.cards}Ou réviser toute la matière (${chs.filter(c => cardsOf(c.id).length).length} chapitres)</a>` : ""}</div>` : ""}
+      ${todo ? `<div class="card todaycard"><span class="small">À réviser aujourd'hui</span><b>${esc(todo.c.name)}</b><span class="small">${todo.due ? plural(todo.due, "carte à revoir", "cartes à revoir") : "Entraînement"} · ${Math.max(0, todo.m)} % maîtrisé</span><a class="btn todogo" href="#cartes-${todo.c.id}">${I.play}<b>Réviser</b></a>${chs.filter(c => cardsOf(c.id).length).length > 1 ? `<a class="revall" href="#revision-${id}">${I.cards}Ou réviser toute la matière (${chs.filter(c => cardsOf(c.id).length).length} chapitres)</a>` : ""}</div>` : ""}
       <div class="stack"><div class="row between"><h2>Chapitres</h2><span class="row" style="gap:8px"><button class="btn sm ghost" id="addG" aria-expanded="false" title="Ranger les chapitres dans des dossiers">${I.folder}<span class="hidexs">Dossiers</span></button><button class="btn sm" id="sAdd" aria-label="Ajouter un chapitre" title="Ajouter un chapitre">${I.plus}Nouveau</button></span></div>
         ${sorted.length ? `<p class="small muted" style="margin:0">Du moins au plus maîtrisé : commence par le haut.</p><div class="chlist">${sorted.map(x => `<a class="chline" href="#chapitre-${x.c.id}"><span class="mpill ${tone(x.m)}">${x.n ? x.m + " %" : "–"}</span><span class="grow" style="min-width:0"><b>${esc(x.c.name)}</b><span class="small muted">${x.n ? plural(x.n, "carte", "cartes") : x.c.auto_name ? "Le nom viendra de ton cours" : "Cours à importer"}${gname(x.c) ? " · " + esc(gname(x.c)) : ""}</span></span>${x.due ? `<span class="pill">${x.due} à revoir</span>` : ""}<span class="chev">${I.back}</span></a>`).join("")}</div>` : `<p class="muted">Aucun chapitre pour l'instant.</p>`}
         ${sorted.length ? "" : `<button class="addline" id="sAdd2">${I.plus}Nouveau chapitre</button>`}
@@ -3313,6 +3313,20 @@
   }
   const isDoneAll = (j, k, bs) => { const w = bs.filter(b => b.act !== "pause"); return w.length > 0 && w.every(b => isDone(j, k, b)); };
   let jDay = null;
+  // Grand écran (17 nov.) : une colonne à droite de la journée, pour ne pas laisser la moitié de l'écran vide :
+  // le résumé du jour, les cartes à revoir et les prochains contrôles. Cachée sur téléphone (tout est déjà ailleurs).
+  function jSide(j, list, school, freeMin) {
+    const rev = list.filter(b => b.act !== "pause"), done = rev.filter(b => isDone(j, jDay, b)).length;
+    const schoolMin = school.reduce((t, x) => t + mins(x.end) - mins(x.start), 0), due = state.cards ? dueCards(state.cards).length : 0;
+    const ups = upCtrls().filter(x => x.c.d >= jDay).slice(0, 4);
+    const line = (ic, b, t) => `<div class="jsl"><span class="jsi">${ic}</span><span><b>${b}</b><span class="small muted">${t}</span></span></div>`;
+    return `<aside class="jside" aria-label="Résumé"><div class="card pad stack"><h3>${jDay === localDay() ? "Ta journée" : "Ce jour-là"}</h3>
+      ${line(I.subj, school.length ? plural(school.length, "cours", "cours") : "Pas cours", school.length ? durTxt(schoolMin) + " au lycée" : "Journée libre")}
+      ${line(I.clock, rev.length ? plural(rev.length, "révision", "révisions") : "Aucune révision", rev.length ? done + " faite" + (done > 1 ? "s" : "") + " sur " + rev.length : "Touche + pour en ajouter")}
+      ${freeMin ? line(I.home, durTxt(freeMin) + " de libre", "Entre les cours et les révisions") : ""}
+      ${due ? `<a class="btn" href="#cartes-jour">Réviser ${plural(due, "carte", "cartes")}</a>` : ""}</div>
+      <div class="card pad stack"><h3>Prochains contrôles</h3>${ups.length ? ups.map(x => `<a class="jsctl" href="#matiere-${x.s.id}" style="--c:${esc(x.s.color)}"><span class="dot"></span><span class="grow"><b>${esc(x.s.name)}</b><span class="small muted">${dayOf(x.c.d).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}</span></span><span class="chev">${I.back}</span></a>`).join("") : `<p class="small muted">Aucun contrôle prévu. Ajoute-les avec le +, le planning de révision s'organise autour.</p>`}</div></aside>`;
+  }
   function screenJournee() {
     drawTabs("calendrier"); nowTaskTick();
     const j = jGet(); jDay = jView().day;
@@ -3325,9 +3339,10 @@
     const month = sel.toLocaleDateString("fr-FR", { month: "long" });
     // Frise : cours du lycée (gris) et blocs (couleur de la matière), avec les trous libres.
     const items = school.map(x => ({ school: true, start: x.start, dur: mins(x.end) - mins(x.start), x })).concat(list.map(b => ({ b, start: b.start, dur: b.dur }))).sort((a, b) => mins(a.start) - mins(b.start));
-    let prevEnd = null; const rows = [];
+    let prevEnd = null, freeMin = 0; const rows = [];
     items.forEach(it => {
       const st = mins(it.start);
+      if (prevEnd != null && st - prevEnd >= 30) freeMin += st - prevEnd;
       if (prevEnd != null && st - prevEnd >= 30) rows.push(`<button class="jgap" data-gap="${hm(prevEnd)}"><span>${durTxt(st - prevEnd)} de libre</span>${I.plus}</button>`);
       if (it.school) { const sj = subjOfName(it.x.subject), ct = sj && ctrlToday.find(x => x.s.id === sj.id && !ctrlShown.has(x)); if (ct) ctrlShown.add(ct); rows.push(`<div class="jrow school${ct ? " hasctl" : ""}"><span class="jpill" style="--c:${esc(sj ? sj.color : "#475569")};--h:${Math.min(96, Math.max(48, it.dur * .9))}px">${ct ? I.check : I.subj}</span><div class="jtxt"><span class="small muted">${esc(it.x.start)}–${esc(it.x.end)} (${durTxt(it.dur)})</span><b>${ct ? "Contrôle de " + esc(sj.name) : "Cours" + (sj ? " de " + esc(sj.name) : " : " + esc(it.x.subject))}</b>${ct ? `<a class="jctlink" href="#matiere-${sj.id}">${ct.c.ch && ct.c.ch.length ? plural(ct.c.ch.length, "chapitre", "chapitres") + " · " : ""}Réviser</a>` : ""}${it.x.room ? `<span class="small muted">Salle ${esc(it.x.room)}</span>` : ""}</div></div>`); }
       else { const b = it.b, done = isDone(j, jDay, b), s = subj(b.s), a = actOf(b.act), ch = b.ch && state.chapters.find(c => c.id === b.ch), auto = !b.ch && b.auto && b.s && bestChapter(b.s);
@@ -3343,7 +3358,7 @@
     app.innerHTML = `<div class="jnav"><button class="linkbtn" id="jup">${I.back}Calendrier</button><span class="grow"></span>${jDay !== today ? `<button class="btn sm" id="jback">Aujourd'hui</button>` : ""}<button class="btn sm ghost jai" id="jai" aria-label="Demander à l'IA d'organiser ta journée">${I.spark}IA</button><div class="jmwrap"><button class="iconbtn jmbtn" id="jmenu" aria-label="Ajouter" aria-haspopup="menu" aria-expanded="false">${I.plus}</button><div class="jmenu" id="jmenubox" role="menu" hidden><button role="menuitem" id="jadd">${I.clock}<span>Ajouter une révision</span></button><button role="menuitem" id="jctl">${I.check}<span>Ajouter un contrôle</span></button><button role="menuitem" id="joff" aria-pressed="${!!j.off[jDay]}">${I.home}<span>${j.off[jDay] ? "Remettre les cours" : "Pas cours ce jour-là"}</span></button></div></div></div><div class="jhead"><button class="jtitle" id="jtoday"><b>${sel.getDate()} ${esc(month)}</b> <span>${sel.getFullYear()}</span></button>${edtGet().ab && ab ? `<span class="pill">Sem. ${ab}</span>` : ""}</div>
       <div class="jweek"><button class="iconbtn flat" id="jprev" aria-label="Semaine précédente">${I.back}</button>${week.map(k => { const d = dayOf(k); return `<button class="jd${k === jDay ? " on" : ""}${k === today ? " now" : ""}" data-day="${k}"><span>${d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "")}</span><b>${d.getDate()}</b><span class="jdots">${dots(k)}</span></button>`; }).join("")}<button class="iconbtn flat" id="jnext" aria-label="Semaine suivante" style="transform:scaleX(-1)">${I.back}</button></div>
       <div class="jline">${rows.join("") || `<div class="card pad stack jempty"><b>Rien de prévu ${jDay === today ? "aujourd'hui" : "ce jour-là"}.</b><p class="small muted">Touche + en haut pour ajouter une révision ou un contrôle, ou « IA » pour l'organiser avec tes mots.</p></div>`}</div>
-      ${edtGet().slots.length ? "" : `<button class="linkbtn" id="jedt">${I.cal}Ajouter mon emploi du temps</button>`}`;
+      ${edtGet().slots.length ? "" : `<button class="linkbtn" id="jedt">${I.cal}Ajouter mon emploi du temps</button>`}${jSide(j, list, school, freeMin)}`;
     const re = () => screenJournee();
     $("jup").onclick = () => jGo("mois");
     // En haut à droite (17 nov.) : « IA » (organiser la journée avec ses mots) et un seul « + » qui ouvre Ajouter une révision,
@@ -3610,7 +3625,15 @@
   // Comme dans les applis de chat : en rouvrant Merge (ou après 30 min ailleurs), l'onglet Prof s'ouvre sur une nouvelle
   // discussion ; les anciennes restent dans l'historique (☰).
   let profFresh = true, profHiddenAt = 0;
+  // Retoucher l'onglet Prof quand on y est déjà : on repart sur une nouvelle discussion (comme rouvrir l'appli).
+  document.addEventListener("merge:tabagain", e => { if (/^#exos/.test(e.detail)) profFresh = true; });
   document.addEventListener("visibilitychange", () => { if (document.hidden) profHiddenAt = Date.now(); else if (profHiddenAt && Date.now() - profHiddenAt > 30 * 60000) profFresh = true; });
+  // Écran vide sans cours lié : les derniers chapitres travaillés, en un geste pour les lier.
+  function recentChips() {
+    const r = state.chapters.filter(c => cardsOf(c.id).length).slice(-3).reverse();
+    if (!r.length) return "";
+    return `<div class="precent"><span class="small muted">Travailler sur un de tes chapitres :</span><div class="chips">${r.map(c => { const s = state.subjects.find(x => x.id === c.subject_id) || {}; return `<button class="chip pchip" data-rch="${c.id}" style="--c:${esc(s.color || "#9483ff")}"><span class="dot"></span>${esc(c.name)}</button>`; }).join("")}</div></div>`;
+  }
   function screenExos(arg) {
     drawTabs("exos");
     const p = profGet();
@@ -3625,12 +3648,13 @@
     // Sur grand écran (PC) : historique toujours visible à gauche, conversation sur tout le reste.
     app.innerHTML = `<aside class="pside" aria-label="Mes discussions"><button class="btn" id="psnew">${I.plus}Nouvelle discussion</button><div class="pdlist">${histRows(p)}</div></aside><div class="pmain"><div class="row profhead"><button class="iconbtn flat" id="phist" aria-label="Mes discussions" title="Mes discussions">${I.menu}</button><h1 class="grow ptitle">${esc(conv.t || "Prof")}</h1><button class="iconbtn flat" id="pnew" aria-label="Nouvelle discussion" title="Nouvelle discussion">${I.edit}</button></div>
       <div class="pctx">${ctxChips(conv.ctx)}<button class="pchip add" id="pctx">${I.book}${linked ? "Modifier" : "Lier un cours"}</button></div>
-      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") + (m.doc ? `<span class="small muted"> · ${esc(m.doc)}</span>` : "") : md(m.t) + qcmHtml(m, i) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.prof}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur les cours liés en haut. " : "Pour que je m'appuie sur ton cours, touche « Lier un cours » : un ou plusieurs chapitres, ou des matières entières. "}Demande un exercice, une explication, ou joins ta copie, un PDF, un PowerPoint ou une photo avec le bouton +.</p><div class="chips exquick">${EXO_QUICK.map((q, i) => `<button class="chip" data-q="${i}">${q[0]}</button>`).join("")}</div><p class="small muted">${linked ? "Le prof s'appuie sur les cours liés" : "Sans cours lié, le prof répond avec ses connaissances de lycée"} ; il peut se tromper sur un calcul. 1 message = 1 appel IA.</p></div>`}</div>
+      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") + (m.doc ? `<span class="small muted"> · ${esc(m.doc)}</span>` : "") : md(m.t) + qcmHtml(m, i) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.prof}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur les cours liés en haut. " : "Pour que je m'appuie sur ton cours, touche « Lier un cours » : un ou plusieurs chapitres, ou des matières entières. "}Demande un exercice, une explication, ou joins ta copie, un PDF, un PowerPoint ou une photo avec le bouton +.</p>${linked ? "" : recentChips()}<div class="chips exquick">${EXO_QUICK.map((q, i) => `<button class="chip" data-q="${i}">${q[0]}</button>`).join("")}</div><p class="small muted">${linked ? "Le prof s'appuie sur les cours liés" : "Sans cours lié, le prof répond avec ses connaissances de lycée"} ; il peut se tromper sur un calcul. 1 message = 1 appel IA.</p></div>`}</div>
       <div class="pcomp"><div id="eximg" class="pimg" hidden></div><div class="pbar"><button class="iconbtn flat" id="pplus" aria-label="Ajouter une photo, un cours ou une demande rapide">${I.plus}</button><textarea id="exq" rows="1" maxlength="2000" placeholder="Écris ton message…"></textarea>${canDictate() ? `<button class="iconbtn flat" id="exmic" aria-label="Dicter">${I.mic}</button>` : ""}<button class="iconbtn psend" id="exsend" aria-label="Envoyer">${I.send}</button></div>
       <input id="exphoto" type="file" accept="image/*" capture="environment" hidden><input id="exfile" type="file" accept="${FILE_ACCEPT}" multiple hidden></div></div>`;
     const save = () => { conv.at = Date.now(); profSave(p); };
     // Cours liés.
     app.querySelectorAll("[data-unctx]").forEach(b => b.onclick = () => { const [k, id] = b.dataset.unctx.split(":"); conv.ctx[k === "s" ? "s" : "ch"] = conv.ctx[k === "s" ? "s" : "ch"].filter(x => x !== id); save(); screenExos(); });
+    app.querySelectorAll("[data-rch]").forEach(b => b.onclick = () => { if (!conv.ctx.ch.includes(b.dataset.rch)) conv.ctx.ch.push(b.dataset.rch); save(); screenExos(); });
     $("pctx").onclick = () => ctxSheet(conv, () => { save(); screenExos(); });
     $("pnew").onclick = () => { if (!msgs.length && !linked) return toast("Tu es déjà dans une nouvelle discussion."); const c = newConv(); p.convs.unshift(c); p.cur = c.id; profSave(p); screenExos(); };
     $("phist").onclick = () => histDrawer(p);

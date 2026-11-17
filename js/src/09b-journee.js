@@ -113,6 +113,20 @@
   }
   const isDoneAll = (j, k, bs) => { const w = bs.filter(b => b.act !== "pause"); return w.length > 0 && w.every(b => isDone(j, k, b)); };
   let jDay = null;
+  // Grand écran (17 nov.) : une colonne à droite de la journée, pour ne pas laisser la moitié de l'écran vide :
+  // le résumé du jour, les cartes à revoir et les prochains contrôles. Cachée sur téléphone (tout est déjà ailleurs).
+  function jSide(j, list, school, freeMin) {
+    const rev = list.filter(b => b.act !== "pause"), done = rev.filter(b => isDone(j, jDay, b)).length;
+    const schoolMin = school.reduce((t, x) => t + mins(x.end) - mins(x.start), 0), due = state.cards ? dueCards(state.cards).length : 0;
+    const ups = upCtrls().filter(x => x.c.d >= jDay).slice(0, 4);
+    const line = (ic, b, t) => `<div class="jsl"><span class="jsi">${ic}</span><span><b>${b}</b><span class="small muted">${t}</span></span></div>`;
+    return `<aside class="jside" aria-label="Résumé"><div class="card pad stack"><h3>${jDay === localDay() ? "Ta journée" : "Ce jour-là"}</h3>
+      ${line(I.subj, school.length ? plural(school.length, "cours", "cours") : "Pas cours", school.length ? durTxt(schoolMin) + " au lycée" : "Journée libre")}
+      ${line(I.clock, rev.length ? plural(rev.length, "révision", "révisions") : "Aucune révision", rev.length ? done + " faite" + (done > 1 ? "s" : "") + " sur " + rev.length : "Touche + pour en ajouter")}
+      ${freeMin ? line(I.home, durTxt(freeMin) + " de libre", "Entre les cours et les révisions") : ""}
+      ${due ? `<a class="btn" href="#cartes-jour">Réviser ${plural(due, "carte", "cartes")}</a>` : ""}</div>
+      <div class="card pad stack"><h3>Prochains contrôles</h3>${ups.length ? ups.map(x => `<a class="jsctl" href="#matiere-${x.s.id}" style="--c:${esc(x.s.color)}"><span class="dot"></span><span class="grow"><b>${esc(x.s.name)}</b><span class="small muted">${dayOf(x.c.d).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}</span></span><span class="chev">${I.back}</span></a>`).join("") : `<p class="small muted">Aucun contrôle prévu. Ajoute-les avec le +, le planning de révision s'organise autour.</p>`}</div></aside>`;
+  }
   function screenJournee() {
     drawTabs("calendrier"); nowTaskTick();
     const j = jGet(); jDay = jView().day;
@@ -125,9 +139,10 @@
     const month = sel.toLocaleDateString("fr-FR", { month: "long" });
     // Frise : cours du lycée (gris) et blocs (couleur de la matière), avec les trous libres.
     const items = school.map(x => ({ school: true, start: x.start, dur: mins(x.end) - mins(x.start), x })).concat(list.map(b => ({ b, start: b.start, dur: b.dur }))).sort((a, b) => mins(a.start) - mins(b.start));
-    let prevEnd = null; const rows = [];
+    let prevEnd = null, freeMin = 0; const rows = [];
     items.forEach(it => {
       const st = mins(it.start);
+      if (prevEnd != null && st - prevEnd >= 30) freeMin += st - prevEnd;
       if (prevEnd != null && st - prevEnd >= 30) rows.push(`<button class="jgap" data-gap="${hm(prevEnd)}"><span>${durTxt(st - prevEnd)} de libre</span>${I.plus}</button>`);
       if (it.school) { const sj = subjOfName(it.x.subject), ct = sj && ctrlToday.find(x => x.s.id === sj.id && !ctrlShown.has(x)); if (ct) ctrlShown.add(ct); rows.push(`<div class="jrow school${ct ? " hasctl" : ""}"><span class="jpill" style="--c:${esc(sj ? sj.color : "#475569")};--h:${Math.min(96, Math.max(48, it.dur * .9))}px">${ct ? I.check : I.subj}</span><div class="jtxt"><span class="small muted">${esc(it.x.start)}–${esc(it.x.end)} (${durTxt(it.dur)})</span><b>${ct ? "Contrôle de " + esc(sj.name) : "Cours" + (sj ? " de " + esc(sj.name) : " : " + esc(it.x.subject))}</b>${ct ? `<a class="jctlink" href="#matiere-${sj.id}">${ct.c.ch && ct.c.ch.length ? plural(ct.c.ch.length, "chapitre", "chapitres") + " · " : ""}Réviser</a>` : ""}${it.x.room ? `<span class="small muted">Salle ${esc(it.x.room)}</span>` : ""}</div></div>`); }
       else { const b = it.b, done = isDone(j, jDay, b), s = subj(b.s), a = actOf(b.act), ch = b.ch && state.chapters.find(c => c.id === b.ch), auto = !b.ch && b.auto && b.s && bestChapter(b.s);
@@ -143,7 +158,7 @@
     app.innerHTML = `<div class="jnav"><button class="linkbtn" id="jup">${I.back}Calendrier</button><span class="grow"></span>${jDay !== today ? `<button class="btn sm" id="jback">Aujourd'hui</button>` : ""}<button class="btn sm ghost jai" id="jai" aria-label="Demander à l'IA d'organiser ta journée">${I.spark}IA</button><div class="jmwrap"><button class="iconbtn jmbtn" id="jmenu" aria-label="Ajouter" aria-haspopup="menu" aria-expanded="false">${I.plus}</button><div class="jmenu" id="jmenubox" role="menu" hidden><button role="menuitem" id="jadd">${I.clock}<span>Ajouter une révision</span></button><button role="menuitem" id="jctl">${I.check}<span>Ajouter un contrôle</span></button><button role="menuitem" id="joff" aria-pressed="${!!j.off[jDay]}">${I.home}<span>${j.off[jDay] ? "Remettre les cours" : "Pas cours ce jour-là"}</span></button></div></div></div><div class="jhead"><button class="jtitle" id="jtoday"><b>${sel.getDate()} ${esc(month)}</b> <span>${sel.getFullYear()}</span></button>${edtGet().ab && ab ? `<span class="pill">Sem. ${ab}</span>` : ""}</div>
       <div class="jweek"><button class="iconbtn flat" id="jprev" aria-label="Semaine précédente">${I.back}</button>${week.map(k => { const d = dayOf(k); return `<button class="jd${k === jDay ? " on" : ""}${k === today ? " now" : ""}" data-day="${k}"><span>${d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "")}</span><b>${d.getDate()}</b><span class="jdots">${dots(k)}</span></button>`; }).join("")}<button class="iconbtn flat" id="jnext" aria-label="Semaine suivante" style="transform:scaleX(-1)">${I.back}</button></div>
       <div class="jline">${rows.join("") || `<div class="card pad stack jempty"><b>Rien de prévu ${jDay === today ? "aujourd'hui" : "ce jour-là"}.</b><p class="small muted">Touche + en haut pour ajouter une révision ou un contrôle, ou « IA » pour l'organiser avec tes mots.</p></div>`}</div>
-      ${edtGet().slots.length ? "" : `<button class="linkbtn" id="jedt">${I.cal}Ajouter mon emploi du temps</button>`}`;
+      ${edtGet().slots.length ? "" : `<button class="linkbtn" id="jedt">${I.cal}Ajouter mon emploi du temps</button>`}${jSide(j, list, school, freeMin)}`;
     const re = () => screenJournee();
     $("jup").onclick = () => jGo("mois");
     // En haut à droite (17 nov.) : « IA » (organiser la journée avec ses mots) et un seul « + » qui ouvre Ajouter une révision,
