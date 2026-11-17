@@ -359,7 +359,10 @@
   function ctrlDaySheet(k, after) {
     const draw = el => {
       const onDay = ctrls().filter(c => c.d === k);
-      el.querySelector("#cdchips").innerHTML = state.subjects.map(x => `<button class="chip" data-sub="${x.id}" aria-pressed="${onDay.some(c => c.s === x.id)}" style="--c:${esc(x.color)}"><span class="dot"></span>&nbsp;${esc(x.name)}</button>`).join("") || '<span class="muted">Ajoute d\'abord une matière.</span>';
+      // Contrôles déjà prévus ce jour : une ligne chacun avec un vrai bouton « Retirer » (avant : il fallait retoucher la matière).
+      el.querySelector("#cdlist").innerHTML = onDay.map(c => { const x = state.subjects.find(y => y.id === c.s) || {}; return `<div class="cdrow" style="--c:${esc(x.color || "#9483ff")}"><span class="dot"></span><b class="grow">${esc(x.name || "Matière")}</b><button class="btn sm ghost softdel" data-cdrm="${c.id}">${I.trash}Retirer</button></div>`; }).join("");
+      el.querySelectorAll("[data-cdrm]").forEach(b => b.onclick = async () => { const c = ctrls().find(x => x.id === b.dataset.cdrm), x = c && state.subjects.find(y => y.id === c.s); await ctrlDel(b.dataset.cdrm); toast("Contrôle" + (x ? " de " + x.name : "") + " retiré."); draw(el); });
+      el.querySelector("#cdchips").innerHTML = state.subjects.filter(x => !onDay.some(c => c.s === x.id)).map(x => `<button class="chip" data-sub="${x.id}" aria-pressed="false" style="--c:${esc(x.color)}"><span class="dot"></span>&nbsp;${esc(x.name)}</button>`).join("") || (state.subjects.length ? '<span class="muted small">Toutes tes matières ont un contrôle ce jour-là.</span>' : '<span class="muted">Ajoute d\'abord une matière.</span>');
       el.querySelectorAll("[data-sub]").forEach(b => b.onclick = async () => {
         const sub = state.subjects.find(x => x.id === b.dataset.sub), have = ctrls().find(c => c.s === sub.id && c.d === k);
         if (have) { await ctrlDel(have.id); toast("Contrôle de " + sub.name + " retiré."); return draw(el); }
@@ -367,5 +370,5 @@
         const c = await ctrlAdd(sub.id, k); if (c) ctrlChSheet(c.id, after); else draw(el);
       });
     };
-    sheet(`<div class="row"><span class="mico big">${I.check}</span><h1>Contrôles</h1></div><p class="muted">${esc(fmtDate(k))} : touche une ou plusieurs matières.</p><div class="chips" id="cdchips"></div><button class="btn ghost" id="cdok">Fermer</button>`, el => { draw(el); el.querySelector("#cdok").onclick = () => { closeSheet(); after(); }; });
+    sheet(`<div class="row"><span class="mico big">${I.check}</span><h1>Contrôles</h1></div><p class="muted">${esc(fmtDate(k))}</p><div class="stack" id="cdlist"></div><p class="label">Ajouter un contrôle de</p><div class="chips" id="cdchips"></div><button class="btn ghost" id="cdok">Terminé</button>`, el => { draw(el); el.querySelector("#cdok").onclick = () => { closeSheet(); after(); }; });
   }

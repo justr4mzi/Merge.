@@ -39,9 +39,11 @@ Deno.serve(async (req) => {
     const byUser = Object.fromEntries((profs ?? []).map((p: Any) => [p.user_id, p]));
     const now = new Date();
     let sent = 0, removed = 0;
-    const push = async (s: Any, body: string, url: string, patch: Any) => {
+    // Titre de la notification : pas « Merge. » (sur iPhone, le nom de l'appli est déjà écrit dessous : « from Merge. »).
+    const titleFor = (k: string) => k === "examToday" ? "Contrôle aujourd'hui" : /^exam/.test(k) ? "Contrôle bientôt" : k === "danger" ? "Ta série est en jeu" : k === "praise" ? "Bien joué" : "Révision du jour";
+    const push = async (s: Any, body: string, url: string, patch: Any, title = "Révision du jour") => {
       try {
-        await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify({ title: "Merge.", body, url }), { TTL: 3600 });
+        await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify({ title, body, url }), { TTL: 3600 });
         await admin.from("push_subscriptions").update(patch).eq("endpoint", s.endpoint);
         sent++;
       } catch (e) {
@@ -89,7 +91,7 @@ Deno.serve(async (req) => {
         studied: days.has(here.day), streak: streakOf(days, here.day), due: open.daily ? await dueOf(s.user_id) : 0,
         examToday: exams.filter((x: Any) => x.exam_date === here.day), examSoon: exams.filter((x: Any) => x.exam_date !== here.day),
       });
-      if (r) await push(s, r.body, r.url, r.patch);
+      if (r) await push(s, r.body, r.url, r.patch, titleFor(String(r.kind ?? "")));
     }
     return json({ sent, removed, subscriptions: subs.length });
   } catch (e) {

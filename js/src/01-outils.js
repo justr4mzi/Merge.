@@ -10,7 +10,7 @@
   function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   // Ces clés sont gardées sur l'appareil ET dans le compte (table user_kv) : on retrouve la même chose sur téléphone et sur PC.
   // Restent sur l'appareil seulement : kvts (horodatages), file (révisions en attente d'envoi), cache.* et gen.* (copies de la base), erreurs.* (copie de secours de la table mistakes). Le thème est dans le profil.
-  const SYNC = /^merge\.(fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|controles|boostnext|boostj|journee|exo\..+|prof|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
+  const SYNC = /^merge\.(paris|fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|controles|boostnext|boostj|journee|exo\..+|prof|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
   let kvTs = {}, kvQueue = {}, kvTimer = null, kvOff = false, kvAt = 0;
   try { kvTs = JSON.parse(localStorage.getItem("merge.kvts") || "{}") || {}; } catch (e) { kvTs = {}; }
   const kvSaveTs = () => { try { localStorage.setItem("merge.kvts", JSON.stringify(kvTs)); } catch (e) { /* rien */ } };
@@ -84,7 +84,9 @@
     const out = [], re = /\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|\$([^$\n]+?)\$/g; let last = 0, m;
     const plain = t => esc(t.replace(/\\([A-Za-z]+)/g, (x, k) => TEXSYM[k] || x));
     while ((m = re.exec(text))) { out.push(plain(text.slice(last, m.index))); const tex = m[1] || m[2] || m[3] || m[4], disp = !!(m[1] || m[2]); out.push(`<span class="m${disp ? " md" : ""}" data-tex="${esc(tex)}">${esc(tex)}</span>`); last = re.lastIndex; }
-    out.push(plain(text.slice(last))); const h = out.join(""); return bold ? h.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>") : h;
+    out.push(plain(text.slice(last))); let h = out.join(""); if (bold) h = h.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+    // Texte avec formule : un seul élément, sinon un parent en « flex » mettrait chaque mot et chaque formule en colonne.
+    return out.length > 1 ? `<span class="mxw">${h}</span>` : h;
   }
   const mx = t => mathify(String(t == null ? "" : t), false);
   // Version texte d'une formule, pour les endroits où KaTeX ne peut pas s'afficher (bulles SVG, voix, titres).

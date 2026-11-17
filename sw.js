@@ -1,6 +1,6 @@
 // Service worker : garde la coquille de l'appli pour un démarrage rapide et hors ligne.
 // Ne met jamais en cache les appels Supabase ou IA.
-const CACHE = "merge-shell-v99";
+const CACHE = "merge-shell-v100";
 const SHELL = ["./", "index.html", "css/app.css", "js/config.js", "js/app.js", "vendor/supabase.js", "vendor/ts-fsrs.js", "vendor/pdf.min.js", "vendor/pdf.worker.min.js", "vendor/jszip.min.js", "icons/icon.svg", "icons/apple-touch-icon.png", "icons/icon-192.png", "manifest.webmanifest"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(f => new Request(f, { cache: "reload" }))))); self.skipWaiting(); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))); self.clients.claim(); });
@@ -13,7 +13,7 @@ self.addEventListener("fetch", e => {
 
 // Rappels de révision
 self.addEventListener("push", e => {
-  let d = { title: "Merge.", body: "C'est l'heure de réviser.", url: "./#accueil" };
+  let d = { title: "Révision du jour", body: "C'est l'heure de réviser.", url: "./#accueil" };
   try { d = Object.assign(d, e.data.json()); } catch (err) { /* message sans contenu */ }
   e.waitUntil(self.registration.showNotification(d.title, { body: d.body, icon: "icons/icon-192.png", badge: "icons/icon-192.png", data: { url: d.url } }));
 });

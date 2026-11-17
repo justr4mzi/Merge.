@@ -214,6 +214,13 @@
   }
 
   // ---------- badges ----------
+  // Badges avec leur progression (pour « Prochains badges » dans Progrès).
+  function badgeProgress() {
+    const reviews = state.cards.reduce((s, c) => s + (c.right_count || 0) + (c.wrong_count || 0), 0), st = streak();
+    const ms = state.chapters.map(c => { const cs = cardsOf(c.id); return cs.length ? mastery(cs) : 0; }), full = ms.filter(x => x >= 100).length, best = Math.max(0, ...ms);
+    const b = (name, cur, goal, unit) => ({ name, cur: Math.min(cur, goal), goal, label: unit ? `${Math.min(cur, goal)} / ${goal}${unit}` : `${Math.min(cur, goal)} / ${goal}` });
+    return [b("Première carte", reviews, 1), b("100 réponses", reviews, 100), b("1 000 réponses", reviews, 1000), b("3 jours d'affilée", st, 3), b("7 jours d'affilée", st, 7), b("30 jours d'affilée", st, 30), b("Un chapitre à 100 %", best, 100, " %"), b("5 chapitres à 100 %", full, 5), b("100 cartes créées", state.cards.length, 100)];
+  }
   function badges() {
     const reviews = state.cards.reduce((s, c) => s + (c.right_count || 0) + (c.wrong_count || 0), 0), st = streak();
     const full = state.chapters.filter(c => { const cs = cardsOf(c.id); return cs.length && mastery(cs) >= 100; }).length;
@@ -270,7 +277,7 @@
   function utter(t, lang, rate) { const u = new SpeechSynthesisUtterance(t); u.lang = lang || "fr-FR"; const v = pickVoice(u.lang); if (v) { u.voice = v; u.lang = v.lang; } u.rate = Math.min(2, rate || voiceRate()); return u; }
   if ("speechSynthesis" in window) { try { speechSynthesis.getVoices(); } catch (e) { /* voix chargées plus tard */ } }
   // Les longues phrases sont lues par morceaux : certaines voix en ligne se coupent après une quinzaine de secondes.
-  // Lecture à voix haute. Voix Merge (Laomedeia, fonction `voix`, chaque phrase gardée sur le serveur) si elle est disponible,
+  // Lecture à voix haute. Voix Merge (fonction `voix`, chaque phrase gardée sur le serveur) si elle est disponible,
   // sinon voix de l'appareil : hors ligne, API pas encore activée, ou quota gratuit du mois atteint.
   const spk = { el: null, token: 0, down: 0 };
   const neuralWanted = () => safeGet("merge.vengine") !== "appareil";
@@ -290,11 +297,27 @@
     const next = () => { if (over) return; if (k >= chunks.length) return end(); const u = utter(chunks[k++], lang, rate); u.onend = next; u.onerror = end; speechSynthesis.speak(u); };
     next();
   }
+  // iPhone : un son ne peut démarrer que pendant le toucher de l'élève. La voix Merge arrive après un appel au serveur, donc trop tard :
+  // iOS la bloquait et l'appli retombait sur la voix de l'appareil. On « réveille » le lecteur tout de suite avec un silence
+  // d'une fraction de seconde ; ensuite iOS le laisse jouer la vraie voix.
+  let silentUrl = "";
+  function unlockAudio() {
+    try {
+      if (!silentUrl) {
+        const n = 800, b = new ArrayBuffer(44 + n * 2), v = new DataView(b), w = (o, t) => [...t].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+        w(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+        v.setUint32(24, 8000, true); v.setUint32(28, 16000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, n * 2, true);
+        silentUrl = URL.createObjectURL(new Blob([b], { type: "audio/wav" }));
+      }
+      const a = spk.el || (spk.el = new Audio()); a.src = silentUrl; const p = a.play(); if (p && p.catch) p.catch(() => {});
+    } catch (e) { /* pas de son possible : la voix de l'appareil prendra le relais */ }
+  }
   function speakText(t, lang, onend, rate) {
     stopSpeak(); const my = spk.token;
     t = /[$\\]/.test(String(t)) ? texPlain(t).replace(/\(([^()]*)\)\/\(([^()]*)\)/g, "$1 sur $2") : String(t);
     const useNeural = neuralWanted() && state.user && !state.offline && navigator.onLine !== false && Date.now() - spk.down > 600000;
     if (!useNeural) return speakTextDevice(t, lang, onend, rate);
+    unlockAudio();
     const bits = t.match(/[^.!?;:\n]+[.!?;:]*\s*/g) || [t], chunks = []; let cur = "";
     bits.forEach(b => { if ((cur + b).length > 900 && cur.trim()) { chunks.push(cur.trim()); cur = ""; } cur += b; }); if (cur.trim()) chunks.push(cur.trim());
     let k = 0, over = false; const end = () => { if (!over && my === spk.token) { over = true; if (onend) onend(); } };

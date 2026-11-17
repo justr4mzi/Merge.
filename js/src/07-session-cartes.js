@@ -104,8 +104,8 @@
         <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Progression de la session"><i style="width:${pct}%"></i></div>
         <div class="counters"><span class="counter no" aria-label="Cartes à revoir">${S.again.size}</span><span class="counter yes" aria-label="Cartes réussies">${S.known}</span></div>
         <div class="flipwrap" id="wrap"><button class="flip${S.flipped ? " back" : ""}" id="flip" aria-label="Retourner la carte">
-          <div class="face"><header>${training ? "Entraînement" : S.again.has(c.id) ? "On la revoit" : "Question"}</header><div class="txt">${cfront(c)}</div><footer>Touche la carte pour voir la réponse</footer></div>
-          <div class="face b"><header>Réponse</header>${picHtml(c)}<div class="txt">${mx(c.back)}</div><div id="mnemo">${mnemoHtml(c)}</div><div id="extra" class="extra">${backExtra(c)}</div><footer>${c.source_quote ? "Dans ton cours : « " + esc(c.source_quote) + " »" : ""}</footer></div>
+          <div class="face"><header>${training ? "Entraînement" : S.again.has(c.id) ? "On la revoit" : "Question"}</header><div class="txt"><div class="tin">${cfront(c)}</div></div><footer>Touche la carte pour voir la réponse</footer></div>
+          <div class="face b"><header>Réponse</header>${picHtml(c)}<div class="txt"><div class="tin">${schBox(c) ? schemaHtml(c, false, "show") : ""}${mx(c.back)}</div></div><div id="mnemo">${mnemoHtml(c)}</div><div id="extra" class="extra">${backExtra(c)}</div><footer>${c.source_quote ? "Dans ton cours : « " + esc(c.source_quote) + " »" : ""}</footer></div>
         </button></div>
         ${schBox(c) ? `<button class="chip sm schbtn" id="zoomsch">${I.search}Agrandir le schéma</button>` : ""}
         ${typed() ? `<div class="field typedbox"><label for="mine">Ta réponse, avant de retourner la carte</label><textarea id="mine" style="min-height:70px" placeholder="Écris ce que tu répondrais">${esc(S.mine)}</textarea></div>` : ""}
@@ -116,7 +116,7 @@
           <div class="card pad stack"><h2>Raccourcis clavier</h2><div class="srow"><span>Retourner la carte</span><kbd>Espace</kbd></div><div class="srow"><span>Juste</span><kbd>→</kbd></div><div class="srow"><span>Faux</span><kbd>←</kbd></div><div class="srow"><span>Annuler ma réponse</span><kbd>Ctrl Z</kbd></div><div class="srow"><span>Trop facile</span><kbd>↑</kbd></div><div class="srow"><span>À revoir bientôt</span><kbd>↓</kbd></div></div>
           <p class="note">Une carte ratée revient jusqu'à ce que tu la réussisses.</p></aside></div>`;
       if ($("see")) $("see").onclick = () => showPage(c.image_path, $("pageimg"));
-      if ($("zoomsch")) $("zoomsch").onclick = () => openSchema(c);
+      if ($("zoomsch")) $("zoomsch").onclick = () => S.flipped ? openSchema(c, "show") : schOnFront(c) ? openSchema(c, "hide") : toast("Retourne la carte : le schéma est avec la réponse.");
       if ($("say")) $("say").onclick = () => speakText(S.flipped ? c.back : c.front, "fr-FR");
       $("flip").onclick = () => { if ($("mine")) S.mine = $("mine").value; S.flipped = !S.flipped; $("flip").classList.toggle("back", S.flipped); $("extra").innerHTML = backExtra(c); };
       $("no").onclick = () => answer(false); $("yes").onclick = () => answer(true);
@@ -161,21 +161,34 @@
   // ---------- schémas du cours sur les cartes ----------
   // Une carte de schéma garde la photo de la page (image_path) et le cadre du schéma (image_box : [haut, gauche, bas, droite] de 0 à 1000).
   // On n'affiche que le schéma : l'image entière est placée dans un cadre qui cache le reste (aucune copie d'image en plus).
+  // image_box = [ymin, xmin, ymax, xmax] du schéma sur la page (0 à 1000), puis éventuellement les cadres des légendes
+  // à cacher côté question : [..., [y0, x0, y1, x1], [y0, x0, y1, x1]…] (ajoutés à la lecture des photos, studio v19).
   function schBox(c) {
-    const b = c && c.image_path && Array.isArray(c.image_box) ? c.image_box.map(Number) : null;
+    const b = c && c.image_path && Array.isArray(c.image_box) ? c.image_box.slice(0, 4).map(Number) : null;
     return b && b.length === 4 && b.every(Number.isFinite) && b[2] > b[0] && b[3] > b[1] ? b : null;
+  }
+  function schMasks(c) {
+    return schBox(c) ? c.image_box.slice(4).filter(m => Array.isArray(m) && m.length === 4 && m.map(Number).every(Number.isFinite)).map(m => m.map(Number)) : [];
   }
   // Rapport largeur / hauteur du schéma : la photo est supposée en 3:4 jusqu'à son chargement, puis on prend sa vraie taille.
   const schRatio = (b, w, h) => ((b[3] - b[1]) * (w || 3)) / ((b[2] - b[0]) * (h || 4));
-  function schemaHtml(c, small) {
+  // mode : "hide" = légendes à trouver cachées (question), "show" = légendes visibles et entourées (réponse), sinon schéma brut.
+  function schemaHtml(c, small, mode) {
     const b = schBox(c); if (!b) return "";
     const bw = (b[3] - b[1]) / 1000, bh = (b[2] - b[0]) / 1000, pc = x => (x * 100).toFixed(3) + "%";
-    return `<span class="schema${small ? " sm" : ""}" data-sch="${esc(c.id)}" role="img" aria-label="Schéma du cours" style="--ar:${schRatio(b).toFixed(4)}">`
+    const masks = mode ? schMasks(c) : [], rel = m => `left:${pc((m[1] - b[1]) / 1000 / bw)};top:${pc((m[0] - b[0]) / 1000 / bh)};width:${pc((m[3] - m[1]) / 1000 / bw)};height:${pc((m[2] - m[0]) / 1000 / bh)}`;
+    return `<span class="schema${small ? " sm" : ""}" data-sch="${esc(c.id)}" data-mode="${mode || ""}" role="img" aria-label="Schéma du cours" style="--ar:${schRatio(b).toFixed(4)}">`
       + `<img class="schimg" data-pic="${esc(c.image_path)}" alt="" draggable="false" style="width:${pc(1 / bw)};height:${pc(1 / bh)};left:${pc(-b[1] / 1000 / bw)};top:${pc(-b[0] / 1000 / bh)}">`
+      + masks.map(m => `<i class="${mode === "hide" ? "schmask" : "schhit"}" style="${rel(m)}">${mode === "hide" ? "?" : ""}</i>`).join("")
       + (small ? "" : `<i class="schzoom" aria-hidden="true">${I.search}</i>`) + `</span>`;
   }
+  // Question d'une carte de schéma : les légendes à trouver sont cachées. Sans légende connue (cartes créées avant studio v19),
+  // le schéma ne s'affiche qu'au dos, avec la réponse : sinon la réponse se lirait sur l'image.
+  const schOnFront = c => schMasks(c).length > 0;
+  // « Sur ce schéma S1 de… » : l'identifiant interne S1 n'a rien à faire dans la question.
+  const cleanFront = t => String(t == null ? "" : t).replace(/(sch[ée]mas?)\s+S\d+\b/gi, "$1");
   // Question d'une carte : son schéma (s'il y en a un) puis le texte. small = petite vignette dans les listes.
-  function cfront(c, small) { return schemaHtml(c, small) + mx(c.front); }
+  function cfront(c, small) { return (schOnFront(c) ? schemaHtml(c, small, "hide") : "") + mx(cleanFront(c.front)); }
   // Vraie taille de la photo connue : on corrige le rapport du cadre pour que le schéma ne soit pas déformé.
   document.addEventListener("load", e => {
     const im = e.target; if (!im || !im.classList) return;
@@ -186,16 +199,16 @@
     if (box) box.classList.add("ok");
   }, true);
   // Agrandir un schéma : en grand, avec « Voir la page entière » (le schéma y est entouré).
-  function openSchema(c) {
+  function openSchema(c, mode) {
     const b = schBox(c); if (!b) return;
     const old = document.getElementById("schview"); if (old) old.remove();
     const el = document.createElement("div"); el.id = "schview"; el.className = "schview"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Schéma du cours");
     const pc = x => (x / 10).toFixed(2) + "%";
     const draw = (full) => {
-      el.innerHTML = `<div class="schviewbar"><button class="iconbtn flat" data-schx aria-label="Fermer">${I.x}</button><button class="btn sm ghost" data-schfull>${full ? "Voir le schéma seul" : "Voir la page entière"}</button></div>`
-        + `<div class="schviewbody">${full ? `<span class="schpage"><img class="pageimg" data-pic="${esc(c.image_path)}" alt="Page du cours"><i class="schmark" style="top:${pc(b[0])};left:${pc(b[1])};height:${pc(b[2] - b[0])};width:${pc(b[3] - b[1])}"></i></span>` : schemaHtml(c).replace('class="schema"', 'class="schema big"')}</div>`;
+      el.innerHTML = `<div class="schviewbar"><button class="iconbtn flat" data-schx aria-label="Fermer">${I.x}</button>${mode === "hide" ? "" : `<button class="btn sm ghost" data-schfull>${full ? "Voir le schéma seul" : "Voir la page entière"}</button>`}</div>`
+        + `<div class="schviewbody">${full ? `<span class="schpage"><img class="pageimg" data-pic="${esc(c.image_path)}" alt="Page du cours"><i class="schmark" style="top:${pc(b[0])};left:${pc(b[1])};height:${pc(b[2] - b[0])};width:${pc(b[3] - b[1])}"></i></span>` : schemaHtml(c, false, mode).replace('class="schema"', 'class="schema big"')}</div>`;
       el.querySelector("[data-schx]").onclick = close;
-      el.querySelector("[data-schfull]").onclick = () => draw(!full);
+      if (el.querySelector("[data-schfull]")) el.querySelector("[data-schfull]").onclick = () => draw(!full);
       const box = el.querySelector(".schema"); if (box) box._c = c;
       fillPics(el);
     };
@@ -209,7 +222,7 @@
   document.addEventListener("click", e => {
     const f = e.target.closest && e.target.closest(".schema[data-sch]");
     if (!f || f.closest("button,a,#schview")) return;
-    const c = (state.cards || []).find(x => x.id === f.dataset.sch); if (c) { e.preventDefault(); openSchema(c); }
+    const c = (state.cards || []).find(x => x.id === f.dataset.sch); if (c) { e.preventDefault(); openSchema(c, f.dataset.mode || ""); }
   });
   async function uploadCardPic(file, chapterId, cardId) {
     let bmp; try { bmp = await createImageBitmap(file); } catch (e) { if (!window.heic2any) await new Promise((ok, ko) => { const sc = document.createElement("script"); sc.src = "vendor/heic2any.min.js"; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); }); const o = await window.heic2any({ blob: file, toType: "image/jpeg", quality: 0.85 }); bmp = await createImageBitmap(Array.isArray(o) ? o[0] : o); }

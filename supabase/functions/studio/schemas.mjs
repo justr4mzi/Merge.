@@ -33,23 +33,57 @@ export function cleanTitle(t) {
   return String(t ?? "").replace(/[\[\]|*_#`]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
 }
 
+// Cadre d'une légende (un mot ou quelques mots sur le schéma) : petit, mais pas vide. Marge de 0,8 % pour bien la cacher.
+export function cleanLabelBox(raw) {
+  const n = String(raw ?? "").split(/[,;\s]+/).filter(Boolean).map(Number);
+  if (n.length !== 4 || n.some((x) => !Number.isFinite(x))) return null;
+  let [y0, x0, y1, x1] = n.map((x) => Math.max(0, Math.min(1000, x)));
+  if (y1 < y0) [y0, y1] = [y1, y0];
+  if (x1 < x0) [x0, x1] = [x1, x0];
+  if (y1 - y0 < 4 || x1 - x0 < 6 || (y1 - y0) * (x1 - x0) > 120000) return null;
+  const pad = 8;
+  return [Math.max(0, y0 - pad), Math.max(0, x0 - pad), Math.min(1000, y1 + pad), Math.min(1000, x1 + pad)].map(Math.round);
+}
+// Une légende compte pour un schéma si son cadre est (presque) dans celui du schéma.
+const inside = (l, b) => l[0] >= b[0] - 30 && l[1] >= b[1] - 30 && l[2] <= b[2] + 30 && l[3] <= b[3] + 30;
+
 // pages : [{ text, path }] dans l'ordre du cours (path = photo de la page, ou null pour du texte).
-// Renvoie { texts, schemas } : textes sans les repères, et schémas [{ id: "S1", path, box, titre }].
+// Renvoie { texts, schemas } : textes sans les repères, et schémas [{ id: "S1", path, box, titre, labels: [{ box, text }] }].
+// Les légendes ([[LEGENDE|cadre|texte]], écrites juste après leur schéma) servent à les cacher côté question sur les cartes.
 export function extractSchemas(pages) {
   const schemas = [];
   const texts = (pages || []).map((p) => {
-    let perPage = 0;
-    return String(p?.text ?? "").replace(MARK, (_, inner) => {
+    let perPage = 0, cur = null;
+    return String(p?.text ?? "").replace(ANY, (_, kind, inner) => {
       const { box, titre } = parseMark(inner);
+      if (/legende/i.test(kind.normalize("NFD").replace(/[\u0300-\u036f]/g, ""))) {
+        const t = cleanTitle(titre), lb = cur ? cleanLabelBox(box) : null;
+        if (t && lb && inside(lb, cur.box) && cur.labels.length < 20) cur.labels.push({ box: lb, text: t });
+        return t ? `(légende : ${t})` : "";
+      }
       const t = cleanTitle(titre) || "schéma", b = p?.path ? cleanBox(box) : null;
-      if (!b || perPage >= 4 || schemas.length >= 60) return `[Schéma : ${t}]`;
+      if (!b || perPage >= 4 || schemas.length >= 60) { cur = null; return `[Schéma : ${t}]`; }
       perPage++;
       const id = "S" + (schemas.length + 1);
-      schemas.push({ id, path: p.path, box: b, titre: t });
+      cur = { id, path: p.path, box: b, titre: t, labels: [] };
+      schemas.push(cur);
       return `[Schéma ${id} : ${t}]`;
     });
   });
   return { texts, schemas };
+}
+const ANY = /\[\[\s*(SCHEMA|L[EÉ]GENDE)\s*\|([^\n]*?)\]\](?!\])/gi;
+// Légendes à cacher pour une carte : celle qui est la réponse (« masque » donné par l'IA) si on la retrouve, sinon toutes.
+export function labelMasks(schema, masque) {
+  const labels = (schema && schema.labels) || [];
+  if (!labels.length) return [];
+  const m = String(masque ?? "").trim();
+  if (m) {
+    const mw = words(m).join(" ");
+    const hit = labels.filter((l) => { const lw = words(l.text).join(" "); return lw && (lw === mw || lw.includes(mw) || mw.includes(lw) || similar(l.text, m) >= 0.5); });
+    if (hit.length) return hit.map((l) => l.box);
+  }
+  return labels.map((l) => l.box);
 }
 
 // ---------- cartes en double (deuxième import dans un chapitre qui a déjà des cartes) ----------

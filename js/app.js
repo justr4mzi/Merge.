@@ -162,6 +162,7 @@
     clap: '<rect x="3" y="9" width="18" height="11.5" rx="1.5"/><path d="M3 9l1.6-4.8 15.8 2.2L19.5 9M8.5 4.8l-.8 4.2M14 5.6l-.8 3.4"/>',
     coeur: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0112 7.2a4.3 4.3 0 017.5 2.6C19.5 15.4 12 20 12 20z"/><path d="M12 10.5v4M10 12.5h4"/>',
     feuille: '<path d="M5 19c0-8 5-13 14-14 0 9-5 14-13 14zM5 19l7-7"/>',
+    oral: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21M9 21h6"/>',
   };
   // Ordre important : la première règle qui correspond l'emporte (ex. « éducation physique » est du sport, pas de la physique).
   const SUBJ_RULES = [
@@ -178,7 +179,7 @@
     [/philo/, "ampoule"],
     [/latin|grec|\blca\b|antiquit/, "temple"],
     [/histoire des arts/, "palette"],
-    [/grand oral|\boral\b|eloquence/, "bulle"],
+    [/grand oral|\boral\b|eloquence/, "oral"],
     [/hggsp|geopolit|histoire|geograph|\bhg\b|\bh-?g\b/, "globe"],
     [/\bemc\b|civique|citoyen/, "drapeau"],
     [/anglais|espagnol|allemand|italien|arabe|chinois|japonais|portugais|russe|coreen|turc|hebreu|neerlandais|polonais|\blv ?\d|\blva\b|\blvb\b|\bllcer|\bamc\b|langue|english|spanish/, "bulle"],
@@ -207,7 +208,7 @@
   function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   // Ces clés sont gardées sur l'appareil ET dans le compte (table user_kv) : on retrouve la même chose sur téléphone et sur PC.
   // Restent sur l'appareil seulement : kvts (horodatages), file (révisions en attente d'envoi), cache.* et gen.* (copies de la base), erreurs.* (copie de secours de la table mistakes). Le thème est dans le profil.
-  const SYNC = /^merge\.(fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|controles|boostnext|boostj|journee|exo\..+|prof|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
+  const SYNC = /^merge\.(paris|fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|controles|boostnext|boostj|journee|exo\..+|prof|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
   let kvTs = {}, kvQueue = {}, kvTimer = null, kvOff = false, kvAt = 0;
   try { kvTs = JSON.parse(localStorage.getItem("merge.kvts") || "{}") || {}; } catch (e) { kvTs = {}; }
   const kvSaveTs = () => { try { localStorage.setItem("merge.kvts", JSON.stringify(kvTs)); } catch (e) { /* rien */ } };
@@ -281,7 +282,9 @@
     const out = [], re = /\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|\$([^$\n]+?)\$/g; let last = 0, m;
     const plain = t => esc(t.replace(/\\([A-Za-z]+)/g, (x, k) => TEXSYM[k] || x));
     while ((m = re.exec(text))) { out.push(plain(text.slice(last, m.index))); const tex = m[1] || m[2] || m[3] || m[4], disp = !!(m[1] || m[2]); out.push(`<span class="m${disp ? " md" : ""}" data-tex="${esc(tex)}">${esc(tex)}</span>`); last = re.lastIndex; }
-    out.push(plain(text.slice(last))); const h = out.join(""); return bold ? h.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>") : h;
+    out.push(plain(text.slice(last))); let h = out.join(""); if (bold) h = h.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+    // Texte avec formule : un seul élément, sinon un parent en « flex » mettrait chaque mot et chaque formule en colonne.
+    return out.length > 1 ? `<span class="mxw">${h}</span>` : h;
   }
   const mx = t => mathify(String(t == null ? "" : t), false);
   // Version texte d'une formule, pour les endroits où KaTeX ne peut pas s'afficher (bulles SVG, voix, titres).
@@ -586,7 +589,69 @@
     const l = ctrls(); if (l.some(c => c.s === sid && c.d === d)) return null;
     const c = { id: "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), s: sid, d, ch: null }; l.push(c); ctrlSave(l); await ctrlSync(); return c;
   }
-  async function ctrlDel(cid) { ctrlSave(ctrls().filter(c => c.id !== cid)); await ctrlSync(); }
+  async function ctrlDel(cid) { ctrlSave(ctrls().filter(c => c.id !== cid)); betSave(bets().filter(b => !(b.cid === cid && b.note == null))); await ctrlSync(); }
+  // ---------- pari sur la note d'un contrôle (17 nov.) ----------
+  // On vise une note et on mise des pièces : elles sont bloquées jusqu'à ce qu'on entre sa vraie note après le contrôle.
+  // Note atteinte : on récupère mise × (1 + (note visée - 8) / 6) → ×1,33 pour 10, ×2 pour 14, ×3 pour 20 (plus c'est ambitieux, plus ça rapporte).
+  // À 1 point près : on récupère la moitié. En dessous : la mise est perdue. Rangé à part (merge.paris) pour survivre à l'effacement des vieux contrôles.
+  const bets = () => (jget("merge.paris", null) || []).filter(b => b && b.id && b.cid && b.goal >= 1 && b.stake > 0);
+  const betSave = l => jset("merge.paris", l);
+  const betOf = cid => bets().find(b => b.cid === cid);
+  const betMult = goal => 1 + (Math.max(8, Math.min(20, goal)) - 8) / 6;
+  const betBack = (b, note) => note >= b.goal ? Math.round(b.stake * betMult(b.goal)) : note >= b.goal - 1 ? Math.round(b.stake / 2) : 0;
+  // Pour le solde : toutes les mises sont « dépensées », les gains des paris terminés sont « gagnés ».
+  function betCoins() { const l = bets(); return { staked: l.reduce((a, b) => a + b.stake, 0), back: l.filter(b => b.note != null).reduce((a, b) => a + betBack(b, b.note), 0), locked: l.filter(b => b.note == null).reduce((a, b) => a + b.stake, 0) }; }
+  const betsToSettle = () => bets().filter(b => b.note == null && b.d < localDay());
+  const noteTxt = n => String(n).replace(".", ",");
+  function betSheet(cid, after) {
+    const c = ctrls().find(x => x.id === cid), s = c && state.subjects.find(x => x.id === c.s); if (!s) return;
+    const have = betOf(cid), bal = coinsInfo().balance + (have ? have.stake : 0);
+    let goal = have ? have.goal : 14, stake = have ? have.stake : Math.min(50, Math.max(10, Math.floor(bal / 2 / 5) * 5));
+    const paint = el => {
+      const win = Math.round(stake * betMult(goal));
+      el.querySelector("#bgoal").textContent = noteTxt(goal) + "/20";
+      el.querySelector("#bmult").textContent = "×" + betMult(goal).toFixed(2).replace(".", ",").replace(/,?0+$/, "");
+      el.querySelectorAll("[data-stk]").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.stk === stake)));
+      el.querySelector("#bstake").textContent = plural(stake, "pièce", "pièces");
+      el.querySelector("#bwhat").innerHTML = `<li><b>${noteTxt(goal)} ou plus</b> : tu récupères <b>${win}</b> pièces (+${win - stake})</li><li><b>${noteTxt(goal - 1)}</b> : tu récupères ${Math.round(stake / 2)} pièces</li><li><b>Moins</b> : tu perds tes ${stake} pièces</li>`;
+      el.querySelector("#bok").textContent = (have ? "Modifier le pari · " : "Miser ") + plural(stake, "pièce", "pièces");
+    };
+    if (bal < 10) return sheet(`<div class="row"><span class="mico big">${I.coin}</span><h1>Parier sur ta note</h1></div><p>Il faut au moins 10 pièces pour parier. Tu en gagnes en révisant : 1 pièce tous les ${COIN_PTS} points.</p><button class="btn" data-close>J'ai compris</button>`);
+    const stakes = [10, 25, 50, 100, 200].filter(x => x <= bal);
+    sheet(`<div class="row"><span class="mico big">${I.coin}</span><h1>Parier sur ta note</h1></div><p class="muted">Contrôle de ${esc(s.name)} · ${esc(fmtDate(c.d))}. Vise une note, mise des pièces : elles restent bloquées jusqu'à ce que tu entres ta vraie note.</p>
+      <div class="betrow"><span class="label">Note visée</span><div class="row"><button class="iconbtn" id="bminus" aria-label="Note visée plus basse">−</button><b class="betgoal" id="bgoal"></b><button class="iconbtn" id="bplus" aria-label="Note visée plus haute">${I.plus}</button><span class="pill" id="bmult"></span></div></div>
+      <div class="betrow"><span class="label">Mise · <span id="bstake"></span> <span class="muted">(tu as ${plural(bal, "pièce", "pièces")})</span></span><div class="chips">${stakes.map(x => `<button class="chip" data-stk="${x}">${x}</button>`).join("")}${bal > 200 || !stakes.includes(bal) ? `<button class="chip" data-stk="${bal}">Tout (${bal})</button>` : ""}</div></div>
+      <ul class="betwhat" id="bwhat"></ul>
+      <button class="btn big" id="bok"></button>${have ? `<button class="btn ghost" id="bcancel">Annuler le pari (pièces rendues)</button>` : `<button class="btn ghost" data-close>Pas de pari</button>`}`, el => {
+      paint(el);
+      el.querySelector("#bminus").onclick = () => { goal = Math.max(10, goal - 1); paint(el); };
+      el.querySelector("#bplus").onclick = () => { goal = Math.min(20, goal + 1); paint(el); };
+      el.querySelectorAll("[data-stk]").forEach(b => b.onclick = () => { stake = +b.dataset.stk; paint(el); });
+      el.querySelector("#bok").onclick = () => {
+        const l = bets().filter(b => b.cid !== cid); l.push({ id: have ? have.id : "p" + Date.now().toString(36), cid, s: s.id, sname: s.name, d: c.d, goal, stake, at: Date.now(), note: null }); betSave(l); walletSync();
+        closeSheet(); toast(`Pari enregistré : ${noteTxt(goal)}/20 en ${s.name}, ${plural(stake, "pièce", "pièces")} en jeu.`); if (after) after();
+      };
+      if (el.querySelector("#bcancel")) el.querySelector("#bcancel").onclick = () => { betSave(bets().filter(b => b.cid !== cid)); walletSync(); closeSheet(); toast("Pari annulé, tes pièces sont rendues."); if (after) after(); };
+    });
+  }
+  // Après le contrôle : on entre sa note, le pari se règle.
+  function betNoteSheet(bid, after) {
+    const b = bets().find(x => x.id === bid); if (!b) return;
+    sheet(`<div class="row"><span class="mico big">${I.check}</span><h1>Ta note en ${esc(b.sname)}</h1></div><p class="muted">Contrôle du ${esc(fmtDate(b.d))} · tu visais ${noteTxt(b.goal)}/20 avec ${plural(b.stake, "pièce", "pièces")} en jeu.</p>
+      <div class="field"><label for="bnote">Ta note sur 20</label><input id="bnote" type="number" inputmode="decimal" min="0" max="20" step="0.25" placeholder="Ex. 14,5"></div><p class="small" id="bprev" aria-live="polite"></p>
+      <button class="btn big" id="bnok">Valider ma note</button><button class="btn ghost" data-close>Plus tard</button>`, el => {
+      const inp = el.querySelector("#bnote"), read = () => { const v = parseFloat(String(inp.value).replace(",", ".")); return Number.isFinite(v) && v >= 0 && v <= 20 ? v : null; };
+      inp.oninput = () => { const v = read(); el.querySelector("#bprev").textContent = v == null ? "" : v >= b.goal ? `Objectif atteint : tu récupères ${betBack(b, v)} pièces.` : v >= b.goal - 1 ? `À un point près : tu récupères ${betBack(b, v)} pièces.` : `Objectif raté : tu perds tes ${b.stake} pièces.`; };
+      el.querySelector("#bnok").onclick = () => {
+        const v = read(); if (v == null) return toast("Entre une note entre 0 et 20.");
+        const l = bets(), x = l.find(y => y.id === bid); x.note = v; x.settled = Date.now(); betSave(l); walletSync();
+        const back = betBack(x, v); closeSheet();
+        if (v >= x.goal && typeof confetti === "function") try { confetti(); } catch (e) { /* rien */ }
+        toast(v >= x.goal ? `Bravo ! +${back - x.stake} pièces (${back} récupérées).` : back ? `Presque ! ${back} pièces récupérées.` : `Raté de peu ou de beaucoup : ${x.stake} pièces perdues. La prochaine fois !`);
+        if (after) after();
+      };
+    });
+  }
   // Fenêtre « Quels chapitres tombent ? » : ouverte juste après avoir placé un contrôle, et depuis le bouton « Chapitres ».
   function ctrlChSheet(cid, after) {
     const c = ctrls().find(x => x.id === cid), s = c && state.subjects.find(x => x.id === c.s); if (!s) return;
@@ -599,10 +664,12 @@
     };
     sheet(`<div class="row"><span class="mico big">${I.cal}</span><h1>Contrôle de ${esc(s.name)}</h1></div><p class="muted">${esc(fmtDate(c.d))}</p><h2>Quels chapitres tombent ?</h2>
       ${chs.length ? `<button type="button" class="chip big" id="ccall" aria-pressed="true">Tous les chapitres</button><span class="label">Ou seulement :</span><div class="chips" id="cchs"></div><p class="small muted" id="ccnote" aria-live="polite"></p>` : '<p class="small muted">Pas encore de chapitre dans cette matière : le contrôle porte sur toute la matière. Tu pourras choisir les chapitres plus tard.</p><span id="ccall" hidden></span><span id="cchs" hidden></span><span id="ccnote" hidden></span>'}
-      <button class="btn" id="ccok">Valider</button>`, el => {
+      <button class="btn" id="ccok">Valider</button>${!betOf(cid) && c.d >= localDay() ? `<button class="btn ghost" id="ccbet">${I.coin}Valider et parier sur ma note</button>` : ""}`, el => {
       paint(el);
       el.querySelector("#ccall").onclick = () => { sel.clear(); paint(el); };
-      el.querySelector("#ccok").onclick = () => { const l = ctrls(), x = l.find(y => y.id === cid); if (x) { x.ch = sel.size ? [...sel] : null; ctrlSave(l); } closeSheet(); toast(sel.size ? "Contrôle enregistré avec " + plural(sel.size, "chapitre", "chapitres") + "." : "Contrôle enregistré."); if (after) after(); };
+      const save = () => { const l = ctrls(), x = l.find(y => y.id === cid); if (x) { x.ch = sel.size ? [...sel] : null; ctrlSave(l); } };
+      el.querySelector("#ccok").onclick = () => { save(); closeSheet(); toast(sel.size ? "Contrôle enregistré avec " + plural(sel.size, "chapitre", "chapitres") + "." : "Contrôle enregistré."); if (after) after(); };
+      if (el.querySelector("#ccbet")) el.querySelector("#ccbet").onclick = () => { save(); closeSheet(); if (after) after(); setTimeout(() => betSheet(cid, after), 260); };
     });
   }
 
@@ -961,7 +1028,8 @@
   // moins ce qui a été dépensé. Exemple : ~100 bonnes réponses par jour ≈ 40 pièces par jour, un bisou en une semaine, le cinéma en ~2 mois.
   const COIN_PTS = 25;
   const levelBonus = L => { let t = 0; for (let l = 2; l <= L; l++) t += 10 * l; return t; };
-  function coinsInfo() { const x = xpInfo(), st = rwState(), earned = Math.floor(x.xp / COIN_PTS) + levelBonus(x.level), spent = st.buys.reduce((a, b) => a + (+b.price || 0), 0); return { earned, spent, balance: Math.max(0, earned - spent) }; }
+  // Pièces : gagnées (points, niveaux, paris gagnés) moins dépensées (boutique, mises des paris). « locked » = mises en attente d'une note.
+  function coinsInfo() { const x = xpInfo(), st = rwState(), bc = betCoins(), earned = Math.floor(x.xp / COIN_PTS) + levelBonus(x.level) + bc.back, spent = st.buys.reduce((a, b) => a + (+b.price || 0), 0) + bc.staked; return { earned, spent, balance: Math.max(0, earned - spent), locked: bc.locked }; }
   const rwSave = (st) => { jset("merge.rewards", st); walletSync(); };
   const rwOwned = (r, xp, st) => r.lv ? levelOfXp(xp) >= r.lv : r.price ? st.buys.some(b => b.id === r.id) || st.chest.includes(r.id) : r.chest ? st.chest.includes(r.id) : xp >= r.pts;
   // Valeurs des articles personnalisés (titre écrit, couleur choisie).
@@ -1305,21 +1373,18 @@
     const today = state.sessions.find(s => s.day === localDay()) || { seconds: 0, cards_reviewed: 0 };
     const doneVal = p.daily_goal_kind === "minutes" ? Math.floor(today.seconds / 60) : today.cards_reviewed;
     const unit = p.daily_goal_kind === "minutes" ? "min" : "cartes";
-    const lv = xpInfo();
     const week = lastDays(7, state.sessions);
     const ups = upCtrls();
     const yearNow = new Date().getMonth() >= 8 ? new Date().getFullYear() : new Date().getFullYear() - 1, newYear = p.school_year && p.school_year < yearNow;
-    app.innerHTML = `<div class="row between"><div class="logo">${esc(C.NOM_APPLI)}<b>.</b></div><span class="grow"></span><span class="homemusic"><button class="iconbtn flat" data-qs aria-label="Recherche rapide">${I.search}</button><button class="iconbtn flat" data-pomo aria-label="Pomodoro">${I.clock}</button>${musicBtn()}</span>${state.offline ? '<span class="pill warn">Hors ligne</span>' : st ? `<span class="streak" title="${plural(st, "jour", "jours")} d'affilée">${plural(st, "jour", "jours")}<span class="stl">&nbsp;d'affilée</span></span>` : `<span class="pill">${esc(p.classe || "")}</span>`}</div>
-      <div class="hello"><div class="row">${MASCOT((rwEquipped("mascotte") || {}).v || "")}<h1 class="grow">Salut ${esc(p.display_name || "")}${rwEquipped("titre") && rwEquipped("titre").id !== "t-novice" && rwName(rwEquipped("titre")) ? ` <span class="rwtitle">${esc(rwName(rwEquipped("titre")))}</span>` : ""}</h1></div><p class="muted">${esc(new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }).replace(/^./, c => c.toUpperCase()))} · ${esc((rwOwned(SHOP.find(r => r.id === "p-phrase"), 0, rwState()) && rwState().custom.phrase) || PEP)}</p></div>
-      <div class="level"><a class="lvl" href="#recompenses" aria-label="Niveau ${lv.level}, voir les récompenses">Niveau ${lv.level}</a><a class="coinpill" href="#boutique" aria-label="${coinsInfo().balance} pièces, ouvrir la boutique">${I.coin}${coinsInfo().balance}</a><div class="bar grow"><i style="width:${lv.pct}%"></i></div><span class="small muted">encore ${lv.left} points</span></div>
-      ${(() => { const tn = new Date().getHours() >= 15 ? tonightSuggestion() : null; return tn ? `<div class="banner"><div><h2>Ce soir</h2><p class="small">Demain tu as ${tn.subs.map(x => esc(x.name)).join(", ")}. Un petit tour avant ?</p></div><a class="btn sm" href="#revision-${tn.subs[0].id}">Réviser ${esc(tn.subs[0].name)}</a></div>` : ""; })()}${resumeHtml()}${nowTaskHtml()}
+    app.innerHTML = `<div class="row between"><div class="logo">${esc(C.NOM_APPLI)}<b>.</b></div><span class="grow"></span><span class="homemusic"><button class="iconbtn flat" data-qs aria-label="Recherche rapide">${I.search}</button><button class="iconbtn flat" data-pomo aria-label="Pomodoro">${I.clock}</button>${musicBtn()}</span><a class="coinpill" href="#boutique" aria-label="${plural(coinsInfo().balance, "pièce", "pièces")} : ouvrir la boutique">${I.coin}${coinsInfo().balance}</a>${state.offline ? '<span class="pill warn">Hors ligne</span>' : st ? `<span class="streak" title="${plural(st, "jour", "jours")} d'affilée">${plural(st, "jour", "jours")}<span class="stl">&nbsp;d'affilée</span></span>` : `<span class="pill">${esc(p.classe || "")}</span>`}</div>
+      <div class="hello"><div class="row">${MASCOT((rwEquipped("mascotte") || {}).v || "")}<h1 class="grow">Salut ${esc(p.display_name || "")}${rwEquipped("titre") && rwEquipped("titre").id !== "t-novice" && rwName(rwEquipped("titre")) ? ` <span class="rwtitle">${esc(rwName(rwEquipped("titre")))}</span>` : ""}</h1></div></div>
       <div class="dash dash2">${missionHtml(due, doneVal, unit, st)}${nextCtrlHtml(ups)}</div>
+      <div class="hintlist">${betsToSettle().map(b => `<div class="banner bethint"><div><h2>Ta note en ${esc(b.sname)} ?</h2><p class="small">Contrôle du ${esc(fmtDate(b.d))} : entre ta note pour régler ton pari (${plural(b.stake, "pièce", "pièces")}).</p></div><button class="btn sm" data-bnote="${b.id}">Entrer ma note</button></div>`).join("")}${(() => { const tn = new Date().getHours() >= 15 ? tonightSuggestion() : null; return tn ? `<div class="banner"><div><h2>Ce soir</h2><p class="small">Demain tu as ${tn.subs.map(x => esc(x.name)).join(", ")}. Un petit tour avant ?</p></div><a class="btn sm" href="#revision-${tn.subs[0].id}">Réviser ${esc(tn.subs[0].name)}</a></div>` : ""; })()}${resumeHtml()}${nowTaskHtml()}${[0, 1].includes(new Date().getDay()) && state.sessions.length && safeGet("merge.bilanseen") !== localDay(mondayOf(new Date())) ? `<div class="banner"><div><h2>Ton bilan de la semaine est prêt</h2><p class="small">Ce que tu as fait, et ton objectif pour la suite.</p></div><a class="btn sm" href="#bilan">Voir</a></div>` : ""}${newYear ? `<div class="banner"><div><h2>Nouvelle année scolaire</h2><p class="small">Tu passes en quelle classe ? Mets ta classe à jour dans Réglages.</p></div><a class="btn sm" href="#reglages">Mettre à jour</a></div>` : ""}</div>
       ${homeSubjectsHtml()}
       ${weekHtml(week, p)}
-      ${[0, 1].includes(new Date().getDay()) && state.sessions.length && safeGet("merge.bilanseen") !== localDay(mondayOf(new Date())) ? `<div class="banner"><div><h2>Ton bilan de la semaine est prêt</h2><p class="small">Ce que tu as fait, et ton objectif pour la suite.</p></div><a class="btn sm" href="#bilan">Voir</a></div>` : ""}
       ${planTodayHtml()}${installHtml()}
-      ${newYear ? `<div class="banner"><div><h2>Nouvelle année scolaire</h2><p class="small">Tu passes en quelle classe ? Mets ta classe à jour dans Réglages.</p></div><a class="btn sm" href="#reglages">Mettre à jour</a></div>` : ""}
       ${state.subjects.length ? "" : `<div class="card pad stack"><h2>Commence par une matière</h2><p class="small muted">Crée ta première matière, puis importe ton cours pour avoir tes cartes.</p><a class="btn" href="#nouvelle-matiere">Ajouter une matière</a></div>`}`;
+    app.querySelectorAll("[data-bnote]").forEach(b => b.onclick = () => betNoteSheet(b.dataset.bnote, screenHome));
     if ($("insb")) { $("insb").onclick = installSheet; $("insno").onclick = () => { safeSet("merge.noinstall", "1"); screenHome(); }; }
     celebrate();
     nowTaskTick();
@@ -1380,11 +1445,14 @@
   function chapterRow(c, color) { const cs = cardsOf(c.id); return `<a class="card subject" style="--c:${esc(okColor(c.color) ? c.color : color)}" href="#chapitre-${c.id}"><div class="row between"><b>${esc(c.name)}${c.auto_name ? '<span class="small muted" style="display:block;font-weight:600">Le nom viendra de ton cours</span>' : ""}</b><span class="pill">${cs.length ? plural(cs.length, "carte", "cartes") : "À importer"}</span></div>${cs.length ? `<div class="row"><div class="bar grow"><i style="width:${mastery(cs)}%"></i></div><span class="small muted">${mastery(cs)} %</span></div>` : ""}</a>`; }
   // Champ « Nouveau chapitre » avec la case « Nom choisi automatiquement » (le nom vient du cours importé, voir studio/titre.mjs).
   const AUTO_NAME = "Nouveau chapitre";
-  const chapterField = (label, ph) => `<div class="field"><label for="cname">${label}</label><div class="row"><input id="cname" type="text" maxlength="80" placeholder="${ph}"><button class="btn" id="addCh" aria-label="Ajouter le chapitre">${I.plus}</button></div>
-      <button type="button" class="switch" role="switch" id="cauto" aria-checked="false"><i></i><span>Nom choisi automatiquement d'après le cours</span></button></div>`;
+  // Fenêtre claire (16 nov.) : le nom, la case « nom automatique », puis UN gros bouton « Créer le chapitre » (avant, un petit « + »
+  // à côté du champ qu'on ne voyait pas). Les dossiers, peu utilisés, sont un simple lien discret en dessous.
+  const chapterField = (label, ph) => `<div class="field"><label for="cname">${label}</label><input id="cname" type="text" maxlength="80" placeholder="${ph}" enterkeyhint="done"></div>
+      <button type="button" class="switch" role="switch" id="cauto" aria-checked="false"><i></i><span>Nom choisi automatiquement d'après le cours</span></button>
+      <button class="btn big" id="addCh">${I.plus}<span id="addChTxt">Créer le chapitre</span></button>`;
   function wireChapterField(subjectId, groupId) {
     const inp = $("cname"), sw = $("cauto"), ph = inp.placeholder;
-    sw.onclick = () => { const on = sw.getAttribute("aria-checked") !== "true"; sw.setAttribute("aria-checked", on); inp.disabled = on; if (on) inp.value = ""; inp.placeholder = on ? "Le nom viendra de ton cours" : ph; if (!on) inp.focus(); };
+    sw.onclick = () => { const on = sw.getAttribute("aria-checked") !== "true"; sw.setAttribute("aria-checked", on); inp.disabled = on; if (on) inp.value = ""; inp.placeholder = on ? "Le nom viendra de ton cours" : ph; $("addChTxt").textContent = on ? "Créer et importer mon cours" : "Créer le chapitre"; if (!on) inp.focus(); };
     $("addCh").onclick = () => addChapter(inp.value.trim(), subjectId, groupId, sw.getAttribute("aria-checked") === "true");
     inp.onkeydown = e => { if (e.key === "Enter") $("addCh").click(); };
   }
@@ -1401,24 +1469,38 @@
     const s = state.subjects.find(x => x.id === id); if (!s) { location.hash = "#accueil"; return; }
     drawTabs("matieres"); // barre du bas visible : on peut revenir à l'accueil d'un geste
     const chs = state.chapters.filter(c => c.subject_id === id), groups = state.groups.filter(g => g.subject_id === id), loose = chs.filter(c => !groups.some(g => g.id === c.group_id));
-    app.innerHTML = `<div class="row"><a class="iconbtn" href="#matieres" aria-label="Retour aux matières">${I.back}</a><span class="grow"></span><button class="iconbtn flat" id="sSet" aria-label="Réglages de la matière" title="Réglages">${I.gear}</button></div>
-      <div class="stack" style="--c:${esc(s.color)}"><div class="row"><span class="dot"></span><h1>${esc(s.name)}</h1></div>
-        <div class="card pad stack ctrlbox"><div class="row between"><h2>Contrôles</h2><button class="btn sm" id="ctAdd" aria-expanded="${!!openPicker}">${I.cal}Ajouter un contrôle</button></div><div id="examBox"></div>
-          ${isFree(s) ? '<p class="small muted">Révision libre : pas de contrôle prévu, tu avances à ton rythme.</p>' : ctrlsOf(id).filter(c => c.d >= localDay()).map(c => `<div class="ctrlrow"><span class="jx">${jx(c.d)}</span><span class="grow"><b>${esc(fmtDate(c.d))}</b><span class="small muted">${c.ch && c.ch.length ? esc(chs.filter(y => c.ch.includes(y.id)).map(y => y.name).join(", ")) : "Tous les chapitres"}</span></span><button class="btn sm ghost" data-cch="${c.id}">Chapitres</button><button class="iconbtn flat" data-cdel="${c.id}" aria-label="Supprimer le contrôle du ${esc(fmtDate(c.d))}">${I.x}</button></div>`).join("") || '<p class="small muted">Aucun contrôle prévu. Ajoute-en un : ton plan de révision se fait tout seul. Tu peux en mettre plusieurs.</p>'}
-          <button type="button" class="switch" role="switch" aria-checked="${isFree(s)}" id="ctFree"><i></i><span>Pas de contrôle, révision libre</span></button></div>
-        ${chs.some(c => cardsOf(c.id).length) ? `<a class="btn revall" href="#revision-${id}">${I.cards}Réviser tous les chapitres de la matière</a>` : ""}
-        <div class="row" style="flex-wrap:wrap"><a class="btn sm ghost" href="#methode-${id}">${I.steps}Fiche méthode</a><a class="btn sm ghost" href="#bac-${id}">${I.book}Vrais sujets d'examen</a></div></div>
-      <div class="stack"><div class="row between"><h2>Dossiers</h2><button class="iconbtn accent" id="addG" aria-label="Ajouter un dossier">${I.plus}</button></div>
-        <div id="gform"></div>
-        ${groups.length ? `<div class="grid">${groups.map(g => { const gc = chs.filter(c => c.group_id === g.id), cs = state.cards.filter(k => gc.some(c => c.id === k.chapter_id)), m = mastery(cs); return `<a class="card folder" style="--c:${esc(okColor(g.color) ? g.color : s.color)}" href="#dossier-${g.id}"><div class="row">${I.folder}<b class="grow">${esc(g.name)}</b></div><div class="row between small"><span>${plural(gc.length, "chapitre", "chapitres")}</span><span>${m} %</span></div><div class="bar"><i style="width:${m}%"></i></div></a>`; }).join("")}</div>` : '<p class="small muted">Range tes chapitres par thème, par exemple « Thème 1 : Génétique ». Touche + pour créer un dossier.</p>'}</div>
-      <div class="stack"><div class="row between"><h2>${groups.length ? "Chapitres sans dossier" : "Chapitres"}</h2><button class="iconbtn accent" id="sAdd" aria-label="Ajouter un chapitre" title="Ajouter un chapitre">${I.plus}</button></div>
-      ${loose.length ? loose.map(c => chapterRow(c, s.color)).join("") : `<p class="muted">${chs.length ? "Tous tes chapitres sont rangés dans des dossiers." : "Aucun chapitre pour l'instant. Touche + pour en créer un."}</p>`}</div>
+    // Matière, design E « Plan de révision » (choisi par Ramzi, 17 nov.) : en haut ce qu'il faut réviser aujourd'hui (le chapitre
+    // le moins maîtrisé qui a des cartes à revoir) avec un gros bouton « Réviser » ; les contrôles en lignes compactes ; les chapitres
+    // du moins au plus maîtrisé ; les dossiers (peu utilisés) en petits liens discrets ; les outils en bas.
+    const ups = isFree(s) ? [] : ctrlsOf(id).filter(c => c.d >= localDay()), ic = subjIcon(s.name);
+    const info = chs.map(c => { const cs = cardsOf(c.id); return { c, n: cs.length, m: cs.length ? mastery(cs) : -1, due: cs.filter(fsrsDue).length }; });
+    const todo = info.filter(x => x.n && x.due).sort((x, y) => x.m - y.m || y.due - x.due)[0] || info.filter(x => x.n && x.m < 100).sort((x, y) => x.m - y.m)[0];
+    const sorted = info.slice().sort((x, y) => (x.n ? x.m : 1000) - (y.n ? y.m : 1000));
+    const tone = m => m < 0 ? "none" : m < 30 ? "low" : m < 70 ? "mid" : "high";
+    const gname = c => { const g = groups.find(x => x.id === c.group_id); return g ? g.name : ""; };
+    const head = isFree(s) ? "Révision libre" : ups.length ? (daysUntil(ups[0].d) === 0 ? "Contrôle aujourd'hui" : `Contrôle dans ${plural(daysUntil(ups[0].d), "jour", "jours")}`) : "Pas de contrôle prévu";
+    app.innerHTML = `<div class="row"><a class="iconbtn" href="#matieres" aria-label="Retour aux matières">${I.back}</a><span class="grow"></span><button class="iconbtn flat" id="sSet" aria-label="Réglages et outils de la matière" title="Réglages">${I.gear}</button></div>
+      <div class="subhead" style="--c:${esc(s.color)}"><span class="hsico big">${ic || esc(s.name.slice(0, 2).toUpperCase())}</span><div class="grow" style="min-width:0"><h1>${esc(s.name)}</h1><p class="small muted">${head} · ${plural(chs.length, "chapitre", "chapitres")}</p></div></div>
+      ${todo ? `<div class="card todaycard"><span class="small">À réviser aujourd'hui</span><b>${esc(todo.c.name)}</b><span class="small">${todo.due ? plural(todo.due, "carte à revoir", "cartes à revoir") : "Entraînement"} · ${Math.max(0, todo.m)} % maîtrisé</span><a class="btn todogo" href="#cartes-${todo.c.id}">${I.play}Réviser</a></div>` : ""}
+      ${chs.some(c => cardsOf(c.id).length) ? `<a class="btn ghost revall" href="#revision-${id}">${I.cards}Réviser tous les chapitres de la matière</a>` : ""}
+      <div class="stack ctrlbox" style="--c:${esc(s.color)}"><div class="row between"><h2>Contrôles</h2><button class="btn sm ghost" id="ctAdd" aria-expanded="${!!openPicker}">${I.plus}Ajouter</button></div><div id="examBox"></div>
+        ${isFree(s) ? '<p class="small muted">Révision libre : pas de contrôle prévu, tu avances à ton rythme.</p>' : ups.length ? ups.map(c => `<div class="ctrlrow"><span class="jx">${jx(c.d)}</span><span class="grow" style="min-width:0"><b class="ctdate">${esc(fmtDate(c.d))}</b><span class="small muted ctsub">${c.ch && c.ch.length ? esc(chs.filter(y => c.ch.includes(y.id)).map(y => y.name).join(", ")) : "Tous les chapitres"}</span></span><button class="btn sm ghost${betOf(c.id) ? " beton" : ""}" data-bet="${c.id}" aria-label="${betOf(c.id) ? "Ton pari : " + noteTxt(betOf(c.id).goal) + " sur 20, " + betOf(c.id).stake + " pièces" : "Parier des pièces sur ta note"}">${I.coin}${betOf(c.id) ? noteTxt(betOf(c.id).goal) + "/20" : '<span class="hidesm">Parier</span>'}</button><button class="btn sm ghost" data-cch="${c.id}" aria-label="Chapitres du contrôle">${I.book}<span class="hidesm">Chapitres</span></button><button class="btn sm ghost softdel" data-cdel="${c.id}" aria-label="Retirer le contrôle du ${esc(fmtDate(c.d))}">${I.trash}<span class="hidesm">Retirer</span></button></div>`).join("") : '<p class="small muted">Aucun contrôle prévu.</p>'}
+        ${(() => { const past = bets().filter(b => b.s === id && b.d < localDay()).sort((a, b) => b.d.localeCompare(a.d)).slice(0, 6); return past.length ? `<details class="pastctl"${past.some(b => b.note == null) ? " open" : ""}><summary>Contrôles passés${past.some(b => b.note == null) ? ` · <b>${past.filter(b => b.note == null).length} note à entrer</b>` : ""}</summary>${past.map(b => `<div class="ctrlrow past"><span class="grow" style="min-width:0"><b>${esc(fmtDate(b.d))}</b><span class="small muted">Visé ${noteTxt(b.goal)}/20 · ${plural(b.stake, "pièce", "pièces")} misées${b.note != null ? ` · eu ${noteTxt(b.note)} → ${betBack(b, b.note) - b.stake >= 0 ? "+" : ""}${betBack(b, b.note) - b.stake} pièces` : ""}</span></span>${b.note == null ? `<button class="btn sm" data-bnote="${b.id}">Entrer ma note</button>` : `<span class="pill ${b.note >= b.goal ? "ok" : ""}">${b.note >= b.goal ? "Gagné" : "Raté"}</span>`}</div>`).join("")}</details>` : ""; })()}
+        <button type="button" class="switch" role="switch" aria-checked="${isFree(s)}" id="ctFree"><i></i><span>Pas de contrôle, révision libre</span></button></div>
+      <div class="stack"><div class="row between"><h2>Chapitres</h2><button class="btn sm" id="sAdd" aria-label="Ajouter un chapitre" title="Ajouter un chapitre">${I.plus}Nouveau</button></div>
+        ${sorted.length ? `<p class="small muted" style="margin:0">Du moins au plus maîtrisé : commence par le haut.</p><div class="chlist">${sorted.map(x => `<a class="chline" href="#chapitre-${x.c.id}"><span class="mpill ${tone(x.m)}">${x.n ? x.m + " %" : "–"}</span><span class="grow" style="min-width:0"><b>${esc(x.c.name)}</b><span class="small muted">${x.n ? plural(x.n, "carte", "cartes") : x.c.auto_name ? "Le nom viendra de ton cours" : "Cours à importer"}${gname(x.c) ? " · " + esc(gname(x.c)) : ""}</span></span>${x.due ? `<span class="pill">${x.due} à revoir</span>` : ""}<span class="chev">${I.back}</span></a>`).join("")}</div>` : `<p class="muted">Aucun chapitre pour l'instant.</p>`}
+        <button class="addline" id="sAdd2">${I.plus}Nouveau chapitre</button>
+        <div class="foldline">${groups.map(g => { const gc = chs.filter(c => c.group_id === g.id); return `<a class="folder" style="--c:${esc(okColor(g.color) ? g.color : s.color)}" href="#dossier-${g.id}">${I.folder}${esc(g.name)} · ${gc.length}</a>`; }).join("")}<button class="linkbtn" id="addG">${I.folder}${groups.length ? "Nouveau dossier" : "Ranger dans des dossiers"}</button></div>
+        <div id="gform"></div></div>
+      <div class="row subtools"><a class="btn sm ghost" href="#methode-${id}">${I.steps}Fiche méthode</a><a class="btn sm ghost" href="#bac-${id}">${I.book}Vrais sujets d'examen</a></div>
       <div id="stools">${subjectToolsHtml(s, chs)}</div>`;
     // Contrôles : « Ajouter un contrôle » ouvre le calendrier ; un jour touché crée le contrôle puis demande ses chapitres.
     const openExam = () => { examPicker($("examBox"), { date: null, free: false }, async v => { if (!v.date) return; const c = await ctrlAdd(id, v.date); $("examBox").innerHTML = ""; if (!c) return toast("Il y a déjà un contrôle ce jour-là."); screenSubject(id); ctrlChSheet(c.id, () => screenSubject(id)); }, true); };
     if (openPicker) openExam();
     $("ctAdd").onclick = () => { if ($("examBox").innerHTML) { $("examBox").innerHTML = ""; $("ctAdd").setAttribute("aria-expanded", "false"); } else { openExam(); $("ctAdd").setAttribute("aria-expanded", "true"); } };
     app.querySelectorAll("[data-cch]").forEach(b => b.onclick = () => ctrlChSheet(b.dataset.cch, () => screenSubject(id)));
+    app.querySelectorAll("[data-bet]").forEach(b => b.onclick = () => betSheet(b.dataset.bet, () => screenSubject(id)));
+    app.querySelectorAll("[data-bnote]").forEach(b => b.onclick = () => betNoteSheet(b.dataset.bnote, () => screenSubject(id)));
     app.querySelectorAll("[data-cdel]").forEach(b => b.onclick = async () => { if (!(await askConfirm("Supprimer ce contrôle ?", "Il disparaîtra du calendrier et du planning."))) return; await ctrlDel(b.dataset.cdel); toast("Contrôle supprimé."); screenSubject(id); });
     $("ctFree").onclick = async () => { const err = await saveExam(id, { date: null, free: !isFree(s) }); if (err) return fail(err, "Réglage non enregistré"); await ctrlSync(); toast(isFree(s) ? "Révision libre activée." : "Révision libre désactivée."); screenSubject(id); };
     $("addG").onclick = () => {
@@ -1431,11 +1513,12 @@
         await loadAll(); screenSubject(id); toast("Dossier créé.");
       };
     };
-    $("sAdd").onclick = () => sheet(`<div class="row"><span class="mico big">${I.plus}</span><h1>Ajouter</h1></div>${chapterField("Nouveau chapitre", "Ex. Les ondes mécaniques")}<button class="btn ghost" id="sAddG">${I.folder || I.plus}Nouveau dossier</button><button class="btn ghost" data-close>Fermer</button>`, () => {
+    $("sAdd").onclick = () => sheet(`<div class="row"><span class="mico big">${I.plus}</span><h1>Nouveau chapitre</h1></div>${chapterField("Nom du chapitre", "Ex. Les ondes mécaniques")}<button class="linkbtn addfolder" id="sAddG">${I.folder || I.plus}Ou créer un dossier pour ranger tes chapitres</button>`, () => {
       wireChapterField(id, null); setTimeout(() => { const c = $("cname"); if (c && matchMedia("(pointer:fine)").matches) c.focus(); }, 50);
       $("sAddG").onclick = () => { closeSheet(); $("addG").click(); $("gform").scrollIntoView({ block: "center", behavior: "smooth" }); };
     });
     $("sSet").onclick = () => sheet(subjectSettingsHtml(s), () => wireSubjectTools(s));
+    $("sAdd2").onclick = () => $("sAdd").click();
   }
 
   // ---------- dossier (sous-catégorie) : onglets Résumés, Flashcards, Quiz, Contrôles ----------
@@ -1470,8 +1553,8 @@
         <div class="stack" role="tabpanel">${list()}</div>
 `;
       app.querySelectorAll("[data-gt]").forEach(b => b.onclick = () => { groupTab = b.dataset.gt; draw(); });
-      $("gAdd").onclick = () => sheet(`<div class="row"><span class="mico big">${I.plus}</span><h1>Ajouter</h1></div>${chapterField("Nouveau chapitre dans ce dossier", "Ex. Chapitre 1 : La mitose")}
-          ${loose.length ? `<div class="field"><label for="mv">Ou ranger un chapitre existant ici</label><div class="row"><select id="mv">${loose.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select><button class="btn sm" id="mvgo">Ranger</button></div></div>` : ""}<button class="btn ghost" data-close>Fermer</button>`, () => {
+      $("gAdd").onclick = () => sheet(`<div class="row"><span class="mico big">${I.plus}</span><h1>Nouveau chapitre</h1></div>${chapterField("Nom du chapitre (dans ce dossier)", "Ex. Chapitre 1 : La mitose")}
+          ${loose.length ? `<div class="field"><label for="mv">Ou ranger un chapitre existant ici</label><div class="row"><select id="mv">${loose.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select><button class="btn sm" id="mvgo">Ranger</button></div></div>` : ""}`, () => {
         wireChapterField(g.subject_id, id); setTimeout(() => { const c = $("cname"); if (c && matchMedia("(pointer:fine)").matches) c.focus(); }, 50);
         if ($("mvgo")) $("mvgo").onclick = async () => { const r = await sb.from("chapters").update({ group_id: id }).eq("id", $("mv").value); if (r.error) return fail(r.error, "Chapitre non rangé"); closeSheet(); await loadAll(); screenGroup(id); toast("Chapitre rangé dans le dossier."); };
       });
@@ -1559,18 +1642,22 @@
     // puis « Plus d'outils » replié. Toujours le « i » et l'étoile dans « Plus d'outils » ; les favoris rejoignent les raccourcis.
     const nc = nextCtrl(s), ctl = nc && (!nc.ch || !nc.ch.length || nc.ch.includes(id));
     const chHead = () => `<div class="chhead" style="--c:${esc(s.color)}"><div class="chring" style="--p:${m}" role="img" aria-label="Maîtrise ${m} %"><b>${m}%</b></div><div class="grow"><h1>${esc(ch.name)}</h1><p class="small muted">${cards.length ? plural(cards.length, "carte", "cartes") + (due ? " · " + plural(due, "à revoir", "à revoir") : "") : "Pas encore de cartes"}${ctl ? " · contrôle " + (jx(nc.d) === "Auj." ? "aujourd'hui" : jx(nc.d)) : ""}</p></div></div>`;
-    const short = (k) => {
+    const short = (k, odd) => {
       const M = MODES[k]; let sub = M.s, icon = I[M.i], href = k === "prof" ? "#exos-" + id : "#" + k + "-" + id;
       if (k === "resume" && !hasSum) { href = "#import-" + id; sub = "Importe ton cours"; }
       if (k === "resume" && hasSum) sub = "L'essentiel";
       if (k === "quiz") sub = "QCM"; if (k === "interro") sub = "Tu écris, il corrige"; if (k === "prof") sub = "Une question, un exercice, un quiz… ce que tu veux";
       if (k === "controle") { icon = m >= 100 ? I.check : I.lock; sub = m >= 100 ? "Débloqué" : "À 100 %"; }
-      return `<a class="short${k === "prof" ? " wide" : ""}" href="${href}"><span class="mico">${icon}</span><span class="mtxt"><b>${M.n}</b><span class="small">${sub}</span></span></a>`;
+      return `<a class="short${k === "prof" && odd ? " wide" : ""}" href="${href}"><span class="mico">${icon}</span><span class="mtxt"><b>${M.n}</b><span class="small">${sub}</span></span></a>`;
     };
     const revMin = Math.max(1, Math.round((due || Math.min(20, meta.length)) * 0.5));
-    const modesHtml = () => `<a class="revbig" href="#cartes-${id}">${I.play}<span class="grow"><b>Réviser maintenant</b><span class="small">${due ? plural(due, "carte à revoir", "cartes à revoir") : "Entraînement sur tes cartes"}, environ ${revMin} min</span></span></a>`
+    // Raccourcis : sur téléphone 2 colonnes (« Demander au prof » en large s'il est seul sur sa ligne) ; sur PC, une grille
+    // sans trou : 5 raccourcis sur une ligne, 6 en 3 × 2, plus en 4 colonnes.
+    const shortKeys = () => ["resume", "quiz", "interro", "controle"].concat(hasSchema ? ["schema"] : [], favs().filter(k => !MODE_MAIN.includes(k) && k !== "schema"), ["prof"]);
+    const shortsHtml = () => { const keys = shortKeys(), odd = keys.length % 2 === 1, pcCols = keys.length <= 5 ? keys.length : keys.length === 6 ? 3 : 4; return `<div class="shorts" style="--pccols:${pcCols}">${keys.map(k => short(k, odd)).join("")}</div>`; };
+    const modesHtml = () => `<a class="revbig" href="#cartes-${id}"><span class="grow"><b>Réviser maintenant</b><span class="small">${due ? plural(due, "carte à revoir", "cartes à revoir") : "Entraînement sur tes cartes"} · environ ${revMin} min</span></span><span class="revgo" aria-hidden="true">${I.play}</span></a>`
       + (hard ? `<a class="mvar solo" href="#difficiles-${id}">${I.bolt}Seulement les difficiles · ${hard}</a>` : "")
-      + `<div class="shorts">${["resume", "quiz", "interro", "controle"].concat(hasSchema ? ["schema"] : [], favs().filter(k => !MODE_MAIN.includes(k) && k !== "schema"), ["prof"]).map(short).join("")}</div>`
+      + shortsHtml()
       + `<a class="mvar solo" href="#blanc-${id}">${I.clock}Interro chronométrée, comme le jour J</a>`
       + `<details class="moremodes"${safeGet("merge.moremodes") === "1" ? " open" : ""}><summary><span class="grow">Plus d'outils</span><span class="small muted">${MODE_CATS.reduce((a, c) => a + c[1].length, 0)} outils</span></summary><div class="stack modesbox">${MODE_CATS.map(c => sect(c[0], c[1])).join("")}</div></details>`;
     function wireModes() {
@@ -2155,8 +2242,8 @@
         <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Progression de la session"><i style="width:${pct}%"></i></div>
         <div class="counters"><span class="counter no" aria-label="Cartes à revoir">${S.again.size}</span><span class="counter yes" aria-label="Cartes réussies">${S.known}</span></div>
         <div class="flipwrap" id="wrap"><button class="flip${S.flipped ? " back" : ""}" id="flip" aria-label="Retourner la carte">
-          <div class="face"><header>${training ? "Entraînement" : S.again.has(c.id) ? "On la revoit" : "Question"}</header><div class="txt">${cfront(c)}</div><footer>Touche la carte pour voir la réponse</footer></div>
-          <div class="face b"><header>Réponse</header>${picHtml(c)}<div class="txt">${mx(c.back)}</div><div id="mnemo">${mnemoHtml(c)}</div><div id="extra" class="extra">${backExtra(c)}</div><footer>${c.source_quote ? "Dans ton cours : « " + esc(c.source_quote) + " »" : ""}</footer></div>
+          <div class="face"><header>${training ? "Entraînement" : S.again.has(c.id) ? "On la revoit" : "Question"}</header><div class="txt"><div class="tin">${cfront(c)}</div></div><footer>Touche la carte pour voir la réponse</footer></div>
+          <div class="face b"><header>Réponse</header>${picHtml(c)}<div class="txt"><div class="tin">${schBox(c) ? schemaHtml(c, false, "show") : ""}${mx(c.back)}</div></div><div id="mnemo">${mnemoHtml(c)}</div><div id="extra" class="extra">${backExtra(c)}</div><footer>${c.source_quote ? "Dans ton cours : « " + esc(c.source_quote) + " »" : ""}</footer></div>
         </button></div>
         ${schBox(c) ? `<button class="chip sm schbtn" id="zoomsch">${I.search}Agrandir le schéma</button>` : ""}
         ${typed() ? `<div class="field typedbox"><label for="mine">Ta réponse, avant de retourner la carte</label><textarea id="mine" style="min-height:70px" placeholder="Écris ce que tu répondrais">${esc(S.mine)}</textarea></div>` : ""}
@@ -2167,7 +2254,7 @@
           <div class="card pad stack"><h2>Raccourcis clavier</h2><div class="srow"><span>Retourner la carte</span><kbd>Espace</kbd></div><div class="srow"><span>Juste</span><kbd>→</kbd></div><div class="srow"><span>Faux</span><kbd>←</kbd></div><div class="srow"><span>Annuler ma réponse</span><kbd>Ctrl Z</kbd></div><div class="srow"><span>Trop facile</span><kbd>↑</kbd></div><div class="srow"><span>À revoir bientôt</span><kbd>↓</kbd></div></div>
           <p class="note">Une carte ratée revient jusqu'à ce que tu la réussisses.</p></aside></div>`;
       if ($("see")) $("see").onclick = () => showPage(c.image_path, $("pageimg"));
-      if ($("zoomsch")) $("zoomsch").onclick = () => openSchema(c);
+      if ($("zoomsch")) $("zoomsch").onclick = () => S.flipped ? openSchema(c, "show") : schOnFront(c) ? openSchema(c, "hide") : toast("Retourne la carte : le schéma est avec la réponse.");
       if ($("say")) $("say").onclick = () => speakText(S.flipped ? c.back : c.front, "fr-FR");
       $("flip").onclick = () => { if ($("mine")) S.mine = $("mine").value; S.flipped = !S.flipped; $("flip").classList.toggle("back", S.flipped); $("extra").innerHTML = backExtra(c); };
       $("no").onclick = () => answer(false); $("yes").onclick = () => answer(true);
@@ -2212,21 +2299,34 @@
   // ---------- schémas du cours sur les cartes ----------
   // Une carte de schéma garde la photo de la page (image_path) et le cadre du schéma (image_box : [haut, gauche, bas, droite] de 0 à 1000).
   // On n'affiche que le schéma : l'image entière est placée dans un cadre qui cache le reste (aucune copie d'image en plus).
+  // image_box = [ymin, xmin, ymax, xmax] du schéma sur la page (0 à 1000), puis éventuellement les cadres des légendes
+  // à cacher côté question : [..., [y0, x0, y1, x1], [y0, x0, y1, x1]…] (ajoutés à la lecture des photos, studio v19).
   function schBox(c) {
-    const b = c && c.image_path && Array.isArray(c.image_box) ? c.image_box.map(Number) : null;
+    const b = c && c.image_path && Array.isArray(c.image_box) ? c.image_box.slice(0, 4).map(Number) : null;
     return b && b.length === 4 && b.every(Number.isFinite) && b[2] > b[0] && b[3] > b[1] ? b : null;
+  }
+  function schMasks(c) {
+    return schBox(c) ? c.image_box.slice(4).filter(m => Array.isArray(m) && m.length === 4 && m.map(Number).every(Number.isFinite)).map(m => m.map(Number)) : [];
   }
   // Rapport largeur / hauteur du schéma : la photo est supposée en 3:4 jusqu'à son chargement, puis on prend sa vraie taille.
   const schRatio = (b, w, h) => ((b[3] - b[1]) * (w || 3)) / ((b[2] - b[0]) * (h || 4));
-  function schemaHtml(c, small) {
+  // mode : "hide" = légendes à trouver cachées (question), "show" = légendes visibles et entourées (réponse), sinon schéma brut.
+  function schemaHtml(c, small, mode) {
     const b = schBox(c); if (!b) return "";
     const bw = (b[3] - b[1]) / 1000, bh = (b[2] - b[0]) / 1000, pc = x => (x * 100).toFixed(3) + "%";
-    return `<span class="schema${small ? " sm" : ""}" data-sch="${esc(c.id)}" role="img" aria-label="Schéma du cours" style="--ar:${schRatio(b).toFixed(4)}">`
+    const masks = mode ? schMasks(c) : [], rel = m => `left:${pc((m[1] - b[1]) / 1000 / bw)};top:${pc((m[0] - b[0]) / 1000 / bh)};width:${pc((m[3] - m[1]) / 1000 / bw)};height:${pc((m[2] - m[0]) / 1000 / bh)}`;
+    return `<span class="schema${small ? " sm" : ""}" data-sch="${esc(c.id)}" data-mode="${mode || ""}" role="img" aria-label="Schéma du cours" style="--ar:${schRatio(b).toFixed(4)}">`
       + `<img class="schimg" data-pic="${esc(c.image_path)}" alt="" draggable="false" style="width:${pc(1 / bw)};height:${pc(1 / bh)};left:${pc(-b[1] / 1000 / bw)};top:${pc(-b[0] / 1000 / bh)}">`
+      + masks.map(m => `<i class="${mode === "hide" ? "schmask" : "schhit"}" style="${rel(m)}">${mode === "hide" ? "?" : ""}</i>`).join("")
       + (small ? "" : `<i class="schzoom" aria-hidden="true">${I.search}</i>`) + `</span>`;
   }
+  // Question d'une carte de schéma : les légendes à trouver sont cachées. Sans légende connue (cartes créées avant studio v19),
+  // le schéma ne s'affiche qu'au dos, avec la réponse : sinon la réponse se lirait sur l'image.
+  const schOnFront = c => schMasks(c).length > 0;
+  // « Sur ce schéma S1 de… » : l'identifiant interne S1 n'a rien à faire dans la question.
+  const cleanFront = t => String(t == null ? "" : t).replace(/(sch[ée]mas?)\s+S\d+\b/gi, "$1");
   // Question d'une carte : son schéma (s'il y en a un) puis le texte. small = petite vignette dans les listes.
-  function cfront(c, small) { return schemaHtml(c, small) + mx(c.front); }
+  function cfront(c, small) { return (schOnFront(c) ? schemaHtml(c, small, "hide") : "") + mx(cleanFront(c.front)); }
   // Vraie taille de la photo connue : on corrige le rapport du cadre pour que le schéma ne soit pas déformé.
   document.addEventListener("load", e => {
     const im = e.target; if (!im || !im.classList) return;
@@ -2237,16 +2337,16 @@
     if (box) box.classList.add("ok");
   }, true);
   // Agrandir un schéma : en grand, avec « Voir la page entière » (le schéma y est entouré).
-  function openSchema(c) {
+  function openSchema(c, mode) {
     const b = schBox(c); if (!b) return;
     const old = document.getElementById("schview"); if (old) old.remove();
     const el = document.createElement("div"); el.id = "schview"; el.className = "schview"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Schéma du cours");
     const pc = x => (x / 10).toFixed(2) + "%";
     const draw = (full) => {
-      el.innerHTML = `<div class="schviewbar"><button class="iconbtn flat" data-schx aria-label="Fermer">${I.x}</button><button class="btn sm ghost" data-schfull>${full ? "Voir le schéma seul" : "Voir la page entière"}</button></div>`
-        + `<div class="schviewbody">${full ? `<span class="schpage"><img class="pageimg" data-pic="${esc(c.image_path)}" alt="Page du cours"><i class="schmark" style="top:${pc(b[0])};left:${pc(b[1])};height:${pc(b[2] - b[0])};width:${pc(b[3] - b[1])}"></i></span>` : schemaHtml(c).replace('class="schema"', 'class="schema big"')}</div>`;
+      el.innerHTML = `<div class="schviewbar"><button class="iconbtn flat" data-schx aria-label="Fermer">${I.x}</button>${mode === "hide" ? "" : `<button class="btn sm ghost" data-schfull>${full ? "Voir le schéma seul" : "Voir la page entière"}</button>`}</div>`
+        + `<div class="schviewbody">${full ? `<span class="schpage"><img class="pageimg" data-pic="${esc(c.image_path)}" alt="Page du cours"><i class="schmark" style="top:${pc(b[0])};left:${pc(b[1])};height:${pc(b[2] - b[0])};width:${pc(b[3] - b[1])}"></i></span>` : schemaHtml(c, false, mode).replace('class="schema"', 'class="schema big"')}</div>`;
       el.querySelector("[data-schx]").onclick = close;
-      el.querySelector("[data-schfull]").onclick = () => draw(!full);
+      if (el.querySelector("[data-schfull]")) el.querySelector("[data-schfull]").onclick = () => draw(!full);
       const box = el.querySelector(".schema"); if (box) box._c = c;
       fillPics(el);
     };
@@ -2260,7 +2360,7 @@
   document.addEventListener("click", e => {
     const f = e.target.closest && e.target.closest(".schema[data-sch]");
     if (!f || f.closest("button,a,#schview")) return;
-    const c = (state.cards || []).find(x => x.id === f.dataset.sch); if (c) { e.preventDefault(); openSchema(c); }
+    const c = (state.cards || []).find(x => x.id === f.dataset.sch); if (c) { e.preventDefault(); openSchema(c, f.dataset.mode || ""); }
   });
   async function uploadCardPic(file, chapterId, cardId) {
     let bmp; try { bmp = await createImageBitmap(file); } catch (e) { if (!window.heic2any) await new Promise((ok, ko) => { const sc = document.createElement("script"); sc.src = "vendor/heic2any.min.js"; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); }); const o = await window.heic2any({ blob: file, toType: "image/jpeg", quality: 0.85 }); bmp = await createImageBitmap(Array.isArray(o) ? o[0] : o); }
@@ -2313,7 +2413,7 @@
       <div class="card pad stack" data-sec-card="revision"><h2>Révision</h2>
         <div class="field"><span class="label">Avant un contrôle, revoir les cartes de ses chapitres tous les jours</span>${chips("boost", [["0", "Jamais"], ["3", "3 jours avant"], ["7", "7 jours avant"], ["14", "14 jours avant"]], String(boostDays()))}<p class="small muted">Ces cartes reviennent chaque jour, même réussies, jusqu'au contrôle. Les autres suivent la répétition espacée normale.</p></div>
         <div class="field"><span class="label">Sons et vibrations</span>${chips("snd", [["1", "Activés"], ["0", "Coupés"]], p.sounds === false ? "0" : "1")}</div>
-        <div class="field"><span class="label">Voix qui lit tes cartes</span><div class="chips"><button class="chip" data-ve="merge" aria-pressed="${neuralWanted()}">Voix Merge (Laomedeia)</button><button class="chip" data-ve="appareil" aria-pressed="${!neuralWanted()}">Voix de mon appareil</button></div><div class="row"><button class="btn sm ghost" id="vtry">Écouter un exemple</button></div><p class="note">La voix Merge est plus naturelle. Sans réseau, c'est la voix de ton appareil qui prend le relais.</p></div>
+        <div class="field"><span class="label">Voix qui lit tes cartes</span><div class="chips"><button class="chip" data-ve="merge" aria-pressed="${neuralWanted()}">Voix Merge</button><button class="chip" data-ve="appareil" aria-pressed="${!neuralWanted()}">Voix de mon appareil</button></div><div class="row"><button class="btn sm ghost" id="vtry">Écouter un exemple</button></div><p class="note">La voix Merge est plus naturelle. Sans réseau, c'est la voix de ton appareil qui prend le relais.</p></div>
         ${"speechSynthesis" in window ? `<div class="field"><label for="voice">Voix de l'appareil</label><select id="voice"><option value="">Chargement des voix…</option></select><div class="row"><label class="small muted" for="vrate">Vitesse</label><input id="vrate" class="grow" type="range" min="0.5" max="2" step="0.05" value="${voiceRate()}"><button class="btn sm ghost" id="vtest">Écouter</button></div><p class="note">Les voix viennent de ton appareil et de ton navigateur. Merge choisit la plus naturelle. Sur PC, Microsoft Edge en propose de bien meilleures que Chrome.</p></div>` : ""}
         <button class="btn sm ghost" id="tuto">Revoir le tutoriel</button></div>
       <div class="card pad stack" data-sec-card="rappels" id="rappels"><h2>Rappels</h2>
@@ -2974,15 +3074,23 @@
     const mins = Math.round(d7.reduce((s, d) => s + d.seconds, 0) / 60), cards7 = d7.reduce((s, d) => s + d.cards_reviewed, 0);
     const lv = xpInfo(), coins = coinsInfo().balance;
     const go = (h, ic, t, sub) => `<a class="card ptile" href="#${h}"><span class="mico">${I[ic]}</span><span class="grow" style="min-width:0"><b>${t}</b><span class="small muted">${sub}</span></span></a>`;
+    // Progrès, design C « Parcours et récompenses » (16 nov.) : le niveau et ce qu'il rapporte, le chemin des prochains niveaux,
+    // les badges les plus proches avec leur progression, puis la boutique, Duo et les autres pages, et les chiffres en dessous.
+    const nl = lv.level + 1, gift = L => L % 5 === 0 ? "un coffre, des pièces et un cadeau" : "des pièces et un cadeau de la boutique";
+    const node = (L, kind) => `<span class="pnode ${kind}"><span class="pdot">${kind === "done" ? I.check : kind === "now" ? I.star : L % 5 === 0 ? I.gift : I.coin}</span><span class="small">Niv. ${L}</span></span>`;
+    const path = [lv.level > 1 ? node(lv.level - 1, "done") : "", node(lv.level, "now"), node(nl, "next"), node(nl + 1, "far"), node(Math.ceil((nl + 2) / 5) * 5, "far")].filter(Boolean).join('<i class="pline"></i>');
+    const bp = badgeProgress().filter(b => b.cur < b.goal).sort((x, y) => y.cur / y.goal - x.cur / x.goal).slice(0, 3), won = badges().filter(b => b[1]);
     app.innerHTML = `${progSeg("progres")}<h1>Progrès</h1>
-      <div class="card pad stack prohero"><div class="level"><span class="lvl">Niveau ${lv.level}</span><div class="bar grow"><i style="width:${lv.pct}%"></i></div><span class="small muted">encore ${lv.left} pts</span></div>
-        <a class="pshop" href="#boutique"><span class="mico">${I.coin}</span><span class="grow"><b>Boutique</b><span class="small">${plural(coins, "pièce", "pièces")} à dépenser</span></span><span class="pshopgo">Ouvrir</span></a>
-        <p class="note">${lv.xp} points au total. 10 points par bonne réponse, 2 par erreur, 100 par chapitre maîtrisé à 100 %. ${streakInfo().left ? "Gel de série disponible : un jour raté cette semaine ne cassera pas ta série." : "Ton gel de série a déjà servi cette semaine."}</p></div>
-      <div class="prgrid">${go("recompenses", "star", "Récompenses", "Coffres, cadeaux")}${go("bilan", "chart", "Bilan", "Ta semaine")}${go("erreurs", "trap", "Erreurs", "Cartes ratées")}<button class="card ptile" id="pstats"><span class="mico">${I.chart}</span><span class="grow" style="min-width:0"><b>Par chapitre</b><span class="small muted">Statistiques détaillées</span></span></button></div>
+      <div class="card pathcard"><div class="row between"><b class="plvl">Niveau ${lv.level} <span class="small">${esc(lv.rank)}</span></b><span class="small">${lv.left} pts avant le niveau ${nl}</span></div>
+        <div class="bar"><i style="width:${lv.pct}%"></i></div>
+        <p class="pgift">${I.gift}<span>Au niveau ${nl} : ${gift(nl)}</span></p>
+        <div class="ppath">${path}</div>
+        <p class="small pnote">${lv.xp} points. 10 par bonne réponse, 2 par erreur, 100 par chapitre maîtrisé. ${streakInfo().left ? "Gel de série dispo cette semaine." : "Gel de série déjà utilisé cette semaine."}</p></div>
+      ${bp.length ? `<div class="card pad stack"><h2>Prochains badges</h2>${bp.map(b => `<div class="pbadge"><div class="row between"><span>${esc(b.name)}</span><span class="small muted">${b.label}</span></div><div class="bar"><i style="width:${Math.round(Math.min(1, b.cur / b.goal) * 100)}%"></i></div></div>`).join("")}${won.length ? `<p class="small muted">Déjà gagnés : ${won.map(b => esc(b[0])).join(" · ")}</p>` : ""}</div>` : `<div class="card pad"><b>Tous les badges sont à toi.</b></div>`}
+      <div class="pgrid6"><a class="card ptile pshop" href="#boutique"><span class="mico">${I.coin}</span><span class="grow" style="min-width:0"><b>Boutique</b><span class="small muted">${plural(coins, "pièce", "pièces")}${coinsInfo().locked ? " · " + coinsInfo().locked + " en jeu" : ""}</span></span></a>${go("duo", "duo", "Duo", "Réviser à deux")}${go("recompenses", "star", "Récompenses", "Coffres, cadeaux")}${go("bilan", "chart", "Bilan", "Ta semaine")}${go("erreurs", "trap", "Erreurs", "Cartes ratées")}<button class="card ptile" id="pstats"><span class="mico">${I.chart}</span><span class="grow" style="min-width:0"><b>Par chapitre</b><span class="small muted">Statistiques</span></span></button></div>
       <div class="tiles"><div class="card tile"><b>${streak()}</b><span>${streak() === 0 ? "révise aujourd'hui pour lancer ta série" : streak() === 1 ? "jour d'affilée" : "jours d'affilée"}</span></div><div class="card tile"><b>${cards7}</b><span>cartes en 7 jours</span></div><div class="card tile"><b>${mins}</b><span>minutes en 7 jours</span></div><div class="card tile"><b>${mastery(state.cards)} %</b><span>maîtrise moyenne</span></div></div>
       <div class="card pad stack"><h2>Cartes révisées, 14 derniers jours</h2><div class="bars" role="img" aria-label="Cartes révisées par jour sur 14 jours">${d14.map(d => `<div><i style="height:${Math.max(3, d.cards_reviewed / max * 100)}%" class="${d.cards_reviewed ? "" : "zero"}" title="${d.cards_reviewed}"></i><span>${d.label}</span></div>`).join("")}</div></div>
       <div class="stack"><h2>Par matière</h2><div class="grid">${state.subjects.map(s => { const chs = state.chapters.filter(c => c.subject_id === s.id), cs = state.cards.filter(k => chs.some(c => c.id === k.chapter_id)), m = mastery(cs); return `<a class="card subject" style="--c:${esc(s.color)}" href="#matiere-${s.id}"><div class="row between"><div class="row"><span class="dot"></span><b>${esc(s.name)}</b></div><span class="small muted">${m} %</span></div><div class="bar"><i style="width:${m}%"></i></div></a>`; }).join("") || '<p class="muted">Aucune matière.</p>'}</div></div>
-      <div class="card pad stack"><h2>Badges</h2><div class="chips">${badges().map(b => `<span class="badge ${b[1] ? "on" : ""}">${b[0]}</span>`).join("")}</div></div>
       <div class="card pad stack"><h2>Mes notes</h2><div id="notes"><p class="muted">Chargement…</p></div></div>`;
     // Statistiques d'un chapitre (avant dans chaque chapitre, maintenant ici) : on choisit le chapitre.
     if ($("pstats")) $("pstats").onclick = () => {
@@ -3410,7 +3518,10 @@
   function ctrlDaySheet(k, after) {
     const draw = el => {
       const onDay = ctrls().filter(c => c.d === k);
-      el.querySelector("#cdchips").innerHTML = state.subjects.map(x => `<button class="chip" data-sub="${x.id}" aria-pressed="${onDay.some(c => c.s === x.id)}" style="--c:${esc(x.color)}"><span class="dot"></span>&nbsp;${esc(x.name)}</button>`).join("") || '<span class="muted">Ajoute d\'abord une matière.</span>';
+      // Contrôles déjà prévus ce jour : une ligne chacun avec un vrai bouton « Retirer » (avant : il fallait retoucher la matière).
+      el.querySelector("#cdlist").innerHTML = onDay.map(c => { const x = state.subjects.find(y => y.id === c.s) || {}; return `<div class="cdrow" style="--c:${esc(x.color || "#9483ff")}"><span class="dot"></span><b class="grow">${esc(x.name || "Matière")}</b><button class="btn sm ghost softdel" data-cdrm="${c.id}">${I.trash}Retirer</button></div>`; }).join("");
+      el.querySelectorAll("[data-cdrm]").forEach(b => b.onclick = async () => { const c = ctrls().find(x => x.id === b.dataset.cdrm), x = c && state.subjects.find(y => y.id === c.s); await ctrlDel(b.dataset.cdrm); toast("Contrôle" + (x ? " de " + x.name : "") + " retiré."); draw(el); });
+      el.querySelector("#cdchips").innerHTML = state.subjects.filter(x => !onDay.some(c => c.s === x.id)).map(x => `<button class="chip" data-sub="${x.id}" aria-pressed="false" style="--c:${esc(x.color)}"><span class="dot"></span>&nbsp;${esc(x.name)}</button>`).join("") || (state.subjects.length ? '<span class="muted small">Toutes tes matières ont un contrôle ce jour-là.</span>' : '<span class="muted">Ajoute d\'abord une matière.</span>');
       el.querySelectorAll("[data-sub]").forEach(b => b.onclick = async () => {
         const sub = state.subjects.find(x => x.id === b.dataset.sub), have = ctrls().find(c => c.s === sub.id && c.d === k);
         if (have) { await ctrlDel(have.id); toast("Contrôle de " + sub.name + " retiré."); return draw(el); }
@@ -3418,7 +3529,7 @@
         const c = await ctrlAdd(sub.id, k); if (c) ctrlChSheet(c.id, after); else draw(el);
       });
     };
-    sheet(`<div class="row"><span class="mico big">${I.check}</span><h1>Contrôles</h1></div><p class="muted">${esc(fmtDate(k))} : touche une ou plusieurs matières.</p><div class="chips" id="cdchips"></div><button class="btn ghost" id="cdok">Fermer</button>`, el => { draw(el); el.querySelector("#cdok").onclick = () => { closeSheet(); after(); }; });
+    sheet(`<div class="row"><span class="mico big">${I.check}</span><h1>Contrôles</h1></div><p class="muted">${esc(fmtDate(k))}</p><div class="stack" id="cdlist"></div><p class="label">Ajouter un contrôle de</p><div class="chips" id="cdchips"></div><button class="btn ghost" id="cdok">Terminé</button>`, el => { draw(el); el.querySelector("#cdok").onclick = () => { closeSheet(); after(); }; });
   }
   // ---------- Prof : chat libre façon messagerie ----------
   // On peut parler de tout (cours, méthode, orientation…). Le bouton « Cours » lie à la discussion les chapitres et matières
@@ -3851,6 +3962,13 @@
   }
 
   // ---------- badges ----------
+  // Badges avec leur progression (pour « Prochains badges » dans Progrès).
+  function badgeProgress() {
+    const reviews = state.cards.reduce((s, c) => s + (c.right_count || 0) + (c.wrong_count || 0), 0), st = streak();
+    const ms = state.chapters.map(c => { const cs = cardsOf(c.id); return cs.length ? mastery(cs) : 0; }), full = ms.filter(x => x >= 100).length, best = Math.max(0, ...ms);
+    const b = (name, cur, goal, unit) => ({ name, cur: Math.min(cur, goal), goal, label: unit ? `${Math.min(cur, goal)} / ${goal}${unit}` : `${Math.min(cur, goal)} / ${goal}` });
+    return [b("Première carte", reviews, 1), b("100 réponses", reviews, 100), b("1 000 réponses", reviews, 1000), b("3 jours d'affilée", st, 3), b("7 jours d'affilée", st, 7), b("30 jours d'affilée", st, 30), b("Un chapitre à 100 %", best, 100, " %"), b("5 chapitres à 100 %", full, 5), b("100 cartes créées", state.cards.length, 100)];
+  }
   function badges() {
     const reviews = state.cards.reduce((s, c) => s + (c.right_count || 0) + (c.wrong_count || 0), 0), st = streak();
     const full = state.chapters.filter(c => { const cs = cardsOf(c.id); return cs.length && mastery(cs) >= 100; }).length;
@@ -3907,7 +4025,7 @@
   function utter(t, lang, rate) { const u = new SpeechSynthesisUtterance(t); u.lang = lang || "fr-FR"; const v = pickVoice(u.lang); if (v) { u.voice = v; u.lang = v.lang; } u.rate = Math.min(2, rate || voiceRate()); return u; }
   if ("speechSynthesis" in window) { try { speechSynthesis.getVoices(); } catch (e) { /* voix chargées plus tard */ } }
   // Les longues phrases sont lues par morceaux : certaines voix en ligne se coupent après une quinzaine de secondes.
-  // Lecture à voix haute. Voix Merge (Laomedeia, fonction `voix`, chaque phrase gardée sur le serveur) si elle est disponible,
+  // Lecture à voix haute. Voix Merge (fonction `voix`, chaque phrase gardée sur le serveur) si elle est disponible,
   // sinon voix de l'appareil : hors ligne, API pas encore activée, ou quota gratuit du mois atteint.
   const spk = { el: null, token: 0, down: 0 };
   const neuralWanted = () => safeGet("merge.vengine") !== "appareil";
@@ -3927,11 +4045,27 @@
     const next = () => { if (over) return; if (k >= chunks.length) return end(); const u = utter(chunks[k++], lang, rate); u.onend = next; u.onerror = end; speechSynthesis.speak(u); };
     next();
   }
+  // iPhone : un son ne peut démarrer que pendant le toucher de l'élève. La voix Merge arrive après un appel au serveur, donc trop tard :
+  // iOS la bloquait et l'appli retombait sur la voix de l'appareil. On « réveille » le lecteur tout de suite avec un silence
+  // d'une fraction de seconde ; ensuite iOS le laisse jouer la vraie voix.
+  let silentUrl = "";
+  function unlockAudio() {
+    try {
+      if (!silentUrl) {
+        const n = 800, b = new ArrayBuffer(44 + n * 2), v = new DataView(b), w = (o, t) => [...t].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+        w(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+        v.setUint32(24, 8000, true); v.setUint32(28, 16000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, n * 2, true);
+        silentUrl = URL.createObjectURL(new Blob([b], { type: "audio/wav" }));
+      }
+      const a = spk.el || (spk.el = new Audio()); a.src = silentUrl; const p = a.play(); if (p && p.catch) p.catch(() => {});
+    } catch (e) { /* pas de son possible : la voix de l'appareil prendra le relais */ }
+  }
   function speakText(t, lang, onend, rate) {
     stopSpeak(); const my = spk.token;
     t = /[$\\]/.test(String(t)) ? texPlain(t).replace(/\(([^()]*)\)\/\(([^()]*)\)/g, "$1 sur $2") : String(t);
     const useNeural = neuralWanted() && state.user && !state.offline && navigator.onLine !== false && Date.now() - spk.down > 600000;
     if (!useNeural) return speakTextDevice(t, lang, onend, rate);
+    unlockAudio();
     const bits = t.match(/[^.!?;:\n]+[.!?;:]*\s*/g) || [t], chunks = []; let cur = "";
     bits.forEach(b => { if ((cur + b).length > 900 && cur.trim()) { chunks.push(cur.trim()); cur = ""; } cur += b; }); if (cur.trim()) chunks.push(cur.trim());
     let k = 0, over = false; const end = () => { if (!over && my === spk.token) { over = true; if (onend) onend(); } };
@@ -4681,7 +4815,7 @@
   let enterT = null, lastHash = null;
   function route() {
     app.classList.remove("enter"); void app.offsetWidth; app.classList.add("enter"); clearTimeout(enterT); enterT = setTimeout(() => app.classList.remove("enter"), 700);
-    document.body.classList.remove("nav"); app.classList.toggle("profmode", /^#exos/.test(location.hash));
+    document.body.classList.remove("nav"); app.classList.toggle("profmode", /^#exos/.test(location.hash)); app.classList.toggle("planmode", /^#(calendrier|journee)/.test(location.hash));
     const pd = document.getElementById("pdrawer"); if (pd) pd.remove(); document.body.classList.remove("typing");
     // Section de Réglages ouverte : refermée quand on change d'écran, gardée quand le même écran est redessiné (réglage enregistré, synchro).
     if (location.hash !== lastHash) app.removeAttribute("data-sec"); lastHash = location.hash;

@@ -1,6 +1,7 @@
 // Fonction `admin` de Merge : données du tableau de bord /admin. Protégée par un mot de passe dont seule l'empreinte SHA-256
 // est stockée (table app_secrets, name = 'admin_pw_sha256'). Lecture, plus la gestion des cadeaux en vrai de la boutique
-// (activer un compte : gift_access ; marquer un cadeau comme offert : gift_claims.given_at).
+// (activer un compte : gift_access ; marquer un cadeau comme offert : gift_claims.given_at), et le transfert exceptionnel
+// de chapitres d'un élève à un autre (chapters_of, transfer).
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const CORS = {
@@ -41,6 +42,67 @@ Deno.serve(async (req) => {
       const r = await admin.from("gift_claims").update({ given_at: body.undo ? null : new Date().toISOString() }).eq("id", id);
       if (r.error) throw r.error;
       return json({ ok: true });
+    }
+
+    // Chapitres d'un élève (pour choisir quoi transférer).
+    if (body.action === "chapters_of") {
+      const uid = String(body.user ?? "");
+      if (!/^[0-9a-f-]{36}$/.test(uid)) return json({ error: "requete" }, 400);
+      const [ch, sj, cd] = await Promise.all([
+        admin.from("chapters").select("id,name,subject_id,status").eq("user_id", uid).eq("archived", false).order("created_at"),
+        admin.from("subjects").select("id,name").eq("user_id", uid),
+        admin.from("cards").select("chapter_id").eq("user_id", uid),
+      ]);
+      if (ch.error) throw ch.error;
+      const n: Record<string, number> = {}; (cd.data ?? []).forEach((r: Any) => (n[r.chapter_id] = (n[r.chapter_id] ?? 0) + 1));
+      const sn: Record<string, string> = {}; (sj.data ?? []).forEach((r: Any) => (sn[r.id] = r.name));
+      return json({ chapters: (ch.data ?? []).map((c: Any) => ({ id: c.id, name: c.name, subject: sn[c.subject_id] ?? "", cards: n[c.id] ?? 0 })) });
+    }
+    // Transfert exceptionnel de chapitres d'un élève à un autre (même cours, recopié proprement par l'un) : on COPIE le chapitre,
+    // ses cartes (progression remise à zéro), le résumé, le texte du cours, les contenus IA déjà faits et les photos.
+    // Aucun appel à l'IA. Le chapitre arrive dans la matière du même nom chez l'élève (créée si elle n'existe pas).
+    if (body.action === "transfer") {
+      const to = String(body.to ?? ""), ids = (Array.isArray(body.chapters) ? body.chapters : []).map(String).filter((x: string) => /^[0-9a-f-]{36}$/.test(x)).slice(0, 30);
+      if (!/^[0-9a-f-]{36}$/.test(to) || !ids.length) return json({ error: "requete" }, 400);
+      const norm = (t: unknown) => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      const { data: chs, error: ce } = await admin.from("chapters").select("*").in("id", ids);
+      if (ce) throw ce;
+      const { data: mine } = await admin.from("subjects").select("id,name").eq("user_id", to).eq("archived", false);
+      const subs: Any[] = mine ?? [], done: Any[] = [];
+      for (const c of (chs ?? []) as Any[]) {
+        if (c.user_id === to) continue;
+        const { data: src } = await admin.from("subjects").select("name,color").eq("id", c.subject_id).maybeSingle();
+        let sub = subs.find((x) => norm(x.name) === norm(src?.name));
+        if (!sub) {
+          const r = await admin.from("subjects").insert({ user_id: to, name: src?.name || "Matière", color: src?.color || "#4b39c8" }).select("id,name").single();
+          if (r.error) throw r.error; sub = r.data; subs.push(sub);
+        }
+        const nc = await admin.from("chapters").insert({ user_id: to, subject_id: sub.id, name: c.name, status: c.status || "ready", lang: c.lang || "fr", cards_target: c.cards_target, color: c.color ?? null, notes: c.notes ?? null }).select("id").single();
+        if (nc.error) throw nc.error;
+        const nid = nc.data.id;
+        // Photos des pages (cartes de schéma, « voir la page ») : copiées dans le dossier de l'élève, sinon il ne pourrait pas les ouvrir.
+        const paths = new Map<string, string>();
+        const copyPic = async (p: string | null) => {
+          if (!p) return null; if (paths.has(p)) return paths.get(p)!;
+          const dst = `${to}/${nid}/${p.split("/").pop()}`;
+          const r = await admin.storage.from("cours").copy(p, dst);
+          const out = r.error ? null : dst; paths.set(p, out as string); return out;
+        };
+        const { data: cards } = await admin.from("cards").select("front,back,source_ref,source_quote,needs_check,flagged,edited_by_user,image_path,image_box,picture,mnemonic").eq("chapter_id", c.id);
+        const rows = [];
+        for (const k of (cards ?? []) as Any[]) rows.push({ ...k, user_id: to, chapter_id: nid, image_path: await copyPic(k.image_path), picture: await copyPic(k.picture), image_box: k.image_path ? k.image_box : null });
+        for (let i = 0; i < rows.length; i += 200) { const r = await admin.from("cards").insert(rows.slice(i, i + 200)); if (r.error) throw r.error; }
+        const [sm, so, ac] = await Promise.all([
+          admin.from("summaries").select("markdown,edited_by_user").eq("chapter_id", c.id).maybeSingle(),
+          admin.from("sources").select("filename,mime,pages,extracted_text").eq("chapter_id", c.id),
+          admin.from("ai_cache").select("kind,content").eq("chapter_id", c.id),
+        ]);
+        if (sm.data) await admin.from("summaries").insert({ user_id: to, chapter_id: nid, markdown: sm.data.markdown, edited_by_user: sm.data.edited_by_user });
+        if ((so.data ?? []).length) await admin.from("sources").insert((so.data as Any[]).map((x) => ({ ...x, user_id: to, chapter_id: nid })));
+        if ((ac.data ?? []).length) await admin.from("ai_cache").insert((ac.data as Any[]).map((x) => ({ ...x, user_id: to, chapter_id: nid })));
+        done.push({ name: c.name, subject: sub.name, cards: rows.length });
+      }
+      return json({ ok: true, done });
     }
 
     const today = new Date(); const iso = (d: Date) => d.toISOString().slice(0, 10);

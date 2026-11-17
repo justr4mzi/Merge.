@@ -10,7 +10,7 @@
 <style>
 :root{--bg:#14151c;--card:#22242e;--line:#343744;--fg:#f4f5f8;--muted:#a9afc2;--accent:#9483ff;--btn:#4b39c8;--soft:#2a2654;--ok:#2bbf8a;--red:#ff8589;color-scheme:dark}
 *{box-sizing:border-box}
-body{margin:0;background:radial-gradient(1200px 500px at 80% -10%,#2a2654 0,transparent 60%),var(--bg);color:var(--fg);font-family:"Nunito",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:"Nunito",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh}
 .wrap{max-width:1280px;margin:0 auto;padding:20px 16px 60px}
 .logo{font-weight:800;font-size:1.7em;letter-spacing:-.02em}.logo b{color:var(--accent)}
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}
@@ -38,6 +38,18 @@ td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
 .who b{display:block}.who span{color:var(--muted);font-size:.85em;word-break:break-all}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--line);margin-right:6px}.dot.on{background:var(--ok)}
 .list{display:none}
+.tabs{position:sticky;top:0;z-index:5;display:flex;gap:6px;overflow-x:auto;padding:10px 0;margin:0 0 16px;background:var(--bg);border-bottom:1px solid var(--line)}
+.tabs button{min-height:48px;padding:0 20px;border-radius:99px;border:1px solid var(--line);background:transparent;color:var(--muted);font:inherit;font-weight:800;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.tabs button[aria-selected="true"]{background:var(--btn);border-color:var(--btn);color:#fff}
+.tabs .cnt{font-size:.8em;background:var(--soft);color:var(--accent);border-radius:99px;padding:2px 8px}
+.tabs button[aria-selected="true"] .cnt{background:#ffffff26;color:#fff}
+.panel > .card{margin:0 0 16px!important}
+.panel h2{margin:0 0 4px;font-size:1.35em}
+.steps{display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:20px;align-items:start}
+@media (max-width:900px){.steps{grid-template-columns:1fr}}
+select{min-height:48px;border-radius:12px;background:#191a22;color:var(--fg);border:1px solid var(--line);font:inherit;padding:0 12px;width:100%}
+#tlist label{border-radius:12px;padding:0 10px}#tlist label:hover{background:#262836}
+#tlist input[type=checkbox]{width:22px;min-height:22px;height:22px;accent-color:var(--accent)}
 @media (max-width:860px){.tablewrap{display:none}.list{display:flex;flex-direction:column;gap:10px}
   .u{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}.u .who{grid-column:1/-1}.u div span{display:block;color:var(--muted);font-size:.78em;font-weight:700;text-transform:uppercase;letter-spacing:.03em}}
 </style>
@@ -71,7 +83,7 @@ td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
   // Boutique de chaque élève : niveau, pièces (gagnées, dépensées, restantes) et articles possédés.
   function shopHtml(us) {
     const ws = us.filter(u => u.wallet).sort((a, b) => b.wallet.xp - a.wallet.xp);
-    return `<div class="card" style="margin-top:16px;display:flex;flex-direction:column;gap:12px"><b style="font-size:1.15em">Boutique de chacun</b>
+    return `<div class="card" style="display:flex;flex-direction:column;gap:12px"><h2>Boutique de chacun</h2>
       ${ws.length ? ws.map(u => { const w = u.wallet, it = Array.isArray(w.items) ? w.items : [], eq = Array.isArray(w.equip) ? w.equip : [];
         return `<details><summary style="min-height:44px;display:flex;align-items:center;gap:8px;cursor:pointer;flex-wrap:wrap"><b>${esc(u.name || u.email || "(sans nom)")}</b><span class="small muted">Niveau ${w.level} · ${esc(w.rank || "")} · ${w.xp} points · ${w.coins} pièces à dépenser · ${it.length} article${it.length > 1 ? "s" : ""}</span></summary>
           <div class="small" style="padding:6px 0 10px;display:flex;flex-direction:column;gap:6px"><span>Pièces : ${w.earned} gagnées, ${w.spent} dépensées, <b>${w.coins} restantes</b>${w.chests ? " · " + w.chests + " coffre(s) offert(s) à ouvrir" : ""}</span>
@@ -82,14 +94,48 @@ td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
     const g = data.gifts || { ready: false, access: [], claims: [] }, nm = id => { const u = us.find(x => x.id === id); return u ? (u.name || u.email) : "(compte supprimé)"; };
     if (!g.ready) return `<div class="card" style="margin-bottom:16px"><b>Cadeaux en vrai</b><p class="small muted">Les tables des cadeaux ne sont pas encore créées dans la base.</p></div>`;
     const pend = g.claims.filter(c => !c.given_at), done = g.claims.filter(c => c.given_at);
-    return `<div class="card gifts" style="margin-bottom:16px;display:flex;flex-direction:column;gap:12px"><b style="font-size:1.15em">Cadeaux en vrai</b>
+    return `<div class="card gifts" style="display:flex;flex-direction:column;gap:12px"><h2>Cadeaux en vrai</h2>
       <p class="small muted" style="margin:0">Seuls les comptes activés ici voient les 20 cadeaux en vrai dans leur boutique. Chaque cadeau échangé apparaît ci-dessous dans « À offrir », avec le numéro du bon.</p>
       <div class="bar" style="margin:0"><select id="gu" aria-label="Compte à activer" style="min-height:44px;border-radius:12px;background:#191a22;color:var(--fg);border:1px solid var(--line);padding:0 10px;font:inherit;max-width:320px">${us.filter(u => !g.access.includes(u.id)).map(u => `<option value="${esc(u.id)}">${esc(u.name || u.email)}${u.name ? " · " + esc(u.email) : ""}</option>`).join("")}</select><button class="btn" id="gon">Activer les cadeaux</button></div>
       ${g.access.length ? `<div>${g.access.map(id => `<div class="bar" style="margin:0 0 6px"><span class="dot on"></span><b>${esc(nm(id))}</b><button class="btn ghost" data-goff="${esc(id)}">Retirer</button></div>`).join("")}</div>` : `<p class="small muted" style="margin:0">Aucun compte activé.</p>`}
       <b>À offrir (${pend.length})</b>${pend.length ? pend.map(c => `<div class="bar" style="margin:0"><span><b>${esc(GIFTN[c.gift] || c.gift)}</b> pour ${esc(nm(c.user_id))} <span class="small muted">· bon N° ${esc(String(c.id).slice(0, 8).toUpperCase())} · ${c.price} pièces · demandé ${esc(ago(c.created_at))}</span></span><button class="btn" data-given="${esc(c.id)}">Marquer comme offert</button></div>`).join("") : `<p class="small muted" style="margin:0">Aucune demande en attente.</p>`}
       ${done.length ? `<details><summary class="small muted" style="min-height:44px;display:flex;align-items:center;cursor:pointer">Déjà offerts (${done.length})</summary>${done.map(c => `<div class="small" style="padding:6px 0">${esc(GIFTN[c.gift] || c.gift)} pour ${esc(nm(c.user_id))} · offert ${esc(full(c.given_at))}</div>`).join("")}</details>` : ""}</div>`;
   }
+  // Transfert exceptionnel : copier des chapitres d'un élève vers un autre (sans IA, progression remise à zéro).
+  function transferHtml(us) {
+    const opt = u => `<option value="${esc(u.id)}">${esc(u.name || u.email)}${u.name ? " · " + esc(u.email) : ""} (${u.chapters} chap.)</option>`;
+    const sel = (id, label, list) => `<label class="small muted" for="${id}" style="display:block;margin-bottom:4px">${label}</label><select id="${id}">${list}</select>`;
+    return `<div class="card" style="display:flex;flex-direction:column;gap:16px"><h2>Transférer des chapitres</h2>
+      <p class="small muted" style="margin:0">Exceptionnel : copie des chapitres déjà faits (cartes, résumé, cours, contenus IA, photos) d'un élève vers un autre. Aucune requête IA. Les cartes repartent de zéro chez l'élève qui les reçoit ; elles arrivent dans sa matière du même nom (créée si besoin). Rien n'est retiré à l'élève de départ.</p>
+      <div class="steps"><div>${sel("tfrom", "1. Copier depuis", `<option value="">Choisir un élève…</option>${us.filter(u => u.chapters).map(opt).join("")}`)}</div>
+      <div><span class="small muted" style="display:block;margin-bottom:4px;font-weight:700">2. Chapitres à copier</span><div id="tlist" class="small muted">Choisis l'élève de départ pour voir ses chapitres.</div></div>
+      <div>${sel("tto", "3. Vers", `<option value="">Choisir un élève…</option>${us.map(opt).join("")}`)}</div></div>
+      <div class="bar" style="margin:0"><button class="btn" id="tgo" style="min-height:52px;padding:0 28px">Copier les chapitres cochés</button><span class="small" id="tmsg" aria-live="polite"></span></div></div>`;
+  }
+  function wireTransfer() {
+    const from = document.getElementById("tfrom"), list = document.getElementById("tlist"), msg = document.getElementById("tmsg");
+    if (!from) return;
+    from.onchange = async () => {
+      if (!from.value) { list.textContent = "Choisis l'élève de départ pour voir ses chapitres."; return; }
+      list.textContent = "Chargement…";
+      try {
+        const r = await load({ action: "chapters_of", user: from.value });
+        list.innerHTML = r.chapters.length ? r.chapters.map(c => `<label style="display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer"><input type="checkbox" value="${esc(c.id)}" style="width:20px;height:20px"><span><b>${esc(c.name)}</b> <span class="muted">· ${esc(c.subject)} · ${c.cards} cartes</span></span></label>`).join("") : "Aucun chapitre.";
+      } catch (e) { list.textContent = e.message; }
+    };
+    document.getElementById("tgo").onclick = async () => {
+      const to = document.getElementById("tto").value, ids = [...list.querySelectorAll("input:checked")].map(i => i.value);
+      if (!from.value || !to || !ids.length) { msg.textContent = "Choisis l'élève de départ, au moins un chapitre et l'élève qui reçoit."; return; }
+      if (to === from.value) { msg.textContent = "Choisis deux élèves différents."; return; }
+      const nm = data.users.find(u => u.id === to) || {};
+      if (!confirm(`Copier ${ids.length} chapitre(s) vers ${nm.name || nm.email} ?`)) return;
+      msg.textContent = "Copie en cours…";
+      try { const r = await load({ action: "transfer", to, chapters: ids }); msg.textContent = r.done.length ? "Copié : " + r.done.map(d => `${d.name} (${d.cards} cartes, ${d.subject})`).join(", ") : "Rien à copier."; data = await load(); }
+      catch (e) { msg.textContent = e.message; }
+    };
+  }
   async function act(payload) { try { await load(payload); data = await load(); draw(); } catch (e) { alert(e.message); } }
+  let tab = "eleves";
   function draw() {
     const us = data.users, now = Date.now(), active = us.filter(u => u.last_seen_at && now - Date.parse(u.last_seen_at) < 86400000).length;
     const tot = k => us.reduce((a, u) => a + u.screen[k], 0), aiAll = us.reduce((a, u) => a + u.ai.all, 0), aiDay = us.reduce((a, u) => a + u.ai.d, 0);
@@ -98,18 +144,23 @@ td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
     const live = u => u.last_seen_at && now - Date.parse(u.last_seen_at) < 180000;
     root.innerHTML = `<div class="top"><div class="logo">Merge<b>.</b><span class="tag">Admin</span></div><div class="bar" style="margin:0"><button class="btn ghost" id="rf">Actualiser</button><button class="btn ghost" id="lo">Se déconnecter</button></div></div>
       <div class="kpis"><div class="card kpi"><b>${us.length}</b><span>élèves inscrits</span></div><div class="card kpi"><b>${active}</b><span>actifs sur 24 h</span></div><div class="card kpi"><b>${dur(tot("d"))}</b><span>temps d'écran aujourd'hui</span></div><div class="card kpi"><b>${dur(tot("all"))}</b><span>temps d'écran total</span></div><div class="card kpi"><b>${aiAll}</b><span>requêtes IA au total (${aiDay} aujourd'hui)</span></div>${data.voix ? `<div class="card kpi"><b>${Math.round(data.voix.chars / 1000)} k / ${Math.round(data.voix.limit / 1000)} k</b><span>caractères lus par la voix Merge ce mois (gratuit jusqu'à 1 million)</span></div>` : ""}</div>
-      ${giftsHtml(us)}
+      <nav class="tabs" role="tablist" aria-label="Sections">${[["eleves", "Élèves", us.length], ["transfert", "Transférer des chapitres", ""], ["cadeaux", "Cadeaux en vrai", (data.gifts && data.gifts.claims ? data.gifts.claims.filter(c => !c.given_at).length : 0) || ""], ["boutique", "Boutique de chacun", ""]].map(([k, l, n]) => `<button role="tab" data-tab="${k}" aria-selected="${tab === k}">${l}${n !== "" ? `<span class="cnt">${n}</span>` : ""}</button>`).join("")}</nav>
+      <section class="panel" ${tab === "transfert" ? "" : "hidden"}>${transferHtml(us)}</section>
+      <section class="panel" ${tab === "cadeaux" ? "" : "hidden"}>${giftsHtml(us)}</section>
+      <section class="panel" ${tab === "boutique" ? "" : "hidden"}>${shopHtml(us)}</section>
+      <section class="panel" ${tab === "eleves" ? "" : "hidden"}>
       <div class="bar"><input id="q" type="search" placeholder="Chercher un nom, un mail, une classe" value="${esc(q)}" aria-label="Chercher"><span class="small muted">Mis à jour ${esc(full(data.generated_at))}</span></div>
       <div class="card tablewrap" style="padding:0;overflow-x:auto"><table><thead><tr>${COLS.map(c => `<th><button data-s="${c[0]}"${sort[0] === c[0] ? ` aria-sort="${sort[1] > 0 ? "ascending" : "descending"}"` : ""}>${c[1]}${sort[0] === c[0] ? (sort[1] > 0 ? " ↑" : " ↓") : ""}</button></th>`).join("")}</tr></thead><tbody>
       ${rows.map(u => `<tr><td class="who"><b><span class="dot${live(u) ? " on" : ""}"></span>${esc(u.name || "(sans nom)")}</b><span>${esc(u.email)}</span><span>${esc(u.classe)}</span></td><td><span title="${esc(full(u.last_seen_at))}">${esc(ago(u.last_seen_at))}</span><div class="small muted">${esc(u.last_seen_place || "lieu inconnu")}</div></td><td class="n">${dur(u.screen.d)}</td><td class="n">${dur(u.screen.w)}</td><td class="n">${dur(u.screen.m)}</td><td class="n">${dur(u.screen.all)}</td><td class="n">${u.ai.all}${u.ai.d ? ` <span class="small muted">(${u.ai.d} auj.)</span>` : ""}</td><td class="n">${u.cards}<div class="small muted">${u.chapters} chap.</div></td><td class="n">${u.wallet ? u.wallet.level : "–"}${u.wallet ? `<div class="small muted">${esc(u.wallet.rank || "")} · ${u.wallet.xp} pts</div>` : ""}</td><td class="n">${u.wallet ? u.wallet.coins : "–"}${u.wallet ? `<div class="small muted">${u.wallet.spent} dépensées</div>` : ""}</td></tr>`).join("") || `<tr><td colspan="10" class="muted">Aucun élève.</td></tr>`}</tbody></table></div>
       <div class="list">${rows.map(u => `<div class="card u"><div class="who"><b><span class="dot${live(u) ? " on" : ""}"></span>${esc(u.name || "(sans nom)")}</b><span>${esc(u.email)}${u.classe ? " · " + esc(u.classe) : ""}</span></div><div><span>Dernière connexion</span>${esc(ago(u.last_seen_at))}<div class="small muted">${esc(u.last_seen_place || "lieu inconnu")}</div></div><div><span>Requêtes IA</span>${u.ai.all}${u.ai.d ? " (" + u.ai.d + " auj.)" : ""}</div><div><span>Aujourd'hui</span>${dur(u.screen.d)}</div><div><span>Semaine</span>${dur(u.screen.w)}</div><div><span>Mois</span>${dur(u.screen.m)}</div><div><span>À vie</span>${dur(u.screen.all)}</div><div><span>Niveau</span>${u.wallet ? u.wallet.level + " (" + esc(u.wallet.rank || "") + ")" : "–"}</div><div><span>Pièces</span>${u.wallet ? u.wallet.coins : "–"}</div></div>`).join("")}</div>
-      ${shopHtml(us)}
-      <p class="small muted">Temps d'écran : compté quand l'appli est ouverte et visible, envoyé chaque minute. Lieu : appareil, navigateur et fuseau horaire (pas de géolocalisation). Point vert : actif dans les 3 dernières minutes.</p>`;
+      <p class="small muted">Temps d'écran : compté quand l'appli est ouverte et visible, envoyé chaque minute. Lieu : appareil, navigateur et fuseau horaire (pas de géolocalisation). Point vert : actif dans les 3 dernières minutes.</p></section>`;
+    document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { tab = b.dataset.tab; draw(); });
     document.querySelectorAll("[data-s]").forEach(b => b.onclick = () => { const k = b.dataset.s; sort = sort[0] === k ? [k, -sort[1]] : [k, k === "name" ? 1 : -1]; draw(); });
-    const qi = document.getElementById("q"); qi.oninput = () => { q = qi.value.trim().toLowerCase(); const pos = qi.selectionStart; draw(); const n = document.getElementById("q"); n.focus(); n.setSelectionRange(pos, pos); };
+    const qi = document.getElementById("q"); if (qi) qi.oninput = () => { q = qi.value.trim().toLowerCase(); const pos = qi.selectionStart; draw(); const n = document.getElementById("q"); n.focus(); n.setSelectionRange(pos, pos); };
     if (document.getElementById("gon")) document.getElementById("gon").onclick = () => { const v = document.getElementById("gu").value; if (v) act({ action: "gift_access", user: v, on: true }); };
     document.querySelectorAll("[data-goff]").forEach(b => b.onclick = () => { if (confirm("Retirer l'accès aux cadeaux pour ce compte ?")) act({ action: "gift_access", user: b.dataset.goff, on: false }); });
     document.querySelectorAll("[data-given]").forEach(b => b.onclick = () => act({ action: "gift_given", id: b.dataset.given }));
+    wireTransfer();
     document.getElementById("rf").onclick = async () => { try { data = await load(); draw(); } catch (e) { login(e.message); } };
     document.getElementById("lo").onclick = () => { try { sessionStorage.removeItem(KEY); } catch (e) { /* rien */ } pw = ""; login(); };
   }

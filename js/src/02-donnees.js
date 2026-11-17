@@ -218,7 +218,69 @@
     const l = ctrls(); if (l.some(c => c.s === sid && c.d === d)) return null;
     const c = { id: "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), s: sid, d, ch: null }; l.push(c); ctrlSave(l); await ctrlSync(); return c;
   }
-  async function ctrlDel(cid) { ctrlSave(ctrls().filter(c => c.id !== cid)); await ctrlSync(); }
+  async function ctrlDel(cid) { ctrlSave(ctrls().filter(c => c.id !== cid)); betSave(bets().filter(b => !(b.cid === cid && b.note == null))); await ctrlSync(); }
+  // ---------- pari sur la note d'un contrôle (17 nov.) ----------
+  // On vise une note et on mise des pièces : elles sont bloquées jusqu'à ce qu'on entre sa vraie note après le contrôle.
+  // Note atteinte : on récupère mise × (1 + (note visée - 8) / 6) → ×1,33 pour 10, ×2 pour 14, ×3 pour 20 (plus c'est ambitieux, plus ça rapporte).
+  // À 1 point près : on récupère la moitié. En dessous : la mise est perdue. Rangé à part (merge.paris) pour survivre à l'effacement des vieux contrôles.
+  const bets = () => (jget("merge.paris", null) || []).filter(b => b && b.id && b.cid && b.goal >= 1 && b.stake > 0);
+  const betSave = l => jset("merge.paris", l);
+  const betOf = cid => bets().find(b => b.cid === cid);
+  const betMult = goal => 1 + (Math.max(8, Math.min(20, goal)) - 8) / 6;
+  const betBack = (b, note) => note >= b.goal ? Math.round(b.stake * betMult(b.goal)) : note >= b.goal - 1 ? Math.round(b.stake / 2) : 0;
+  // Pour le solde : toutes les mises sont « dépensées », les gains des paris terminés sont « gagnés ».
+  function betCoins() { const l = bets(); return { staked: l.reduce((a, b) => a + b.stake, 0), back: l.filter(b => b.note != null).reduce((a, b) => a + betBack(b, b.note), 0), locked: l.filter(b => b.note == null).reduce((a, b) => a + b.stake, 0) }; }
+  const betsToSettle = () => bets().filter(b => b.note == null && b.d < localDay());
+  const noteTxt = n => String(n).replace(".", ",");
+  function betSheet(cid, after) {
+    const c = ctrls().find(x => x.id === cid), s = c && state.subjects.find(x => x.id === c.s); if (!s) return;
+    const have = betOf(cid), bal = coinsInfo().balance + (have ? have.stake : 0);
+    let goal = have ? have.goal : 14, stake = have ? have.stake : Math.min(50, Math.max(10, Math.floor(bal / 2 / 5) * 5));
+    const paint = el => {
+      const win = Math.round(stake * betMult(goal));
+      el.querySelector("#bgoal").textContent = noteTxt(goal) + "/20";
+      el.querySelector("#bmult").textContent = "×" + betMult(goal).toFixed(2).replace(".", ",").replace(/,?0+$/, "");
+      el.querySelectorAll("[data-stk]").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.stk === stake)));
+      el.querySelector("#bstake").textContent = plural(stake, "pièce", "pièces");
+      el.querySelector("#bwhat").innerHTML = `<li><b>${noteTxt(goal)} ou plus</b> : tu récupères <b>${win}</b> pièces (+${win - stake})</li><li><b>${noteTxt(goal - 1)}</b> : tu récupères ${Math.round(stake / 2)} pièces</li><li><b>Moins</b> : tu perds tes ${stake} pièces</li>`;
+      el.querySelector("#bok").textContent = (have ? "Modifier le pari · " : "Miser ") + plural(stake, "pièce", "pièces");
+    };
+    if (bal < 10) return sheet(`<div class="row"><span class="mico big">${I.coin}</span><h1>Parier sur ta note</h1></div><p>Il faut au moins 10 pièces pour parier. Tu en gagnes en révisant : 1 pièce tous les ${COIN_PTS} points.</p><button class="btn" data-close>J'ai compris</button>`);
+    const stakes = [10, 25, 50, 100, 200].filter(x => x <= bal);
+    sheet(`<div class="row"><span class="mico big">${I.coin}</span><h1>Parier sur ta note</h1></div><p class="muted">Contrôle de ${esc(s.name)} · ${esc(fmtDate(c.d))}. Vise une note, mise des pièces : elles restent bloquées jusqu'à ce que tu entres ta vraie note.</p>
+      <div class="betrow"><span class="label">Note visée</span><div class="row"><button class="iconbtn" id="bminus" aria-label="Note visée plus basse">−</button><b class="betgoal" id="bgoal"></b><button class="iconbtn" id="bplus" aria-label="Note visée plus haute">${I.plus}</button><span class="pill" id="bmult"></span></div></div>
+      <div class="betrow"><span class="label">Mise · <span id="bstake"></span> <span class="muted">(tu as ${plural(bal, "pièce", "pièces")})</span></span><div class="chips">${stakes.map(x => `<button class="chip" data-stk="${x}">${x}</button>`).join("")}${bal > 200 || !stakes.includes(bal) ? `<button class="chip" data-stk="${bal}">Tout (${bal})</button>` : ""}</div></div>
+      <ul class="betwhat" id="bwhat"></ul>
+      <button class="btn big" id="bok"></button>${have ? `<button class="btn ghost" id="bcancel">Annuler le pari (pièces rendues)</button>` : `<button class="btn ghost" data-close>Pas de pari</button>`}`, el => {
+      paint(el);
+      el.querySelector("#bminus").onclick = () => { goal = Math.max(10, goal - 1); paint(el); };
+      el.querySelector("#bplus").onclick = () => { goal = Math.min(20, goal + 1); paint(el); };
+      el.querySelectorAll("[data-stk]").forEach(b => b.onclick = () => { stake = +b.dataset.stk; paint(el); });
+      el.querySelector("#bok").onclick = () => {
+        const l = bets().filter(b => b.cid !== cid); l.push({ id: have ? have.id : "p" + Date.now().toString(36), cid, s: s.id, sname: s.name, d: c.d, goal, stake, at: Date.now(), note: null }); betSave(l); walletSync();
+        closeSheet(); toast(`Pari enregistré : ${noteTxt(goal)}/20 en ${s.name}, ${plural(stake, "pièce", "pièces")} en jeu.`); if (after) after();
+      };
+      if (el.querySelector("#bcancel")) el.querySelector("#bcancel").onclick = () => { betSave(bets().filter(b => b.cid !== cid)); walletSync(); closeSheet(); toast("Pari annulé, tes pièces sont rendues."); if (after) after(); };
+    });
+  }
+  // Après le contrôle : on entre sa note, le pari se règle.
+  function betNoteSheet(bid, after) {
+    const b = bets().find(x => x.id === bid); if (!b) return;
+    sheet(`<div class="row"><span class="mico big">${I.check}</span><h1>Ta note en ${esc(b.sname)}</h1></div><p class="muted">Contrôle du ${esc(fmtDate(b.d))} · tu visais ${noteTxt(b.goal)}/20 avec ${plural(b.stake, "pièce", "pièces")} en jeu.</p>
+      <div class="field"><label for="bnote">Ta note sur 20</label><input id="bnote" type="number" inputmode="decimal" min="0" max="20" step="0.25" placeholder="Ex. 14,5"></div><p class="small" id="bprev" aria-live="polite"></p>
+      <button class="btn big" id="bnok">Valider ma note</button><button class="btn ghost" data-close>Plus tard</button>`, el => {
+      const inp = el.querySelector("#bnote"), read = () => { const v = parseFloat(String(inp.value).replace(",", ".")); return Number.isFinite(v) && v >= 0 && v <= 20 ? v : null; };
+      inp.oninput = () => { const v = read(); el.querySelector("#bprev").textContent = v == null ? "" : v >= b.goal ? `Objectif atteint : tu récupères ${betBack(b, v)} pièces.` : v >= b.goal - 1 ? `À un point près : tu récupères ${betBack(b, v)} pièces.` : `Objectif raté : tu perds tes ${b.stake} pièces.`; };
+      el.querySelector("#bnok").onclick = () => {
+        const v = read(); if (v == null) return toast("Entre une note entre 0 et 20.");
+        const l = bets(), x = l.find(y => y.id === bid); x.note = v; x.settled = Date.now(); betSave(l); walletSync();
+        const back = betBack(x, v); closeSheet();
+        if (v >= x.goal && typeof confetti === "function") try { confetti(); } catch (e) { /* rien */ }
+        toast(v >= x.goal ? `Bravo ! +${back - x.stake} pièces (${back} récupérées).` : back ? `Presque ! ${back} pièces récupérées.` : `Raté de peu ou de beaucoup : ${x.stake} pièces perdues. La prochaine fois !`);
+        if (after) after();
+      };
+    });
+  }
   // Fenêtre « Quels chapitres tombent ? » : ouverte juste après avoir placé un contrôle, et depuis le bouton « Chapitres ».
   function ctrlChSheet(cid, after) {
     const c = ctrls().find(x => x.id === cid), s = c && state.subjects.find(x => x.id === c.s); if (!s) return;
@@ -231,10 +293,12 @@
     };
     sheet(`<div class="row"><span class="mico big">${I.cal}</span><h1>Contrôle de ${esc(s.name)}</h1></div><p class="muted">${esc(fmtDate(c.d))}</p><h2>Quels chapitres tombent ?</h2>
       ${chs.length ? `<button type="button" class="chip big" id="ccall" aria-pressed="true">Tous les chapitres</button><span class="label">Ou seulement :</span><div class="chips" id="cchs"></div><p class="small muted" id="ccnote" aria-live="polite"></p>` : '<p class="small muted">Pas encore de chapitre dans cette matière : le contrôle porte sur toute la matière. Tu pourras choisir les chapitres plus tard.</p><span id="ccall" hidden></span><span id="cchs" hidden></span><span id="ccnote" hidden></span>'}
-      <button class="btn" id="ccok">Valider</button>`, el => {
+      <button class="btn" id="ccok">Valider</button>${!betOf(cid) && c.d >= localDay() ? `<button class="btn ghost" id="ccbet">${I.coin}Valider et parier sur ma note</button>` : ""}`, el => {
       paint(el);
       el.querySelector("#ccall").onclick = () => { sel.clear(); paint(el); };
-      el.querySelector("#ccok").onclick = () => { const l = ctrls(), x = l.find(y => y.id === cid); if (x) { x.ch = sel.size ? [...sel] : null; ctrlSave(l); } closeSheet(); toast(sel.size ? "Contrôle enregistré avec " + plural(sel.size, "chapitre", "chapitres") + "." : "Contrôle enregistré."); if (after) after(); };
+      const save = () => { const l = ctrls(), x = l.find(y => y.id === cid); if (x) { x.ch = sel.size ? [...sel] : null; ctrlSave(l); } };
+      el.querySelector("#ccok").onclick = () => { save(); closeSheet(); toast(sel.size ? "Contrôle enregistré avec " + plural(sel.size, "chapitre", "chapitres") + "." : "Contrôle enregistré."); if (after) after(); };
+      if (el.querySelector("#ccbet")) el.querySelector("#ccbet").onclick = () => { save(); closeSheet(); if (after) after(); setTimeout(() => betSheet(cid, after), 260); };
     });
   }
 

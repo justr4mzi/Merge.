@@ -8,8 +8,8 @@ The interface is in French. It runs on phones (installable as a PWA) and on desk
 
 The bottom bar (left sidebar on desktop) has six tabs: **Accueil, Matières, Prof, Planning, Progrès, Réglages**.
 
-- **Accueil**: cards due today with a big "Réviser maintenant" button, other ways to revise (mixed revision across subjects, custom selection), the week chart, upcoming tests, streak and mastered cards, the plan of the day, and "Reprendre" for recent chapters.
-- **Matières**: a grid of subject tiles (initials, number of chapters and cards, next test, mastery bar). A subject holds folders and chapters, its tests (with a "no test, free revision" switch), a revision plan and links to past exam papers.
+- **Accueil**: the "Mission du jour" card at the very top (daily goal ring, streak, one big revise button) next to the next test ("Prêt à N %"); small hints below it (tonight's reminder, resume, grade to enter for a past test); then subject tiles with icons, the week and the plan of the day. The coin balance is in the top bar.
+- **Matières**: a grid of subject tiles (drawn icon chosen from the subject name, chapters and cards, next test, mastery bar). A subject screen is a revision plan: "À réviser aujourd'hui" with a big "Réviser" button on the weakest due chapter, "revise the whole subject", its tests (chapters of each test, bet on the grade, "no test, free revision" switch, past tests with their grade), chapters sorted from least to most mastered, discreet folders, method and past exam papers.
 - **Chapter screen**: mastery ring, a big "Réviser maintenant" button (flashcards), shortcuts (Résumé, Quiz, Interro écrite, Contrôle, Schémas when the chapter has a real diagram, favourite tools, Demander au prof), and every other tool inside "Plus d'outils":
   - Comprendre: Feuille blanche (blurting), Feynman, Texte à trous, Face à face (confused notions), Pièges, Exercices guidés, Carte mentale.
   - Fiches: one-page A4 revision sheet, my mistakes.
@@ -17,14 +17,15 @@ The bottom bar (left sidebar on desktop) has six tabs: **Accueil, Matières, Pro
   - Jouer: Boss, Flash 60 secondes (faster and faster), Associer (series of 6 pairs, replay or new series).
   - Variants: "Seulement les difficiles" (flashcards), "Interro chronométrée" (written test against the clock).
   - Old routes (`#apprendre-`, `#blanc-`, `#difficiles-`, `#bus-`, `#libre-`, `#questions-`, `#planche-`, `#vraifaux-`, `#stats-`) still work so old links and notifications never break.
-- **Flashcards**: FSRS scheduling (`ts-fsrs`), Faux / Juste / "Juste, mais à revoir bientôt" / "Trop facile", undo, optional typed answer, notes, highlights, read-aloud, schema cards (the notebook photo cropped to the diagram). The chapter test (Contrôle) unlocks at 100 % mastery.
+- **Flashcards**: FSRS scheduling (`ts-fsrs`), Faux / Juste / "Juste, mais à revoir bientôt" / "Trop facile", undo, optional typed answer, notes, highlights, read-aloud, schema cards (the notebook photo cropped to the diagram; on the question side the label that is the answer is covered by a "?", on the answer side it is highlighted). The chapter test (Contrôle) unlocks at 100 % mastery.
 - **Prof**: a chat with an AI teacher (on desktop, a centred column like other chat apps). Chapters (or whole subjects) can be linked so it follows the student's lessons; without a link it answers at high-school level. It invents exercises with answer fields, corrects a photo of a copy, makes plans, sheets, mnemonics, and **interactive quizzes** (tappable choices corrected instantly with a score). Conversations are kept in a history; reopening the app starts a fresh one.
 - **Planning**: a day timeline mixing school lessons (from the timetable, read by the AI from a photo or PDF) and revision blocks. The "+" menu at the top right holds the day actions: ask the AI (describe your day in words or by voice), add a test, no school that day. A test is shown inside that subject's lesson hour. The round "+" button adds a revision block. Month calendar view too.
-- **Progrès**: level and shop, rewards, weekly report, mistakes, per-chapter statistics, streak, charts, badges, Duo (two students share statistics only, through an invitation code or link).
+- **Progrès**: a level path with the next reward, the next badges, then tiles: shop (coins, and coins at stake in bets), Duo (two students share statistics only, through an invitation code or link), rewards, weekly report, mistakes, statistics.
+- **Bet on a test grade**: when a test is set, the student can aim for a grade (10 to 20) and stake coins (10 to all). The stake is locked until the real grade is entered after the test. Goal reached: stake × (1 + (goal − 8) / 6), so ×1.33 for 10, ×2 for 14, ×3 for 20; one point short: half the stake back; lower: stake lost. Stored in `merge.paris` (synced like the rest), counted in `coinsInfo()`.
 - **Réglages**: an iPhone-style list (profile, revision and voice, reminders, timetable, appearance, AI usage, sharing, archives, delete my data). One section opens at a time.
 - **Motivation**: points, levels, badges, a daily streak with one freeze per week, a shop paid with coins earned by studying (themes, animated backgrounds, mascot outfits, card styles, titles, chests). Optional real-life gifts (`GIFTS` in `js/src/04-niveaux-boutique.js`) are only shown to accounts enabled in the admin page.
 - **Reminders** (Web Push): daily reminder only if the student has not studied yet, "your streak ends tonight" at 9 pm, test reminders (one week, three days, the day before, the morning). Quiet weekends and school holidays (French zones A, B, C) are options.
-- **Admin page** (`/admin`, password protected): students, screen time, AI usage, real gift access and requests.
+- **Admin page** (`/admin`, password protected): tabs "Élèves" (screen time, AI usage, level, coins), "Transférer des chapitres" (copy finished chapters from one student to another: cards with progress reset, summary, lesson text, AI content, photos; no AI request), "Cadeaux en vrai" (access and requests) and "Boutique de chacun".
 
 ## Architecture
 
@@ -80,8 +81,8 @@ All are in `supabase/functions/`. Internal calls (pg_cron, one import step calli
 - **`ai`**: the study tools of the chapter screen. Keeps JWT verification.
 - **`remind`**: push reminders; called every 15 minutes by pg_cron.
 - **`voix`**: Google Text-to-Speech voice; each sentence is stored in the private `voix` bucket so it is never paid twice; a monthly cap (`TTS_MONTHLY_FREE`) falls back to the device voice.
-- **`admin`**: password checked against `admin_pw_sha256`.
-- **`diag`**: real-model checks without student data: schema detection on test pages (`tests/schemas/`, via `studio` `schema_test`) and past-paper search (`{"action":"bac_test","classe":"Terminale STI2D","matiere":"SIN"}`).
+- **`admin`**: password checked against `admin_pw_sha256`. Actions for the admin page, including `chapters_of` and `transfer`.
+- **`diag`**: real-model checks without student data: schema detection on test pages (`tests/schemas/`, via `studio` `schema_test`) and past-paper search (`{"action":"bac_test","classe":"Terminale STI2D","matiere":"SIN"}`). One-off repair `{"action":"schema_fix","only":0}` (one page per call, `dry` to preview): old schema cards that hid nothing get the label that gives their answer hidden. `{"action":"schema_add","chapters":[ids],"only":0}` adds "hidden label" schema cards to chapters made before schema cards existed, from their stored page photos. Results are written to the function logs.
 
 Every call that uses the AI counts in `ai_usage` against a daily quota per user (`AI_DAILY_QUOTA`, 40 by default). Re-reading passes during an import, dictation and the voice do not count.
 

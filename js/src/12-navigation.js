@@ -2,7 +2,7 @@
   let enterT = null, lastHash = null;
   function route() {
     app.classList.remove("enter"); void app.offsetWidth; app.classList.add("enter"); clearTimeout(enterT); enterT = setTimeout(() => app.classList.remove("enter"), 700);
-    document.body.classList.remove("nav"); app.classList.toggle("profmode", /^#exos/.test(location.hash));
+    document.body.classList.remove("nav"); app.classList.toggle("profmode", /^#exos/.test(location.hash)); app.classList.toggle("planmode", /^#(calendrier|journee)/.test(location.hash));
     const pd = document.getElementById("pdrawer"); if (pd) pd.remove(); document.body.classList.remove("typing");
     // Section de Réglages ouverte : refermée quand on change d'écran, gardée quand le même écran est redessiné (réglage enregistré, synchro).
     if (location.hash !== lastHash) app.removeAttribute("data-sec"); lastHash = location.hash;

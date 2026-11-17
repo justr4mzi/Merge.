@@ -162,6 +162,7 @@
     clap: '<rect x="3" y="9" width="18" height="11.5" rx="1.5"/><path d="M3 9l1.6-4.8 15.8 2.2L19.5 9M8.5 4.8l-.8 4.2M14 5.6l-.8 3.4"/>',
     coeur: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0112 7.2a4.3 4.3 0 017.5 2.6C19.5 15.4 12 20 12 20z"/><path d="M12 10.5v4M10 12.5h4"/>',
     feuille: '<path d="M5 19c0-8 5-13 14-14 0 9-5 14-13 14zM5 19l7-7"/>',
+    oral: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21M9 21h6"/>',
   };
   // Ordre important : la première règle qui correspond l'emporte (ex. « éducation physique » est du sport, pas de la physique).
   const SUBJ_RULES = [
@@ -178,7 +179,7 @@
     [/philo/, "ampoule"],
     [/latin|grec|\blca\b|antiquit/, "temple"],
     [/histoire des arts/, "palette"],
-    [/grand oral|\boral\b|eloquence/, "bulle"],
+    [/grand oral|\boral\b|eloquence/, "oral"],
     [/hggsp|geopolit|histoire|geograph|\bhg\b|\bh-?g\b/, "globe"],
     [/\bemc\b|civique|citoyen/, "drapeau"],
     [/anglais|espagnol|allemand|italien|arabe|chinois|japonais|portugais|russe|coreen|turc|hebreu|neerlandais|polonais|\blv ?\d|\blva\b|\blvb\b|\bllcer|\bamc\b|langue|english|spanish/, "bulle"],

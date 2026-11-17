@@ -6,21 +6,18 @@
     const today = state.sessions.find(s => s.day === localDay()) || { seconds: 0, cards_reviewed: 0 };
     const doneVal = p.daily_goal_kind === "minutes" ? Math.floor(today.seconds / 60) : today.cards_reviewed;
     const unit = p.daily_goal_kind === "minutes" ? "min" : "cartes";
-    const lv = xpInfo();
     const week = lastDays(7, state.sessions);
     const ups = upCtrls();
     const yearNow = new Date().getMonth() >= 8 ? new Date().getFullYear() : new Date().getFullYear() - 1, newYear = p.school_year && p.school_year < yearNow;
-    app.innerHTML = `<div class="row between"><div class="logo">${esc(C.NOM_APPLI)}<b>.</b></div><span class="grow"></span><span class="homemusic"><button class="iconbtn flat" data-qs aria-label="Recherche rapide">${I.search}</button><button class="iconbtn flat" data-pomo aria-label="Pomodoro">${I.clock}</button>${musicBtn()}</span>${state.offline ? '<span class="pill warn">Hors ligne</span>' : st ? `<span class="streak" title="${plural(st, "jour", "jours")} d'affilée">${plural(st, "jour", "jours")}<span class="stl">&nbsp;d'affilée</span></span>` : `<span class="pill">${esc(p.classe || "")}</span>`}</div>
-      <div class="hello"><div class="row">${MASCOT((rwEquipped("mascotte") || {}).v || "")}<h1 class="grow">Salut ${esc(p.display_name || "")}${rwEquipped("titre") && rwEquipped("titre").id !== "t-novice" && rwName(rwEquipped("titre")) ? ` <span class="rwtitle">${esc(rwName(rwEquipped("titre")))}</span>` : ""}</h1></div><p class="muted">${esc(new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }).replace(/^./, c => c.toUpperCase()))} · ${esc((rwOwned(SHOP.find(r => r.id === "p-phrase"), 0, rwState()) && rwState().custom.phrase) || PEP)}</p></div>
-      <div class="level"><a class="lvl" href="#recompenses" aria-label="Niveau ${lv.level}, voir les récompenses">Niveau ${lv.level}</a><a class="coinpill" href="#boutique" aria-label="${coinsInfo().balance} pièces, ouvrir la boutique">${I.coin}${coinsInfo().balance}</a><div class="bar grow"><i style="width:${lv.pct}%"></i></div><span class="small muted">encore ${lv.left} points</span></div>
-      ${(() => { const tn = new Date().getHours() >= 15 ? tonightSuggestion() : null; return tn ? `<div class="banner"><div><h2>Ce soir</h2><p class="small">Demain tu as ${tn.subs.map(x => esc(x.name)).join(", ")}. Un petit tour avant ?</p></div><a class="btn sm" href="#revision-${tn.subs[0].id}">Réviser ${esc(tn.subs[0].name)}</a></div>` : ""; })()}${resumeHtml()}${nowTaskHtml()}
+    app.innerHTML = `<div class="row between"><div class="logo">${esc(C.NOM_APPLI)}<b>.</b></div><span class="grow"></span><span class="homemusic"><button class="iconbtn flat" data-qs aria-label="Recherche rapide">${I.search}</button><button class="iconbtn flat" data-pomo aria-label="Pomodoro">${I.clock}</button>${musicBtn()}</span><a class="coinpill" href="#boutique" aria-label="${plural(coinsInfo().balance, "pièce", "pièces")} : ouvrir la boutique">${I.coin}${coinsInfo().balance}</a>${state.offline ? '<span class="pill warn">Hors ligne</span>' : st ? `<span class="streak" title="${plural(st, "jour", "jours")} d'affilée">${plural(st, "jour", "jours")}<span class="stl">&nbsp;d'affilée</span></span>` : `<span class="pill">${esc(p.classe || "")}</span>`}</div>
+      <div class="hello"><div class="row">${MASCOT((rwEquipped("mascotte") || {}).v || "")}<h1 class="grow">Salut ${esc(p.display_name || "")}${rwEquipped("titre") && rwEquipped("titre").id !== "t-novice" && rwName(rwEquipped("titre")) ? ` <span class="rwtitle">${esc(rwName(rwEquipped("titre")))}</span>` : ""}</h1></div></div>
       <div class="dash dash2">${missionHtml(due, doneVal, unit, st)}${nextCtrlHtml(ups)}</div>
+      <div class="hintlist">${betsToSettle().map(b => `<div class="banner bethint"><div><h2>Ta note en ${esc(b.sname)} ?</h2><p class="small">Contrôle du ${esc(fmtDate(b.d))} : entre ta note pour régler ton pari (${plural(b.stake, "pièce", "pièces")}).</p></div><button class="btn sm" data-bnote="${b.id}">Entrer ma note</button></div>`).join("")}${(() => { const tn = new Date().getHours() >= 15 ? tonightSuggestion() : null; return tn ? `<div class="banner"><div><h2>Ce soir</h2><p class="small">Demain tu as ${tn.subs.map(x => esc(x.name)).join(", ")}. Un petit tour avant ?</p></div><a class="btn sm" href="#revision-${tn.subs[0].id}">Réviser ${esc(tn.subs[0].name)}</a></div>` : ""; })()}${resumeHtml()}${nowTaskHtml()}${[0, 1].includes(new Date().getDay()) && state.sessions.length && safeGet("merge.bilanseen") !== localDay(mondayOf(new Date())) ? `<div class="banner"><div><h2>Ton bilan de la semaine est prêt</h2><p class="small">Ce que tu as fait, et ton objectif pour la suite.</p></div><a class="btn sm" href="#bilan">Voir</a></div>` : ""}${newYear ? `<div class="banner"><div><h2>Nouvelle année scolaire</h2><p class="small">Tu passes en quelle classe ? Mets ta classe à jour dans Réglages.</p></div><a class="btn sm" href="#reglages">Mettre à jour</a></div>` : ""}</div>
       ${homeSubjectsHtml()}
       ${weekHtml(week, p)}
-      ${[0, 1].includes(new Date().getDay()) && state.sessions.length && safeGet("merge.bilanseen") !== localDay(mondayOf(new Date())) ? `<div class="banner"><div><h2>Ton bilan de la semaine est prêt</h2><p class="small">Ce que tu as fait, et ton objectif pour la suite.</p></div><a class="btn sm" href="#bilan">Voir</a></div>` : ""}
       ${planTodayHtml()}${installHtml()}
-      ${newYear ? `<div class="banner"><div><h2>Nouvelle année scolaire</h2><p class="small">Tu passes en quelle classe ? Mets ta classe à jour dans Réglages.</p></div><a class="btn sm" href="#reglages">Mettre à jour</a></div>` : ""}
       ${state.subjects.length ? "" : `<div class="card pad stack"><h2>Commence par une matière</h2><p class="small muted">Crée ta première matière, puis importe ton cours pour avoir tes cartes.</p><a class="btn" href="#nouvelle-matiere">Ajouter une matière</a></div>`}`;
+    app.querySelectorAll("[data-bnote]").forEach(b => b.onclick = () => betNoteSheet(b.dataset.bnote, screenHome));
     if ($("insb")) { $("insb").onclick = installSheet; $("insno").onclick = () => { safeSet("merge.noinstall", "1"); screenHome(); }; }
     celebrate();
     nowTaskTick();
@@ -81,11 +78,14 @@
   function chapterRow(c, color) { const cs = cardsOf(c.id); return `<a class="card subject" style="--c:${esc(okColor(c.color) ? c.color : color)}" href="#chapitre-${c.id}"><div class="row between"><b>${esc(c.name)}${c.auto_name ? '<span class="small muted" style="display:block;font-weight:600">Le nom viendra de ton cours</span>' : ""}</b><span class="pill">${cs.length ? plural(cs.length, "carte", "cartes") : "À importer"}</span></div>${cs.length ? `<div class="row"><div class="bar grow"><i style="width:${mastery(cs)}%"></i></div><span class="small muted">${mastery(cs)} %</span></div>` : ""}</a>`; }
   // Champ « Nouveau chapitre » avec la case « Nom choisi automatiquement » (le nom vient du cours importé, voir studio/titre.mjs).
   const AUTO_NAME = "Nouveau chapitre";
-  const chapterField = (label, ph) => `<div class="field"><label for="cname">${label}</label><div class="row"><input id="cname" type="text" maxlength="80" placeholder="${ph}"><button class="btn" id="addCh" aria-label="Ajouter le chapitre">${I.plus}</button></div>
-      <button type="button" class="switch" role="switch" id="cauto" aria-checked="false"><i></i><span>Nom choisi automatiquement d'après le cours</span></button></div>`;
+  // Fenêtre claire (16 nov.) : le nom, la case « nom automatique », puis UN gros bouton « Créer le chapitre » (avant, un petit « + »
+  // à côté du champ qu'on ne voyait pas). Les dossiers, peu utilisés, sont un simple lien discret en dessous.
+  const chapterField = (label, ph) => `<div class="field"><label for="cname">${label}</label><input id="cname" type="text" maxlength="80" placeholder="${ph}" enterkeyhint="done"></div>
+      <button type="button" class="switch" role="switch" id="cauto" aria-checked="false"><i></i><span>Nom choisi automatiquement d'après le cours</span></button>
+      <button class="btn big" id="addCh">${I.plus}<span id="addChTxt">Créer le chapitre</span></button>`;
   function wireChapterField(subjectId, groupId) {
     const inp = $("cname"), sw = $("cauto"), ph = inp.placeholder;
-    sw.onclick = () => { const on = sw.getAttribute("aria-checked") !== "true"; sw.setAttribute("aria-checked", on); inp.disabled = on; if (on) inp.value = ""; inp.placeholder = on ? "Le nom viendra de ton cours" : ph; if (!on) inp.focus(); };
+    sw.onclick = () => { const on = sw.getAttribute("aria-checked") !== "true"; sw.setAttribute("aria-checked", on); inp.disabled = on; if (on) inp.value = ""; inp.placeholder = on ? "Le nom viendra de ton cours" : ph; $("addChTxt").textContent = on ? "Créer et importer mon cours" : "Créer le chapitre"; if (!on) inp.focus(); };
     $("addCh").onclick = () => addChapter(inp.value.trim(), subjectId, groupId, sw.getAttribute("aria-checked") === "true");
     inp.onkeydown = e => { if (e.key === "Enter") $("addCh").click(); };
   }
@@ -102,24 +102,38 @@
     const s = state.subjects.find(x => x.id === id); if (!s) { location.hash = "#accueil"; return; }
     drawTabs("matieres"); // barre du bas visible : on peut revenir à l'accueil d'un geste
     const chs = state.chapters.filter(c => c.subject_id === id), groups = state.groups.filter(g => g.subject_id === id), loose = chs.filter(c => !groups.some(g => g.id === c.group_id));
-    app.innerHTML = `<div class="row"><a class="iconbtn" href="#matieres" aria-label="Retour aux matières">${I.back}</a><span class="grow"></span><button class="iconbtn flat" id="sSet" aria-label="Réglages de la matière" title="Réglages">${I.gear}</button></div>
-      <div class="stack" style="--c:${esc(s.color)}"><div class="row"><span class="dot"></span><h1>${esc(s.name)}</h1></div>
-        <div class="card pad stack ctrlbox"><div class="row between"><h2>Contrôles</h2><button class="btn sm" id="ctAdd" aria-expanded="${!!openPicker}">${I.cal}Ajouter un contrôle</button></div><div id="examBox"></div>
-          ${isFree(s) ? '<p class="small muted">Révision libre : pas de contrôle prévu, tu avances à ton rythme.</p>' : ctrlsOf(id).filter(c => c.d >= localDay()).map(c => `<div class="ctrlrow"><span class="jx">${jx(c.d)}</span><span class="grow"><b>${esc(fmtDate(c.d))}</b><span class="small muted">${c.ch && c.ch.length ? esc(chs.filter(y => c.ch.includes(y.id)).map(y => y.name).join(", ")) : "Tous les chapitres"}</span></span><button class="btn sm ghost" data-cch="${c.id}">Chapitres</button><button class="iconbtn flat" data-cdel="${c.id}" aria-label="Supprimer le contrôle du ${esc(fmtDate(c.d))}">${I.x}</button></div>`).join("") || '<p class="small muted">Aucun contrôle prévu. Ajoute-en un : ton plan de révision se fait tout seul. Tu peux en mettre plusieurs.</p>'}
-          <button type="button" class="switch" role="switch" aria-checked="${isFree(s)}" id="ctFree"><i></i><span>Pas de contrôle, révision libre</span></button></div>
-        ${chs.some(c => cardsOf(c.id).length) ? `<a class="btn revall" href="#revision-${id}">${I.cards}Réviser tous les chapitres de la matière</a>` : ""}
-        <div class="row" style="flex-wrap:wrap"><a class="btn sm ghost" href="#methode-${id}">${I.steps}Fiche méthode</a><a class="btn sm ghost" href="#bac-${id}">${I.book}Vrais sujets d'examen</a></div></div>
-      <div class="stack"><div class="row between"><h2>Dossiers</h2><button class="iconbtn accent" id="addG" aria-label="Ajouter un dossier">${I.plus}</button></div>
-        <div id="gform"></div>
-        ${groups.length ? `<div class="grid">${groups.map(g => { const gc = chs.filter(c => c.group_id === g.id), cs = state.cards.filter(k => gc.some(c => c.id === k.chapter_id)), m = mastery(cs); return `<a class="card folder" style="--c:${esc(okColor(g.color) ? g.color : s.color)}" href="#dossier-${g.id}"><div class="row">${I.folder}<b class="grow">${esc(g.name)}</b></div><div class="row between small"><span>${plural(gc.length, "chapitre", "chapitres")}</span><span>${m} %</span></div><div class="bar"><i style="width:${m}%"></i></div></a>`; }).join("")}</div>` : '<p class="small muted">Range tes chapitres par thème, par exemple « Thème 1 : Génétique ». Touche + pour créer un dossier.</p>'}</div>
-      <div class="stack"><div class="row between"><h2>${groups.length ? "Chapitres sans dossier" : "Chapitres"}</h2><button class="iconbtn accent" id="sAdd" aria-label="Ajouter un chapitre" title="Ajouter un chapitre">${I.plus}</button></div>
-      ${loose.length ? loose.map(c => chapterRow(c, s.color)).join("") : `<p class="muted">${chs.length ? "Tous tes chapitres sont rangés dans des dossiers." : "Aucun chapitre pour l'instant. Touche + pour en créer un."}</p>`}</div>
+    // Matière, design E « Plan de révision » (choisi par Ramzi, 17 nov.) : en haut ce qu'il faut réviser aujourd'hui (le chapitre
+    // le moins maîtrisé qui a des cartes à revoir) avec un gros bouton « Réviser » ; les contrôles en lignes compactes ; les chapitres
+    // du moins au plus maîtrisé ; les dossiers (peu utilisés) en petits liens discrets ; les outils en bas.
+    const ups = isFree(s) ? [] : ctrlsOf(id).filter(c => c.d >= localDay()), ic = subjIcon(s.name);
+    const info = chs.map(c => { const cs = cardsOf(c.id); return { c, n: cs.length, m: cs.length ? mastery(cs) : -1, due: cs.filter(fsrsDue).length }; });
+    const todo = info.filter(x => x.n && x.due).sort((x, y) => x.m - y.m || y.due - x.due)[0] || info.filter(x => x.n && x.m < 100).sort((x, y) => x.m - y.m)[0];
+    const sorted = info.slice().sort((x, y) => (x.n ? x.m : 1000) - (y.n ? y.m : 1000));
+    const tone = m => m < 0 ? "none" : m < 30 ? "low" : m < 70 ? "mid" : "high";
+    const gname = c => { const g = groups.find(x => x.id === c.group_id); return g ? g.name : ""; };
+    const head = isFree(s) ? "Révision libre" : ups.length ? (daysUntil(ups[0].d) === 0 ? "Contrôle aujourd'hui" : `Contrôle dans ${plural(daysUntil(ups[0].d), "jour", "jours")}`) : "Pas de contrôle prévu";
+    app.innerHTML = `<div class="row"><a class="iconbtn" href="#matieres" aria-label="Retour aux matières">${I.back}</a><span class="grow"></span><button class="iconbtn flat" id="sSet" aria-label="Réglages et outils de la matière" title="Réglages">${I.gear}</button></div>
+      <div class="subhead" style="--c:${esc(s.color)}"><span class="hsico big">${ic || esc(s.name.slice(0, 2).toUpperCase())}</span><div class="grow" style="min-width:0"><h1>${esc(s.name)}</h1><p class="small muted">${head} · ${plural(chs.length, "chapitre", "chapitres")}</p></div></div>
+      ${todo ? `<div class="card todaycard"><span class="small">À réviser aujourd'hui</span><b>${esc(todo.c.name)}</b><span class="small">${todo.due ? plural(todo.due, "carte à revoir", "cartes à revoir") : "Entraînement"} · ${Math.max(0, todo.m)} % maîtrisé</span><a class="btn todogo" href="#cartes-${todo.c.id}">${I.play}Réviser</a></div>` : ""}
+      ${chs.some(c => cardsOf(c.id).length) ? `<a class="btn ghost revall" href="#revision-${id}">${I.cards}Réviser tous les chapitres de la matière</a>` : ""}
+      <div class="stack ctrlbox" style="--c:${esc(s.color)}"><div class="row between"><h2>Contrôles</h2><button class="btn sm ghost" id="ctAdd" aria-expanded="${!!openPicker}">${I.plus}Ajouter</button></div><div id="examBox"></div>
+        ${isFree(s) ? '<p class="small muted">Révision libre : pas de contrôle prévu, tu avances à ton rythme.</p>' : ups.length ? ups.map(c => `<div class="ctrlrow"><span class="jx">${jx(c.d)}</span><span class="grow" style="min-width:0"><b class="ctdate">${esc(fmtDate(c.d))}</b><span class="small muted ctsub">${c.ch && c.ch.length ? esc(chs.filter(y => c.ch.includes(y.id)).map(y => y.name).join(", ")) : "Tous les chapitres"}</span></span><button class="btn sm ghost${betOf(c.id) ? " beton" : ""}" data-bet="${c.id}" aria-label="${betOf(c.id) ? "Ton pari : " + noteTxt(betOf(c.id).goal) + " sur 20, " + betOf(c.id).stake + " pièces" : "Parier des pièces sur ta note"}">${I.coin}${betOf(c.id) ? noteTxt(betOf(c.id).goal) + "/20" : '<span class="hidesm">Parier</span>'}</button><button class="btn sm ghost" data-cch="${c.id}" aria-label="Chapitres du contrôle">${I.book}<span class="hidesm">Chapitres</span></button><button class="btn sm ghost softdel" data-cdel="${c.id}" aria-label="Retirer le contrôle du ${esc(fmtDate(c.d))}">${I.trash}<span class="hidesm">Retirer</span></button></div>`).join("") : '<p class="small muted">Aucun contrôle prévu.</p>'}
+        ${(() => { const past = bets().filter(b => b.s === id && b.d < localDay()).sort((a, b) => b.d.localeCompare(a.d)).slice(0, 6); return past.length ? `<details class="pastctl"${past.some(b => b.note == null) ? " open" : ""}><summary>Contrôles passés${past.some(b => b.note == null) ? ` · <b>${past.filter(b => b.note == null).length} note à entrer</b>` : ""}</summary>${past.map(b => `<div class="ctrlrow past"><span class="grow" style="min-width:0"><b>${esc(fmtDate(b.d))}</b><span class="small muted">Visé ${noteTxt(b.goal)}/20 · ${plural(b.stake, "pièce", "pièces")} misées${b.note != null ? ` · eu ${noteTxt(b.note)} → ${betBack(b, b.note) - b.stake >= 0 ? "+" : ""}${betBack(b, b.note) - b.stake} pièces` : ""}</span></span>${b.note == null ? `<button class="btn sm" data-bnote="${b.id}">Entrer ma note</button>` : `<span class="pill ${b.note >= b.goal ? "ok" : ""}">${b.note >= b.goal ? "Gagné" : "Raté"}</span>`}</div>`).join("")}</details>` : ""; })()}
+        <button type="button" class="switch" role="switch" aria-checked="${isFree(s)}" id="ctFree"><i></i><span>Pas de contrôle, révision libre</span></button></div>
+      <div class="stack"><div class="row between"><h2>Chapitres</h2><button class="btn sm" id="sAdd" aria-label="Ajouter un chapitre" title="Ajouter un chapitre">${I.plus}Nouveau</button></div>
+        ${sorted.length ? `<p class="small muted" style="margin:0">Du moins au plus maîtrisé : commence par le haut.</p><div class="chlist">${sorted.map(x => `<a class="chline" href="#chapitre-${x.c.id}"><span class="mpill ${tone(x.m)}">${x.n ? x.m + " %" : "–"}</span><span class="grow" style="min-width:0"><b>${esc(x.c.name)}</b><span class="small muted">${x.n ? plural(x.n, "carte", "cartes") : x.c.auto_name ? "Le nom viendra de ton cours" : "Cours à importer"}${gname(x.c) ? " · " + esc(gname(x.c)) : ""}</span></span>${x.due ? `<span class="pill">${x.due} à revoir</span>` : ""}<span class="chev">${I.back}</span></a>`).join("")}</div>` : `<p class="muted">Aucun chapitre pour l'instant.</p>`}
+        <button class="addline" id="sAdd2">${I.plus}Nouveau chapitre</button>
+        <div class="foldline">${groups.map(g => { const gc = chs.filter(c => c.group_id === g.id); return `<a class="folder" style="--c:${esc(okColor(g.color) ? g.color : s.color)}" href="#dossier-${g.id}">${I.folder}${esc(g.name)} · ${gc.length}</a>`; }).join("")}<button class="linkbtn" id="addG">${I.folder}${groups.length ? "Nouveau dossier" : "Ranger dans des dossiers"}</button></div>
+        <div id="gform"></div></div>
+      <div class="row subtools"><a class="btn sm ghost" href="#methode-${id}">${I.steps}Fiche méthode</a><a class="btn sm ghost" href="#bac-${id}">${I.book}Vrais sujets d'examen</a></div>
       <div id="stools">${subjectToolsHtml(s, chs)}</div>`;
     // Contrôles : « Ajouter un contrôle » ouvre le calendrier ; un jour touché crée le contrôle puis demande ses chapitres.
     const openExam = () => { examPicker($("examBox"), { date: null, free: false }, async v => { if (!v.date) return; const c = await ctrlAdd(id, v.date); $("examBox").innerHTML = ""; if (!c) return toast("Il y a déjà un contrôle ce jour-là."); screenSubject(id); ctrlChSheet(c.id, () => screenSubject(id)); }, true); };
     if (openPicker) openExam();
     $("ctAdd").onclick = () => { if ($("examBox").innerHTML) { $("examBox").innerHTML = ""; $("ctAdd").setAttribute("aria-expanded", "false"); } else { openExam(); $("ctAdd").setAttribute("aria-expanded", "true"); } };
     app.querySelectorAll("[data-cch]").forEach(b => b.onclick = () => ctrlChSheet(b.dataset.cch, () => screenSubject(id)));
+    app.querySelectorAll("[data-bet]").forEach(b => b.onclick = () => betSheet(b.dataset.bet, () => screenSubject(id)));
+    app.querySelectorAll("[data-bnote]").forEach(b => b.onclick = () => betNoteSheet(b.dataset.bnote, () => screenSubject(id)));
     app.querySelectorAll("[data-cdel]").forEach(b => b.onclick = async () => { if (!(await askConfirm("Supprimer ce contrôle ?", "Il disparaîtra du calendrier et du planning."))) return; await ctrlDel(b.dataset.cdel); toast("Contrôle supprimé."); screenSubject(id); });
     $("ctFree").onclick = async () => { const err = await saveExam(id, { date: null, free: !isFree(s) }); if (err) return fail(err, "Réglage non enregistré"); await ctrlSync(); toast(isFree(s) ? "Révision libre activée." : "Révision libre désactivée."); screenSubject(id); };
     $("addG").onclick = () => {
@@ -132,11 +146,12 @@
         await loadAll(); screenSubject(id); toast("Dossier créé.");
       };
     };
-    $("sAdd").onclick = () => sheet(`<div class="row"><span class="mico big">${I.plus}</span><h1>Ajouter</h1></div>${chapterField("Nouveau chapitre", "Ex. Les ondes mécaniques")}<button class="btn ghost" id="sAddG">${I.folder || I.plus}Nouveau dossier</button><button class="btn ghost" data-close>Fermer</button>`, () => {
+    $("sAdd").onclick = () => sheet(`<div class="row"><span class="mico big">${I.plus}</span><h1>Nouveau chapitre</h1></div>${chapterField("Nom du chapitre", "Ex. Les ondes mécaniques")}<button class="linkbtn addfolder" id="sAddG">${I.folder || I.plus}Ou créer un dossier pour ranger tes chapitres</button>`, () => {
       wireChapterField(id, null); setTimeout(() => { const c = $("cname"); if (c && matchMedia("(pointer:fine)").matches) c.focus(); }, 50);
       $("sAddG").onclick = () => { closeSheet(); $("addG").click(); $("gform").scrollIntoView({ block: "center", behavior: "smooth" }); };
     });
     $("sSet").onclick = () => sheet(subjectSettingsHtml(s), () => wireSubjectTools(s));
+    $("sAdd2").onclick = () => $("sAdd").click();
   }
 
   // ---------- dossier (sous-catégorie) : onglets Résumés, Flashcards, Quiz, Contrôles ----------
@@ -171,8 +186,8 @@
         <div class="stack" role="tabpanel">${list()}</div>
 `;
       app.querySelectorAll("[data-gt]").forEach(b => b.onclick = () => { groupTab = b.dataset.gt; draw(); });
-      $("gAdd").onclick = () => sheet(`<div class="row"><span class="mico big">${I.plus}</span><h1>Ajouter</h1></div>${chapterField("Nouveau chapitre dans ce dossier", "Ex. Chapitre 1 : La mitose")}
-          ${loose.length ? `<div class="field"><label for="mv">Ou ranger un chapitre existant ici</label><div class="row"><select id="mv">${loose.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select><button class="btn sm" id="mvgo">Ranger</button></div></div>` : ""}<button class="btn ghost" data-close>Fermer</button>`, () => {
+      $("gAdd").onclick = () => sheet(`<div class="row"><span class="mico big">${I.plus}</span><h1>Nouveau chapitre</h1></div>${chapterField("Nom du chapitre (dans ce dossier)", "Ex. Chapitre 1 : La mitose")}
+          ${loose.length ? `<div class="field"><label for="mv">Ou ranger un chapitre existant ici</label><div class="row"><select id="mv">${loose.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select><button class="btn sm" id="mvgo">Ranger</button></div></div>` : ""}`, () => {
         wireChapterField(g.subject_id, id); setTimeout(() => { const c = $("cname"); if (c && matchMedia("(pointer:fine)").matches) c.focus(); }, 50);
         if ($("mvgo")) $("mvgo").onclick = async () => { const r = await sb.from("chapters").update({ group_id: id }).eq("id", $("mv").value); if (r.error) return fail(r.error, "Chapitre non rangé"); closeSheet(); await loadAll(); screenGroup(id); toast("Chapitre rangé dans le dossier."); };
       });
@@ -260,18 +275,22 @@
     // puis « Plus d'outils » replié. Toujours le « i » et l'étoile dans « Plus d'outils » ; les favoris rejoignent les raccourcis.
     const nc = nextCtrl(s), ctl = nc && (!nc.ch || !nc.ch.length || nc.ch.includes(id));
     const chHead = () => `<div class="chhead" style="--c:${esc(s.color)}"><div class="chring" style="--p:${m}" role="img" aria-label="Maîtrise ${m} %"><b>${m}%</b></div><div class="grow"><h1>${esc(ch.name)}</h1><p class="small muted">${cards.length ? plural(cards.length, "carte", "cartes") + (due ? " · " + plural(due, "à revoir", "à revoir") : "") : "Pas encore de cartes"}${ctl ? " · contrôle " + (jx(nc.d) === "Auj." ? "aujourd'hui" : jx(nc.d)) : ""}</p></div></div>`;
-    const short = (k) => {
+    const short = (k, odd) => {
       const M = MODES[k]; let sub = M.s, icon = I[M.i], href = k === "prof" ? "#exos-" + id : "#" + k + "-" + id;
       if (k === "resume" && !hasSum) { href = "#import-" + id; sub = "Importe ton cours"; }
       if (k === "resume" && hasSum) sub = "L'essentiel";
       if (k === "quiz") sub = "QCM"; if (k === "interro") sub = "Tu écris, il corrige"; if (k === "prof") sub = "Une question, un exercice, un quiz… ce que tu veux";
       if (k === "controle") { icon = m >= 100 ? I.check : I.lock; sub = m >= 100 ? "Débloqué" : "À 100 %"; }
-      return `<a class="short${k === "prof" ? " wide" : ""}" href="${href}"><span class="mico">${icon}</span><span class="mtxt"><b>${M.n}</b><span class="small">${sub}</span></span></a>`;
+      return `<a class="short${k === "prof" && odd ? " wide" : ""}" href="${href}"><span class="mico">${icon}</span><span class="mtxt"><b>${M.n}</b><span class="small">${sub}</span></span></a>`;
     };
     const revMin = Math.max(1, Math.round((due || Math.min(20, meta.length)) * 0.5));
-    const modesHtml = () => `<a class="revbig" href="#cartes-${id}">${I.play}<span class="grow"><b>Réviser maintenant</b><span class="small">${due ? plural(due, "carte à revoir", "cartes à revoir") : "Entraînement sur tes cartes"}, environ ${revMin} min</span></span></a>`
+    // Raccourcis : sur téléphone 2 colonnes (« Demander au prof » en large s'il est seul sur sa ligne) ; sur PC, une grille
+    // sans trou : 5 raccourcis sur une ligne, 6 en 3 × 2, plus en 4 colonnes.
+    const shortKeys = () => ["resume", "quiz", "interro", "controle"].concat(hasSchema ? ["schema"] : [], favs().filter(k => !MODE_MAIN.includes(k) && k !== "schema"), ["prof"]);
+    const shortsHtml = () => { const keys = shortKeys(), odd = keys.length % 2 === 1, pcCols = keys.length <= 5 ? keys.length : keys.length === 6 ? 3 : 4; return `<div class="shorts" style="--pccols:${pcCols}">${keys.map(k => short(k, odd)).join("")}</div>`; };
+    const modesHtml = () => `<a class="revbig" href="#cartes-${id}"><span class="grow"><b>Réviser maintenant</b><span class="small">${due ? plural(due, "carte à revoir", "cartes à revoir") : "Entraînement sur tes cartes"} · environ ${revMin} min</span></span><span class="revgo" aria-hidden="true">${I.play}</span></a>`
       + (hard ? `<a class="mvar solo" href="#difficiles-${id}">${I.bolt}Seulement les difficiles · ${hard}</a>` : "")
-      + `<div class="shorts">${["resume", "quiz", "interro", "controle"].concat(hasSchema ? ["schema"] : [], favs().filter(k => !MODE_MAIN.includes(k) && k !== "schema"), ["prof"]).map(short).join("")}</div>`
+      + shortsHtml()
       + `<a class="mvar solo" href="#blanc-${id}">${I.clock}Interro chronométrée, comme le jour J</a>`
       + `<details class="moremodes"${safeGet("merge.moremodes") === "1" ? " open" : ""}><summary><span class="grow">Plus d'outils</span><span class="small muted">${MODE_CATS.reduce((a, c) => a + c[1].length, 0)} outils</span></summary><div class="stack modesbox">${MODE_CATS.map(c => sect(c[0], c[1])).join("")}</div></details>`;
     function wireModes() {

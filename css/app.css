@@ -92,7 +92,7 @@ h2{font-size:1.06em;font-weight:800}
 .counter.no{border:1.5px solid var(--peach-ink);border-left:0;color:var(--peach-ink);border-radius:0 99px 99px 0}
 .counter.yes{background:var(--mint-bg);color:var(--mint-ink);border-radius:99px 0 0 99px}
 .session{flex:1;display:flex;flex-direction:column;gap:14px;min-height:calc(100dvh - 140px)}
-.flipwrap{perspective:1200px;flex:1;min-height:320px;display:flex;padding:6px 4px;transform:rotate(-1.2deg);touch-action:pan-y}
+.flipwrap{perspective:1200px;flex:1;min-height:320px;display:flex;padding:6px 4px;touch-action:pan-y}
 .flip{position:relative;flex:1;border:0;background:none;padding:0;transform-style:preserve-3d;transition:transform .45s cubic-bezier(.2,.7,.2,1);text-align:left}
 .flip.back{transform:rotateY(180deg)}
 .face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;display:flex;flex-direction:column;overflow:hidden;border-radius:calc(var(--radius) + 4px);box-shadow:0 4px 16px rgba(20,20,60,.12);background:var(--card)}
@@ -1430,7 +1430,7 @@ body[data-flame="bonbon"] .streak,[data-flameprev="bonbon"]{background:linear-gr
 @media (hover:hover) and (pointer:fine){.short:hover{border-color:var(--accent)}}
 .mvar.solo{margin:0;max-width:100%}
 .addcourse{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--fg)}
-@media (min-width:900px){.shorts{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (min-width:900px){.shorts{grid-template-columns:repeat(var(--pccols,4),minmax(0,1fr))}.shorts .short.wide{grid-column:auto}}
 .qbar{height:5px;border-radius:5px;background:var(--line);overflow:hidden}.qbar i{display:block;height:100%;width:100%;background:var(--accent);transition:width .1s linear}
 .match .tilebtn.isq{font-weight:700}
 .mstars{display:flex;gap:6px;justify-content:center}.mstars span{color:var(--line)}.mstars span.on{color:#f5b400}.mstars span.on svg{fill:currentColor}.mstars svg{width:30px;height:30px}
@@ -1458,7 +1458,10 @@ body[data-flame="bonbon"] .streak,[data-flameprev="bonbon"]{background:linear-gr
 .sadd span{display:flex;align-items:center;gap:6px}
 .addround{background:var(--btn-bg);color:#fff;border-radius:50%}
 @media (hover:hover) and (pointer:fine){.stile:hover{border-color:var(--c);transform:translateY(-2px)}}
-@media (min-width:900px){.stiles{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}}
+@media (min-width:900px){.stiles{grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
+  .stile{padding:20px;min-height:178px;border-radius:22px;gap:6px}.stile b{font-size:1.2rem}.stile .small{font-size:.9rem}
+  .stile .sico{width:52px;height:52px;border-radius:15px;margin-bottom:8px}.stile .sico.ic svg{width:27px;height:27px}}
+@media (min-width:1500px){.stiles{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}}
 /* Réglages, design A : liste façon iPhone */
 .setprof{display:flex;align-items:center;gap:14px;width:100%;padding:14px;border-radius:20px;background:var(--card);border:1px solid var(--line);color:var(--fg);font:inherit;text-align:left;cursor:pointer}
 .setprof b{display:block;font-size:1.05rem}
@@ -1532,3 +1535,149 @@ body[data-flame="bonbon"] .streak,[data-flameprev="bonbon"]{background:linear-gr
 .mission .mstreak.on{color:#ffd29a}
 .mission .big{font-size:inherit}
 @media (min-width:900px){.dash.dash2{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}.dash2 .mission{max-width:none}}
+
+/* Cartes : tout le texte (mots et formules) dans un seul bloc, pour qu'une formule ne coupe jamais la phrase en colonnes. */
+.face .txt>.tin{width:100%;max-width:100%;overflow-wrap:anywhere}
+.face .txt>.tin .katex{white-space:nowrap}
+.face .txt:has(.schema)>.tin{display:flex;flex-direction:column;align-items:center;gap:14px}
+
+/* Schémas : légende à trouver cachée côté question (case « ? »), entourée côté réponse. */
+.schema .schmask{position:absolute;display:grid;place-items:center;background:#4b39c8;color:#fff;font-style:normal;font-weight:900;font-size:clamp(10px,1.6vw,16px);border-radius:5px;box-shadow:0 0 0 2px #fff}
+.schema .schhit{position:absolute;border:2.5px solid #2bc48a;border-radius:6px;background:rgba(43,196,138,.12)}
+.face.b .txt:has(.schema) .schema{width:min(100%,calc(min(26vh,240px) * var(--ar,1.3)))}
+
+/* Chapitre : « Réviser maintenant » est LE bouton de l'écran : grand, avec un gros rond « lecture » à droite. */
+.revbig{min-height:88px;padding:16px 16px 16px 22px;border-radius:24px;gap:16px;box-shadow:0 10px 26px color-mix(in srgb,var(--accent) 35%,transparent)}
+.revbig b{font-size:1.3rem}
+.revbig .small{font-size:.9rem;margin-top:2px}
+.revgo{flex:none;width:56px;height:56px;border-radius:50%;display:grid;place-items:center;background:#fff;color:var(--accent)}
+.revgo svg{width:26px;height:26px;margin-left:3px}
+@media (min-width:900px){.revbig{min-height:104px;padding:20px 22px 20px 30px}.revbig b{font-size:1.5rem}.revgo{width:64px;height:64px}}
+@media (hover:hover) and (pointer:fine){.revbig:hover{filter:brightness(1.08)}}
+
+/* Fenêtre « Nouveau chapitre » : gros bouton Créer, lien discret pour les dossiers. */
+#addCh.big{width:100%;min-height:54px;font-size:1.05rem;margin-top:4px}
+.addfolder{align-self:center;display:inline-flex;align-items:center;gap:8px;min-height:44px;color:var(--muted);font-weight:700}
+.addfolder svg{width:17px;height:17px}
+
+/* Progrès, design C « Parcours et récompenses ». */
+.pathcard{display:flex;flex-direction:column;gap:10px;padding:18px;border:0;border-radius:22px;background:linear-gradient(135deg,#3b2bb0,#4b39c8 60%,#5b45d8);color:#fff}
+.pathcard .small{color:#d9d3ff}
+.plvl{font-size:1.25rem}.plvl .small{font-weight:700;margin-left:4px}
+.pathcard .bar{background:rgba(255,255,255,.2)}.pathcard .bar i{background:#fff}
+.pgift{display:flex;align-items:center;gap:8px;margin:0;font-weight:700;color:#ffe2a8}
+.pgift svg{width:19px;height:19px;flex:none}
+.ppath{display:flex;align-items:center;gap:0;margin-top:4px}
+.pline{flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.25);margin:0 4px 18px}
+.pnode{display:flex;flex-direction:column;align-items:center;gap:4px;flex:none}
+.pdot{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.14);color:#e7e3ff}
+.pdot svg{width:18px;height:18px}
+.pnode.done .pdot{background:#fff;color:#4b39c8}
+.pnode.now .pdot{width:44px;height:44px;background:#fff;color:#4b39c8;box-shadow:0 0 0 4px rgba(255,255,255,.25)}
+.pnode.next .pdot{border:2px solid #fff;color:#ffe2a8}
+.pnote{margin:0}
+.pbadge{display:flex;flex-direction:column;gap:6px}
+.pbadge .bar i{background:var(--accent2,#9483ff)}
+.pgrid6{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (min-width:900px){.pgrid6{grid-template-columns:repeat(3,minmax(0,1fr))}.pathcard{padding:24px 28px}}
+
+/* Retour flottant : sur PC, à droite du menu (il passait dessous). */
+@media (min-width:900px){.floatback{left:256px}}
+/* Historique du Prof : la croix discrète, sans rond qui déborde ; visible au survol sur PC. */
+.pdrow{padding-right:2px}
+.pdrow [data-cdel]{flex:none;width:34px;min-width:34px;height:44px;border:0;background:transparent;box-shadow:none;color:var(--muted);opacity:.55;border-radius:10px}
+.pdrow [data-cdel] svg{width:16px;height:16px}
+.pdrow [data-cdel]:focus-visible{opacity:1}
+@media (hover:hover) and (pointer:fine){.pdrow [data-cdel]{opacity:0}.pdrow:hover [data-cdel]{opacity:1}.pdrow [data-cdel]:hover{color:var(--fg);background:var(--card2)}.pdrow:hover{background:color-mix(in srgb,var(--fg) 5%,transparent)}}
+
+/* Planning sur PC : une colonne centrée (comme le Prof), la journée au milieu de l'écran. */
+@media (min-width:900px){.app.planmode{max-width:780px}}
+/* Frise : une ligne continue du premier au dernier moment de la journée, même entre deux blocs (créneaux libres). */
+.jline:has(.jrow)::before{content:"";position:absolute;left:31px;top:22px;bottom:calc(78px + 22px);width:3px;border-radius:2px;background:color-mix(in srgb,var(--fg) 14%,transparent);z-index:0}
+.jrow:first-child::before{top:50%}
+.jrow:last-child::before{bottom:50%}
+
+/* Contrôles d'un jour : chaque contrôle prévu avec un bouton « Retirer » bien visible. */
+.cdrow{display:flex;align-items:center;gap:10px;min-height:52px;padding:4px 6px 4px 14px;border-radius:14px;background:color-mix(in srgb,var(--c) 14%,var(--card));border:1px solid color-mix(in srgb,var(--c) 35%,var(--line))}
+.cdrow .dot{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none}
+/* Bouton « Retirer » discret (pas le rouge plein des suppressions définitives). */
+.btn.softdel{color:#f09595;background:transparent}
+.btn.softdel svg{width:16px;height:16px}
+
+/* Accueil, maquette A choisie par Ramzi : carte « Mission du jour » sombre (pas violette), anneau violet, série en orange,
+   bouton « Continuer » violet sur toute la largeur. Le niveau est dans Progrès. */
+.today.mission{background:var(--card);color:var(--fg);border:1px solid var(--line);box-shadow:none}
+.today.mission::before,.today.mission::after{display:none}
+.today.mission .muted,.today.mission .small.muted{color:var(--muted)}
+.mission .mring{background:conic-gradient(var(--accent2,#9483ff) calc(var(--p)*1%),var(--track) 0)}
+.mission .mring::before{background:var(--card)}
+.mission .mstreak{color:var(--muted)}
+.mission .mstreak.on{color:#f5a35c}
+.today.mission .btn.mgo{background:var(--accent);color:#fff;justify-content:center}
+.today.mission .btn.ghost{background:transparent;color:var(--fg)}
+.today.mission .bar{background:var(--track)}.today.mission .bar i{background:var(--accent2,#9483ff)}
+
+/* Accueil : « Réviser » d'abord. Les messages (ce soir, reprendre ta session, bilan, nouvelle année…) passent SOUS la mission,
+   en lignes compactes, au lieu de grosses cartes au-dessus qui poussaient le bouton vers le bas. */
+.hintlist{display:flex;flex-direction:column;gap:8px}
+.hintlist:empty{display:none}
+.hintlist .banner{flex-direction:row;align-items:center;gap:12px;padding:10px 10px 10px 16px;min-height:60px;border-radius:16px;margin:0}
+.hintlist .banner h2{font-size:1rem;margin:0}
+.hintlist .banner p{margin:2px 0 0;font-size:.85rem}
+.hintlist .banner>div{flex:1;min-width:0}
+.hintlist .banner .btn{flex:none;white-space:nowrap}
+.hello{margin-bottom:-4px}
+.hello h1{margin:0}
+/* Gros bouton « Continuer » : le premier geste de l'appli. */
+.today.mission .btn.mgo{min-height:64px;font-size:1.15rem;border-radius:20px}
+.today.mission .btn.mgo svg{width:22px;height:22px}
+@media (min-width:900px){.today.mission .btn.mgo{min-height:76px;font-size:1.3rem}.mring{width:100px;height:100px}.mission h2{font-size:1.35rem}}
+
+/* Matière, design E « Plan de révision ». */
+.subhead{display:flex;align-items:center;gap:14px}
+.subhead h1{margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.subhead p{margin:2px 0 0}
+.hsico.big{width:56px;height:56px;border-radius:16px}.hsico.big svg{width:28px;height:28px}
+.todaycard{display:flex;flex-direction:column;gap:4px;padding:18px;border:0;border-radius:22px;background:linear-gradient(135deg,#3b2bb0,#4b39c8 60%,#5b45d8);color:#fff}
+.todaycard .small{color:#d9d3ff}
+.todaycard b{font-size:1.3rem}
+.todaycard .todogo{margin-top:10px;min-height:60px;font-size:1.15rem;background:#fff;color:#2b2190;justify-content:center}
+.todaycard .todogo svg{width:22px;height:22px}
+.revall{justify-content:center}
+.ctrlbox{gap:8px}
+.ctrlbox h2{margin:0}
+.ctrlrow{display:flex;align-items:center;gap:10px;padding:8px 8px 8px 12px;border-radius:16px;background:var(--card);border:1px solid var(--line)}
+.ctrlbox .ctrlrow{flex-wrap:nowrap}.ctrlbox .ctrlrow .grow{flex:1 1 auto}.ctrlbox .ctrlrow .btn{margin-left:0;flex:none}
+.chlist{display:flex;flex-direction:column;gap:8px}
+.chline{display:flex;align-items:center;gap:12px;min-height:64px;padding:10px 12px 10px 10px;border-radius:16px;background:var(--card);border:1px solid var(--line);color:var(--fg);text-decoration:none}
+.chline b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chline .chev{flex:none;color:var(--muted)}
+@media (hover:hover) and (pointer:fine){.chline:hover{background:var(--card2)}}
+.mpill{flex:none;min-width:58px;text-align:center;padding:6px 8px;border-radius:12px;font-weight:900;font-size:.9rem}
+.mpill.none{background:var(--card2);color:var(--muted)}
+.mpill.low{background:#4a1f1f;color:#f09595}
+.mpill.mid{background:#3a2a12;color:#f5b25c}
+.mpill.high{background:#123a2c;color:#5dcaa5}
+.addline{display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;border-radius:16px;border:1.5px dashed var(--line);background:transparent;color:var(--accent2,#9483ff);font:inherit;font-weight:800;cursor:pointer}
+.addline svg{width:18px;height:18px}
+.foldline{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.foldline a.folder{flex-direction:row;display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 12px;border-radius:12px;background:color-mix(in srgb,var(--c) 14%,var(--card));color:var(--fg);text-decoration:none;font-weight:700;font-size:.88rem}
+.foldline .folder svg,.foldline .linkbtn svg{width:16px;height:16px}
+.foldline .linkbtn{display:inline-flex;align-items:center;gap:6px;min-height:44px;color:var(--muted);font-weight:700;font-size:.88rem}
+.subtools{flex-wrap:wrap;gap:8px}
+@media (max-width:420px){.hidesm{display:none}}
+@media (min-width:900px){.todaycard{padding:24px 28px}.todaycard .todogo{min-height:68px;max-width:420px}.chlist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Pari sur la note d'un contrôle. */
+.betrow{display:flex;flex-direction:column;gap:8px}
+.betrow .row{gap:12px;align-items:center}
+.betgoal{font-size:2rem;font-weight:900;min-width:96px;text-align:center}
+.betwhat{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.btn.beton{color:#f5c542;border-color:color-mix(in srgb,#f5c542 45%,transparent)}
+.pastctl summary{min-height:44px;display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:800;color:var(--muted)}
+.pastctl b{color:#f5c542}
+.pastctl .ctrlrow{margin-top:6px}
+.pill.ok{background:#123a2c;color:#5dcaa5}
+#bok.big,#bnok.big{font-size:1.05rem;min-height:54px;width:100%}
+@media (max-width:359px){.coinpill{padding:4px 7px;gap:3px}.homemusic{gap:0}.row.between > .logo{font-size:1.5rem}}
+.ctrlrow .ctdate,.ctrlrow .ctsub{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

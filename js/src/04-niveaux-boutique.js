@@ -148,7 +148,8 @@
   // moins ce qui a été dépensé. Exemple : ~100 bonnes réponses par jour ≈ 40 pièces par jour, un bisou en une semaine, le cinéma en ~2 mois.
   const COIN_PTS = 25;
   const levelBonus = L => { let t = 0; for (let l = 2; l <= L; l++) t += 10 * l; return t; };
-  function coinsInfo() { const x = xpInfo(), st = rwState(), earned = Math.floor(x.xp / COIN_PTS) + levelBonus(x.level), spent = st.buys.reduce((a, b) => a + (+b.price || 0), 0); return { earned, spent, balance: Math.max(0, earned - spent) }; }
+  // Pièces : gagnées (points, niveaux, paris gagnés) moins dépensées (boutique, mises des paris). « locked » = mises en attente d'une note.
+  function coinsInfo() { const x = xpInfo(), st = rwState(), bc = betCoins(), earned = Math.floor(x.xp / COIN_PTS) + levelBonus(x.level) + bc.back, spent = st.buys.reduce((a, b) => a + (+b.price || 0), 0) + bc.staked; return { earned, spent, balance: Math.max(0, earned - spent), locked: bc.locked }; }
   const rwSave = (st) => { jset("merge.rewards", st); walletSync(); };
   const rwOwned = (r, xp, st) => r.lv ? levelOfXp(xp) >= r.lv : r.price ? st.buys.some(b => b.id === r.id) || st.chest.includes(r.id) : r.chest ? st.chest.includes(r.id) : xp >= r.pts;
   // Valeurs des articles personnalisés (titre écrit, couleur choisie).

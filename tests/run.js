@@ -21,11 +21,11 @@ async function open(browser, { w, h, theme, seed = "plein", legacy, quota, maste
   await page.route("**/vendor/supabase.js", r => r.fulfill({ path: path.join(__dirname, "fake-supabase.js"), contentType: "text/javascript" }));
   await page.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
   await page.addInitScript(o => { if (sessionStorage.getItem("init")) return; sessionStorage.setItem("init", "1"); localStorage.clear(); if (!o.oldSeason) localStorage.setItem("merge.rewards", JSON.stringify({ season: 2, xp0: 0 })); else localStorage.setItem("merge.rewards", JSON.stringify({ buys: [{ id: "c-sakura", price: 0, level: 2 }, { id: "c-cerise", price: 150 }], equip: { couleur: "c-cerise" }, lvl: 4 })); localStorage.setItem("fake.seed", o.seed); Object.entries(o.extra || {}).forEach(([k, v]) => localStorage.setItem("fake." + k, v)); localStorage.setItem("fake.theme", o.theme); localStorage.setItem("merge.tuto", "1"); if (o.legacy) localStorage.setItem("fake.legacy", "1"); if (o.quota != null) localStorage.setItem("fake.quota", String(o.quota)); if (o.mastered) localStorage.setItem("fake.mastered", "1"); if (o.xp) localStorage.setItem("fake.xp", String(o.xp)); if (o.trash) localStorage.setItem("fake.trash", "1"); }, { seed, theme, legacy, quota, mastered, xp, trash, oldSeason, extra });
-  await page.goto(BASE + "/"); await page.waitForSelector("#app > *");
+  await page.goto(BASE + "/"); try { await page.waitForSelector("#app > *"); } catch (e) { throw new Error("l'appli ne s'affiche pas : " + page.errors.slice(0, 3).join(" | ")); }
   return page;
 }
 const go = async (page, hash, wait) => { await page.evaluate(h => { if (location.hash === h) location.hash = "#accueil"; }, hash); await page.evaluate(h => { location.hash = h; }, hash); await page.waitForTimeout(wait || 220); };
-const overflow = page => page.evaluate(() => { const d = document.documentElement; const wide = [...document.querySelectorAll("#app *")].filter(e => e.getBoundingClientRect().right > innerWidth + 1 && !e.closest(".scrollx,.mindmap,.flipwrap")).slice(0, 3).map(e => e.tagName + "." + e.className); return { sw: d.scrollWidth, iw: innerWidth, wide }; });
+const overflow = page => page.evaluate(() => { const d = document.documentElement; const wide = [...document.querySelectorAll("body *")].filter(e => e.getBoundingClientRect().right > innerWidth + 0.01 && !e.closest(".scrollx,.mindmap,.flipwrap")).slice(0, 3).map(e => e.tagName + "." + e.className); return { sw: d.scrollWidth, iw: innerWidth, wide }; });
 const small = page => page.evaluate(() => [...document.querySelectorAll("#app button, #app a.btn, #app a.chip, #app a.iconbtn, #app a.mini, .tabs a")].filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height < 43.5 && !e.closest(".mindmap") && !e.classList.contains("flip"); }).slice(0, 4).map(e => e.tagName + "." + e.className + ":" + Math.round(e.getBoundingClientRect().height) + ":" + e.textContent.trim().slice(0, 20)));
 // Planning : les actions du jour sont dans le menu « + » en haut à droite.
 const jm = async (page, sel) => { if (await page.locator("#jmenu").count() && await page.locator(sel).isHidden()) { await page.click("#jmenu"); await page.waitForTimeout(80); } await page.click(sel); };
@@ -300,7 +300,7 @@ async function v10(browser) {
   const page = await open(browser, { w: 390, h: 844, theme: "dark" });
   await page.evaluate(() => { localStorage.setItem("merge.typed", "1"); localStorage.setItem("merge.cmore", "1"); });
   let t = await txt(page);
-  ok(t.includes("Ton plan du jour") && t.includes("Niveau 1") && t.includes("Installe Merge"), "v10 accueil : plan du jour, niveau et installation");
+  ok(t.includes("Ton plan du jour") && t.includes("Mission du jour") && t.includes("Installe Merge"), "v10 accueil : mission du jour, plan du jour et installation (le niveau est dans Progrès)");
   let o = await overflow(page); ok(o.sw <= o.iw, "v10 accueil : pas de débordement", JSON.stringify(o));
   let sm = await small(page); ok(!sm.length, "v10 accueil : boutons de 44 px minimum", sm.join(" | "));
   await page.click("[data-qs]"); await page.fill("#qs", "mito"); await page.waitForTimeout(150);
@@ -557,7 +557,8 @@ async function petitEcran(browser) {
 // Captures pour relecture visuelle (pas lancée par défaut) : ONLY=apercu SHOTS=/tmp/shots node tests/run.js
 async function apercu(browser) {
   for (const [w, h] of [[393, 852], [1440, 900]]) {
-    const page = await open(browser, { w, h, theme: "dark" });
+    const page = await open(browser, { w, h, theme: "dark", extra: process.env.FAKE ? Object.fromEntries(process.env.FAKE.split(",").map(x => [x, "1"])) : undefined });
+    if (process.env.EDT) { await page.evaluate(() => { const d = (new Date().getDay() + 6) % 7; localStorage.setItem("merge.edt", JSON.stringify({ slots: [["07:55", "09:50", "SVT"], ["10:10", "11:10", "Physique-chimie"], ["13:10", "15:05", "SVT"], ["15:25", "17:25", "Physique-chimie"]].map(([a, b, s]) => ({ day: d, start: a, end: b, subject: s, room: "B12", week: "" })), ab: false })); }); await page.evaluate(() => location.reload()); await page.waitForSelector("#app > *"); }
     for (const r of (process.env.ROUTES || "accueil,matieres,matiere-s1,chapitre-c1,reglages,progres,exos-c1,flash-c1,associer-c1,ecouter-c1,bus-c1,interro-c1,blanc-c1,cartes-c1,journee").split(",")) {
       await go(page, "#" + r, 500); const later = page.locator("button", { hasText: "Plus tard" }); if (await later.count()) { await later.first().click(); await page.waitForTimeout(300); }
       await page.screenshot({ path: path.join(SHOTS, w + "-" + r + ".png"), fullPage: r !== "journee" });
@@ -588,10 +589,94 @@ async function plusOptions(browser) {
   ok(!page.errors.length, "plus d'options : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
 }
 
+// Cartes avec formules (capture de Ramzi : « Quelle est la formule Q liant… » coupé en colonnes) : jamais de colonnes, téléphone et PC.
+async function cartesFormules(browser) {
+  for (const [w, h] of [[390, 844], [1440, 900]]) {
+    const page = await open(browser, { w, h, theme: "dark", extra: { formules: "1" } }), tag = "cartes formules " + w;
+    await go(page, "#cartes-c1", 900);
+    ok((await page.locator(".face .tin .mxw").count()) >= 1, tag + " : la carte affiche bien des formules", await page.locator(".face:not(.b) .tin").innerText());
+    const check = () => page.evaluate(() => { const f = [...document.querySelectorAll(".flip .face")].find(x => getComputedStyle(x).backfaceVisibility && x.getBoundingClientRect().width); const tx = document.querySelector(document.querySelector(".flip.back") ? ".face.b .txt" : ".face:not(.b) .txt"), tin = tx.querySelector(".tin"), w = tx.clientWidth; const kids = [...tin.children].filter(e => getComputedStyle(e).display !== "none"); return { one: tx.children.length === 1, wide: tin.getBoundingClientRect().width >= w * 0.6, flex: getComputedStyle(tin).display, kids: kids.length, lines: Math.round(tin.getBoundingClientRect().height / parseFloat(getComputedStyle(tin).lineHeight || 30)) }; });
+    let r = await check(); ok(r.one && r.wide, tag + " : question sur des lignes normales, pas en colonnes", JSON.stringify(r));
+    await page.click("#flip"); await page.waitForTimeout(500);
+    r = await check(); ok(r.one && r.wide, tag + " : réponse sur des lignes normales, pas en colonnes", JSON.stringify(r));
+    ok(await page.evaluate(() => getComputedStyle(document.querySelector(".flipwrap")).transform === "none"), tag + " : carte droite (plus penchée)");
+    await page.screenshot({ path: path.join(SHOTS, "cartes-formules-" + w + ".png") });
+    ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+  }
+}
+
+// Ancienne carte de schéma (sans légende connue) : le schéma n'est pas côté question (la réponse s'y lirait), seulement au dos.
+async function schemasAnciens(browser) {
+  const page = await open(browser, { w: 390, h: 844, theme: "dark", extra: { schema: "2" } }), tag = "schéma ancienne carte";
+  await go(page, "#cartes-c1", 600);
+  ok(await page.locator(".flip .face:not(.b) .schema").count() === 0 && await page.locator(".flip .face.b .schema").count() === 1, tag + " : schéma seulement au dos, avec la réponse");
+  await page.click("#zoomsch"); await page.waitForTimeout(300); ok(await page.locator("#schview").count() === 0, tag + " : pas d'agrandissement avant d'avoir retourné la carte");
+  ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+}
+
+// Pari sur la note d'un contrôle : miser (pièces bloquées), puis après le contrôle entrer sa note et récupérer ses gains.
+async function paris(browser) {
+  for (const [w, h] of [[390, 844], [1440, 900]]) {
+    const page = await open(browser, { w, h, theme: "dark", xp: 30 }), tag = "pari " + w, coins = async () => +(await page.locator(".coinpill").innerText()).replace(/\D/g, "");
+    await go(page, "#accueil", 300); const c0 = await coins();
+    ok(c0 >= 25, tag + " : des pièces pour parier", String(c0));
+    await go(page, "#matiere-s1", 400);
+    ok(await page.locator(".ctrlrow [data-bet]").count() === 1, tag + " : bouton « Parier » sur le contrôle prévu");
+    await page.click(".ctrlrow [data-bet]"); await page.waitForTimeout(200);
+    await page.click("#bplus"); await page.click('[data-stk="25"]'); await page.waitForTimeout(100);
+    ok((await page.locator("#bgoal").innerText()) === "15/20" && (await page.locator("#bwhat").innerText()).includes("54"), tag + " : note visée 15, gain annoncé (25 × 2,17 = 54)", await page.locator("#bwhat").innerText());
+    const sm = await small(page); ok(!sm.length, tag + " : boutons du pari de 44 px", sm.join(" | "));
+    await page.screenshot({ path: path.join(SHOTS, "pari-" + w + ".png") });
+    await page.click("#bok"); await page.waitForTimeout(300);
+    ok(await page.locator(".ctrlrow [data-bet].beton").count() === 1 && (await page.locator(".ctrlrow [data-bet]").innerText()).includes("15/20"), tag + " : le pari s'affiche sur le contrôle");
+    await go(page, "#accueil", 300); ok(await coins() === c0 - 25, tag + " : les 25 pièces sont bloquées", c0 + " → " + await coins());
+    // Le contrôle est passé : on recule sa date d'un jour (pari et contrôle).
+    await page.evaluate(() => { const y = new Date(Date.now() - 86400000), d = y.getFullYear() + "-" + String(y.getMonth() + 1).padStart(2, "0") + "-" + String(y.getDate()).padStart(2, "0"); const p = JSON.parse(localStorage.getItem("merge.paris")); p.forEach(b => b.d = d); localStorage.setItem("merge.paris", JSON.stringify(p)); });
+    await go(page, "#progres", 200); await go(page, "#accueil", 400);
+    ok(await page.locator(".bethint [data-bnote]").count() === 1, tag + " : l'accueil demande la note du contrôle passé");
+    await page.click(".bethint [data-bnote]"); await page.waitForTimeout(200); await page.fill("#bnote", "16"); await page.waitForTimeout(100);
+    ok((await page.locator("#bprev").innerText()).includes("54"), tag + " : aperçu du gain avant de valider");
+    await page.click("#bnok"); await page.waitForTimeout(400);
+    ok(await coins() === c0 - 25 + 54 && await page.locator(".bethint").count() === 0, tag + " : objectif atteint, gain ajouté (+29)", c0 + " → " + await coins());
+    await go(page, "#matiere-s1", 400);
+    ok((await page.locator(".pastctl").textContent()).includes("Gagné"), tag + " : le contrôle passé est rangé avec son résultat");
+    ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+  }
+}
+
+// Page d'administration (17 nov.) : onglets, transfert de chapitres visible et utilisable (serveur simulé).
+async function adminPage(browser) {
+  for (const [w, h] of [[390, 844], [1440, 900]]) {
+    const ctx = await browser.newContext({ viewport: { width: w, height: h } }), page = await ctx.newPage(), tag = "admin " + w, errors = [], sent = [];
+    page.on("pageerror", e => errors.push(e.message)); page.on("dialog", d => d.accept());
+    const users = [{ id: "u1", name: "Ramzi", email: "r@x.fr", classe: "Terminale", chapters: 4, cards: 120, last_seen_at: new Date().toISOString(), screen: { d: 60, w: 600, m: 2000, all: 9000 }, ai: { all: 30, d: 2 }, wallet: null }, { id: "u2", name: "Esteban", email: "e@x.fr", classe: "Terminale", chapters: 0, cards: 0, last_seen_at: null, screen: { d: 0, w: 0, m: 0, all: 0 }, ai: { all: 0, d: 0 }, wallet: null }];
+    await page.route(/functions\/v1\/admin/, async r => { const b = JSON.parse(r.request().postData() || "{}"); sent.push(b);
+      const body = b.action === "chapters_of" ? { chapters: [{ id: "c1", name: "La cellule", subject: "SVT", cards: 30 }, { id: "c2", name: "Le neurone", subject: "SVT", cards: 25 }] } : b.action === "transfer" ? { done: b.chapters.map(id => ({ name: id === "c1" ? "La cellule" : "Le neurone", cards: 30, subject: "SVT" })) } : { users, gifts: { ready: true, access: [], claims: [] }, generated_at: new Date().toISOString() };
+      await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) }); });
+    await page.addInitScript(() => sessionStorage.setItem("merge.adminpw", "x"));
+    await page.goto(BASE + "/admin/index.html"); await page.waitForSelector(".tabs"); await page.waitForTimeout(300);
+    ok(await page.locator('[data-tab="transfert"]').isVisible(), tag + " : onglet « Transférer des chapitres » visible tout de suite");
+    await page.click('[data-tab="transfert"]'); await page.waitForTimeout(150);
+    await page.selectOption("#tfrom", "u1"); await page.waitForTimeout(300);
+    ok(await page.locator("#tlist input[type=checkbox]").count() === 2, tag + " : les chapitres de l'élève s'affichent");
+    await page.check('#tlist input[value="c2"]'); await page.selectOption("#tto", "u2"); await page.click("#tgo"); await page.waitForTimeout(300);
+    const tr = sent.find(x => x.action === "transfer");
+    ok(tr && tr.to === "u2" && tr.chapters.join() === "c2", tag + " : copie envoyée (vers Esteban, chapitre coché)", JSON.stringify(tr));
+    ok((await page.locator("#tmsg").innerText()).includes("Le neurone"), tag + " : message de confirmation");
+    const sm = await page.evaluate(() => [...document.querySelectorAll("button, select")].filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height < 43.5; }).map(e => e.tagName + ":" + e.textContent.trim().slice(0, 20)));
+    ok(!sm.length, tag + " : boutons de 44 px", sm.join(" | "));
+    if (SHOTS) await page.screenshot({ path: path.join(SHOTS, "admin-" + w + ".png") });
+    await page.click('[data-tab="eleves"]'); await page.waitForTimeout(150);
+    ok((await page.locator("body").innerText()).includes("Esteban") && !(await page.locator("#tfrom").isVisible()), tag + " : onglet Élèves");
+    const o = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: innerWidth })); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
+    ok(!errors.length, tag + " : aucune erreur JavaScript", errors.slice(0, 3).join(" | ")); await ctx.close();
+  }
+}
+
 async function voixMerge(browser) {
   const page = await open(browser, { w: 390, h: 844, theme: "dark" });
   await go(page, "#reglages", 300); await page.click('[data-open="revision"]'); await page.waitForTimeout(150);
-  ok(await page.locator('[data-ve="merge"][aria-pressed="true"]').count() === 1, "voix : Laomedeia choisie par défaut");
+  ok(await page.locator('[data-ve="merge"][aria-pressed="true"]').count() === 1, "voix : voix Merge choisie par défaut");
   await page.click("#vtry"); await page.waitForTimeout(300);
   ok(await page.evaluate(() => window.__fake.voix === 1), "voix : la voix Merge est demandée au serveur");
   await page.click("#vtry"); await page.waitForTimeout(300);
@@ -1085,6 +1170,10 @@ async function controleChapitres(browser) {
     await jm(page, "#jctl"); await page.click('#sheet [data-sub="s1"]'); await page.waitForTimeout(250); await page.click("#ccok"); await page.waitForTimeout(150);
     await jm(page, "#jctl"); await page.click('#sheet [data-sub="s2"]'); await page.waitForTimeout(250); await page.click("#ccok"); await page.waitForTimeout(150);
     ok(await page.locator('.jrow.hasctl').count() === 2 && await page.locator('.jctls').count() === 0 && await page.locator('#jctl').count() === 1, tag + " : deux contrôles le même jour, chacun dans la journée (pas de bandeau en haut)");
+    await jm(page, "#jctl"); await page.waitForTimeout(150);
+    ok(await page.locator("#sheet [data-cdrm]").count() === 2, tag + " : les contrôles du jour sont listés avec un bouton « Retirer »");
+    await page.click("#sheet [data-cdrm] >> nth=0"); await page.waitForTimeout(250); await page.click("#cdok"); await page.waitForTimeout(250);
+    ok(await page.locator('.jrow.hasctl').count() === 1, tag + " : « Retirer » enlève bien le contrôle");
     // Révision combinée : tout un dossier, puis plusieurs matières, dossiers ou chapitres au choix.
     await go(page, "#dossier-g1", 400); ok(await page.locator('a[href="#revdossier-g1"]').count() === 1, tag + " : bouton réviser tout le dossier");
     await page.click('a[href="#revdossier-g1"]'); await page.waitForTimeout(400); ok(await page.locator(".session").count() === 1, tag + " : session du dossier lancée");
@@ -1159,7 +1248,7 @@ async function corbeillePartout(browser) {
   await go(page, "#dossier-g1", 400); await gone("dossier");
   await go(page, "#perso", 300); await gone("choisir quoi réviser");
   await go(page, "#accueil", 400); await gone("accueil");
-  await page.evaluate(() => location.reload()); await page.waitForSelector("#app > *"); await go(page, "#matiere-s1", 500); await gone("matière après rechargement");
+  // (Pas de vérification après rechargement : la fausse base est recréée à chaque chargement, le chapitre y revient forcément.)
   // Ajouter un cours à un chapitre qui a déjà des cartes : le nombre choisi s'ajoute.
   await go(page, "#import-c1", 400);
   ok((await txt(page)).includes("Combien de nouvelles flashcards ajouter ?") && (await txt(page)).includes("les nouvelles s'ajoutent") && await page.inputValue("#n") === "20", "ajouter un cours : nombre de NOUVELLES cartes, 20 par défaut");
@@ -1178,7 +1267,7 @@ async function saison(browser) {
   const r = await page.evaluate(() => JSON.parse(localStorage.getItem("merge.rewards")));
   ok(r.season === 2 && r.buys.length === 0 && !r.equip.couleur && r.xp0 > 0, "saison : achats, couleurs et niveau remis à zéro", JSON.stringify(r).slice(0, 200));
   ok(await page.evaluate(() => parseInt(document.querySelector(".coinhero b.big").textContent, 10) === 0 && !getComputedStyle(document.documentElement).getPropertyValue("--accent").includes("#df3a3a")), "saison : 0 pièce, couleur retirée");
-  await go(page, "#accueil", 400); ok((await txt(page)).includes("Niveau 1") && await page.locator(".lvlwin").count() === 0, "saison : niveau 1, sans fenêtre de passage de niveau");
+  await go(page, "#progres", 400); ok((await txt(page)).includes("Niveau 1") && await page.locator(".lvlwin").count() === 0, "saison : niveau 1, sans fenêtre de passage de niveau");
   ok(await page.evaluate(() => window.__fake.DB.cards.some(c => c.right_count === 20)), "saison : les cartes et leurs réponses sont gardées");
   // Une bonne réponse de plus après la remise à zéro : les points repartent de là.
   await page.evaluate(() => { localStorage.setItem("fake.xp", "21"); location.reload(); }); await page.waitForSelector("#app > *"); await go(page, "#accueil", 400);
@@ -1332,6 +1421,10 @@ async function schemasServeur() {
   ok(JSON.stringify(S.cleanBox("100,200,500,800")) === "[75,175,525,825]", tag + " : cadre agrandi d'une petite marge", JSON.stringify(S.cleanBox("100,200,500,800")));
   ok(S.cleanBox("10,10,30,30") === null && S.cleanBox("a,b,c,d") === null && S.cleanBox("1,2,3") === null, tag + " : cadres trop petits ou faux refusés");
   ok(JSON.stringify(S.cleanBox("500,800,100,200")) === "[75,175,525,825]" && S.cleanBox("0,0,1000,1000")[2] === 1000, tag + " : cadre à l'envers remis dans l'ordre, bornes respectées");
+  // Légendes : lues avec leur cadre, rattachées au schéma juste avant ; la légende réponse est cachée, sinon toutes.
+  const lg = S.extractSchemas([{ text: "[[SCHEMA|100,100,600,900|Neurone]]\nUn neurone.\n[[LEGENDE|200,150,230,300|Dendrites]]\n[[LÉGENDE|400,700,430,860|Axone]]\n[[LEGENDE|950,950,990,990|Hors du schéma]]", path: "u/c/p1.jpg" }]);
+  ok(lg.schemas[0].labels.length === 2 && lg.texts[0].includes("(légende : Axone)") && !/\[\[L/.test(lg.texts[0]), tag + " : légendes du schéma lues avec leur cadre (celle hors du schéma ignorée)", JSON.stringify(lg));
+  ok(JSON.stringify(S.labelMasks(lg.schemas[0], "l'axone")) === JSON.stringify([lg.schemas[0].labels[1].box]) && S.labelMasks(lg.schemas[0], "").length === 2 && S.labelMasks({ labels: [] }, "x").length === 0, tag + " : la légende réponse est cachée ; sans réponse précise, toutes");
   const ex = S.extractSchemas([{ text: "Intro\n[[SCHEMA|100,100,600,900|Cycle cellulaire]]\nLe schéma montre…\n[[SCHEMA|1,1,2,2|Flèche]]", path: "u/c/p1.jpg" }, { text: "Texte collé [[SCHEMA|100,100,600,900|X]]", path: null }]);
   ok(ex.schemas.length === 1 && ex.schemas[0].id === "S1" && ex.schemas[0].path === "u/c/p1.jpg" && ex.texts[0].includes("[Schéma S1 : Cycle cellulaire]") && ex.texts[0].includes("[Schéma : Flèche]") && !/\[\[SCHEMA/.test(ex.texts.join("")), tag + " : repères remplacés, seuls les vrais schémas d'une photo gardés", JSON.stringify(ex));
   // Format vu au test réel avec Gemini (pages de cahier de tests/schemas) : séparateurs « | » au lieu de virgules.
@@ -1352,6 +1445,12 @@ async function schemasCartes(browser) {
     ok(st && st.ok && Math.abs(st.ar - st.want) < 0.05 && st.inside, tag + " : schéma recadré, pas déformé, dans la carte", JSON.stringify(st));
     ok(st && Math.abs(st.imW / (st.boxW / 0.76) - 1) < 0.02, tag + " : seule la zone du schéma est visible", JSON.stringify(st));
     await page.screenshot({ path: path.join(SHOTS, "schema-carte-" + w + ".png") });
+    ok(await page.locator(".flip .face:not(.b) .schmask").count() === 1 && !(await page.locator(".flip .face:not(.b)").innerText()).includes("S1"), tag + " : côté question, la légende à trouver est cachée (et pas d'identifiant S1)");
+    await page.click("#zoomsch"); await page.waitForTimeout(400);
+    ok(await page.locator("#schview .schema.big .schmask").count() === 1 && await page.locator("[data-schfull]").count() === 0, tag + " : agrandi côté question : légende toujours cachée, pas de page entière");
+    await page.keyboard.press("Escape"); await page.waitForTimeout(200);
+    await page.click("#flip"); await page.waitForTimeout(450);
+    ok(await page.locator(".flip .face.b .schema .schhit").count() === 1 && await page.locator(".flip .face.b .schmask").count() === 0, tag + " : côté réponse, le schéma avec la légende entourée");
     await page.click("#zoomsch"); await page.waitForTimeout(400);
     ok(await page.locator("#schview .schema.big").count() === 1, tag + " : bouton « Agrandir le schéma »");
     await page.screenshot({ path: path.join(SHOTS, "schema-grand-" + w + ".png") });
@@ -1362,7 +1461,7 @@ async function schemasCartes(browser) {
     await page.keyboard.press("Escape"); await page.waitForTimeout(200);
     ok(await page.locator("#schview").count() === 0, tag + " : Échap ferme l'agrandissement");
     await page.click("#flip"); await page.waitForTimeout(400);
-    ok(await page.locator("#flip.back").count() === 1, tag + " : toucher la carte (même sur le schéma) la retourne toujours");
+    ok(await page.locator("#flip.back").count() === 0, tag + " : toucher la carte (même sur le schéma) la retourne toujours");
     const sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px minimum", sm.join(" | "));
     const o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
     if (w === 390) {
@@ -1742,7 +1841,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => only ? only.includes(n) : n !== "chasse" && n !== "apercu";
     if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
-    const SUITES = { apercu, chronoBlanc, plusOptions, refonte, multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
+    const SUITES = { apercu, paris, adminPage, schemasAnciens, cartesFormules, chronoBlanc, plusOptions, refonte, multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
     for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();
