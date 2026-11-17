@@ -39,20 +39,23 @@ function b64(bytes: Uint8Array) {
   return btoa(s);
 }
 async function decodePage(bytes: Uint8Array) {
-  const im = await Image.decode(bytes);
-  const m = Math.max(im.width, im.height);
-  if (m > 1600) {
-    const k = 1600 / m;
-    im.resize(Math.max(1, Math.round(im.width * k)), Math.max(1, Math.round(im.height * k)), Image.RESIZE_NEAREST_NEIGHBOR);
-  }
-  return im;
+  return await Image.decode(bytes);
 }
 async function renderCropB64(pageImg: Any, frame: number[], masks: number[][]) {
   const r = cropRect(frame, pageImg.width, pageImg.height);
-  const sub = pageImg.clone().crop(r.x, r.y, r.w, r.h);
+  const sub = new Image(r.w, r.h);
+  for (let y = 0; y < r.h; y++) {
+    const off = ((r.y + y) * pageImg.width + r.x) * 4;
+    sub.bitmap.set(pageImg.bitmap.subarray(off, off + r.w * 4), y * r.w * 4);
+  }
   for (const m of masks) {
     const mp = maskPixels(m, frame, sub.width, sub.height);
     if (mp) sub.drawBox(mp.x, mp.y, mp.w, mp.h, 0x4b39c8ff);
+  }
+  const mx = Math.max(sub.width, sub.height);
+  if (mx > 900) {
+    const k = 900 / mx;
+    sub.resize(Math.max(1, Math.round(sub.width * k)), Math.max(1, Math.round(sub.height * k)), Image.RESIZE_NEAREST_NEIGHBOR);
   }
   return b64(await sub.encodeJPEG(80));
 }
@@ -331,11 +334,14 @@ async function stepRun(id: string) {
           const dl = await admin.storage.from("cours").download(pth);
           if (!dl.error && dl.data && list.length) {
             const pageImg = await decodePage(new Uint8Array(await dl.data.arrayBuffer()));
-            await Promise.all(list.map(async ({ c }: Any) => {
-              const sc = schemas.find((x) => x.id === c.sch); if (!sc) return;
-              const frame0 = c.frame ?? sc.box, masks0 = c.boxes ?? labelMasks(sc, c.masque);
+            const frameMemo = new Map<string, number[]>();
+            for (const { c } of list) {
+              const sc = schemas.find((x) => x.id === c.sch); if (!sc) continue;
+              const rawFrame = c.frame ?? sc.box, key0 = rawFrame.join(","), masks0 = c.boxes ?? labelMasks(sc, c.masque);
+              const memo = frameMemo.get(key0);
+              const startFrame = memo && masks0.every((b: number[]) => b[0] >= memo[0] - 20 && b[1] >= memo[1] - 20 && b[2] <= memo[2] + 20 && b[3] <= memo[3] + 20) ? memo : rawFrame;
               const res = await checkCroppedSchema({
-                frame: frame0,
+                frame: startFrame,
                 masks: masks0,
                 front: c.front,
                 back: c.back,
@@ -345,10 +351,11 @@ async function stepRun(id: string) {
                   return parseJson(r.text);
                 },
               });
+              if (res.tightened) frameMemo.set(key0, res.frame);
               c.frame = res.frame;
               c.boxes = res.masks;
               c.checked = true;
-            }));
+            }
           }
         } catch (_e) { /* une page qu'on n'arrive pas à revérifier garde ses cartes telles qu'elles sont */ }
       }

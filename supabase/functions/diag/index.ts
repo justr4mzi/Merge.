@@ -31,20 +31,23 @@ function b64(bytes: Uint8Array) {
   return btoa(s);
 }
 async function decodePage(bytes: Uint8Array) {
-  const im = await Image.decode(bytes);
-  const m = Math.max(im.width, im.height);
-  if (m > 1600) {
-    const k = 1600 / m;
-    im.resize(Math.max(1, Math.round(im.width * k)), Math.max(1, Math.round(im.height * k)), Image.RESIZE_NEAREST_NEIGHBOR);
-  }
-  return im;
+  return await Image.decode(bytes);
 }
 async function renderCropB64(pageImg: Any, frame: number[], masks: number[][]) {
   const r = cropRect(frame, pageImg.width, pageImg.height);
-  const sub = pageImg.clone().crop(r.x, r.y, r.w, r.h);
+  const sub = new Image(r.w, r.h);
+  for (let y = 0; y < r.h; y++) {
+    const off = ((r.y + y) * pageImg.width + r.x) * 4;
+    sub.bitmap.set(pageImg.bitmap.subarray(off, off + r.w * 4), y * r.w * 4);
+  }
   for (const m of masks) {
     const mp = maskPixels(m, frame, sub.width, sub.height);
     if (mp) sub.drawBox(mp.x, mp.y, mp.w, mp.h, 0x4b39c8ff);
+  }
+  const mx = Math.max(sub.width, sub.height);
+  if (mx > 900) {
+    const k = 900 / mx;
+    sub.resize(Math.max(1, Math.round(sub.width * k)), Math.max(1, Math.round(sub.height * k)), Image.RESIZE_NEAREST_NEIGHBOR);
   }
   return b64(await sub.encodeJPEG(80));
 }
@@ -172,32 +175,41 @@ async function schemaRecheck(only: number, dry: boolean) {
   const dl = await admin.storage.from("cours").download(path);
   if (dl.error || !dl.data) return { path, error: "image introuvable" };
   const pageImg = await decodePage(new Uint8Array(await dl.data.arrayBuffer()));
-  await Promise.all(cs.map(async (c) => {
-    const frame0 = c.image_box.slice(0, 4).map(Number);
+  const fname = path.split("/").pop() ?? "";
+  const frameMemo = new Map<string, number[]>();
+  for (const c of cs) {
+    const frame0 = c.image_box.slice(0, 4).map(Number), key0 = frame0.join(",");
     const masks0 = groups(c.image_box.slice(4));
+    const memo = frameMemo.get(key0);
+    const startFrame = memo && masks0.every((b) => b[0] >= memo[0] - 20 && b[1] >= memo[1] - 20 && b[2] <= memo[2] + 20 && b[3] <= memo[3] + 20) ? memo : frame0;
     const res = await checkCroppedSchema({
-      frame: frame0,
+      frame: startFrame,
       masks: masks0,
       front: c.front,
       back: c.back,
       renderCrop: (f: number[], m: number[][]) => renderCropB64(pageImg, f, m),
       askGemini: (prompt: string, imgB64: string) => geminiJson(sa, token, [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: imgB64 } }]),
     });
+    if (res.tightened) frameMemo.set(key0, res.frame);
+    const tightened = res.frame.join(",") !== frame0.join(",");
+    // Si la carte existe en copie identique sur un autre compte (ex. chapitre transféré de Déborah vers Esteban), on met à jour les deux.
+    const twinIds = todo.filter((t) => t.id === c.id || (fname && String(t.image_path).endsWith("/" + fname) && t.front === c.front)).map((t) => t.id);
     if (!dry && JSON.stringify(res.box) !== JSON.stringify(c.image_box)) {
-      await admin.from("cards").update({ image_box: res.box }).eq("id", c.id);
+      await admin.from("cards").update({ image_box: res.box }).in("id", twinIds);
     }
     out.push({
       id: c.id,
+      copies: twinIds.length,
       f: String(c.front).slice(0, 60),
       avant: frame0,
       apres: res.frame,
-      resserre: res.tightened,
+      resserre: tightened,
       essais: res.tries,
       cases: res.masks.length,
       dos: res.masks.length === 0,
       ou: res.lastRes?.ou || "",
     });
-  }));
+  }
   return { only, pages: pages.length, path, dry, resserres: out.filter((x) => x.resserre).length, out };
 }
 
