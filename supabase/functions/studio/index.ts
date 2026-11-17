@@ -4,7 +4,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 import { autoTitle } from "./titre.mjs";
-import { extractSchemas, dedupCards, labelMasks, cleanBox, cleanLabelBox } from "./schemas.mjs";
+import { extractSchemas, dedupCards, labelMasks, cleanBox, cleanLabelBox, words } from "./schemas.mjs";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 const CORS = {
@@ -303,7 +303,10 @@ async function stepRun(id: string) {
     if (job.stage === "schcheck") {
       const paths = [...new Set(st.cards.filter((c: Any) => c.sch).map((c: Any) => (schemas.find((x) => x.id === c.sch) ?? {}).path).filter(Boolean))] as string[];
       st.pi ??= 0;
-      const pth = paths[st.pi];
+      // Une page qui fait planter l'étape (photo trop lourde pour la fonction) : au 2e essai on la passe, sinon l'import resterait bloqué.
+      st.pitry = st.pitry && st.pitry.pi === st.pi ? { pi: st.pi, n: st.pitry.n + 1 } : { pi: st.pi, n: 1 };
+      await setJob(id, { state: st });
+      const pth = st.pitry.n <= 2 ? paths[st.pi] : null;
       if (pth) {
         try {
           const list = st.cards.map((c: Any, k: number) => ({ c, k })).filter(({ c }: Any) => c.sch && (schemas.find((x) => x.id === c.sch) ?? {}).path === pth);
@@ -335,7 +338,12 @@ async function stepRun(id: string) {
       }
       st.pi += 1;
       const more = st.pi < paths.length;
-      if (!more) st.cards = st.cards.filter((c: Any) => !c.drop);
+      if (!more) {
+        st.cards = st.cards.filter((c: Any) => !c.drop);
+        // Une même légende ne fait qu'une carte de schéma (le schéma revient souvent sur plusieurs diapositives ou pages).
+        const seen = new Set<string>();
+        st.cards = st.cards.filter((c: Any) => { if (!c.sch) return true; const k = words(c.masque || c.back).join(" "); if (!k) return true; if (seen.has(k)) return false; seen.add(k); return true; });
+      }
       await setJob(id, { state: st, stage: more ? "schcheck" : "save", message: more ? `Vérification des schémas (page ${st.pi + 1} sur ${paths.length})…` : "Enregistrement…" });
       return await kick(id);
     }

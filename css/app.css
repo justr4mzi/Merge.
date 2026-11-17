@@ -1246,7 +1246,7 @@ html:has(.app.profmode),body:has(.app.profmode){overflow:hidden;overscroll-behav
   .app.profmode .pmain>*{width:100%;max-width:770px;margin-inline:auto}
   .app.profmode .exthread{padding-inline:4px}
 }
-/* Grand écran : historique des discussions toujours affiché dans une colonne à gauche (le bouton ☰ devient inutile). */
+/* Grand écran : historique des discussions toujours affiché dans une colonne (à droite depuis le 17 nov., voir plus bas) (le bouton ☰ devient inutile). */
 @media (min-width:1200px){
   .app.profmode{flex-direction:row;gap:24px;padding-left:20px}
   .pside{display:flex;flex-direction:column;gap:12px;flex:none;width:260px;min-height:0;overflow-y:auto;padding-right:16px;border-right:1px solid var(--line)}
@@ -1762,3 +1762,13 @@ details.drop#tools[open],details.drop#cardsdrop[open]{padding-bottom:14px}
 /* « Ou réviser toute la matière » : un peu d'air sous le bouton Réviser. */
 .todaycard .revall{margin-top:10px}
 @media (min-width:900px){.shorts .shortw.wide{grid-column:auto}}
+/* Prof sur PC (17 nov.) : l'historique des discussions passe à DROITE ; la conversation est au milieu, entre le menu et l'historique,
+   l'écran est équilibré (avant, la colonne de la conversation paraissait décalée). Le « Lier un cours » est centré au-dessus. */
+@media (min-width:1200px){
+  .app.profmode{padding-left:28px;padding-right:20px}
+  .app.profmode .pside{order:2;padding-right:0;padding-left:16px;border-right:0;border-left:1px solid var(--line)}
+  .app.profmode .pmain{order:1}
+  .app.profmode .pctx{justify-content:center}
+}
+/* Bouton « Joindre un fichier » du Prof : le sous-titre (formats acceptés) sur sa propre ligne, en petit. */
+.actbtn span small{display:block;margin-top:2px;font-size:.76rem;font-weight:600;line-height:1.25;color:var(--muted)}
