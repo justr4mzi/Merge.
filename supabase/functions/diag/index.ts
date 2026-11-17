@@ -88,7 +88,7 @@ async function schemaFix(dry: boolean, only: number) {
         const hide = labels.filter((l) => want.some((m) => same(l.text, m)));
         // Tout cacher n'aide pas (on ne voit plus le schéma) : seulement si le schéma n'a qu'une légende.
         const ok = hide.length > 0 && (hide.length < labels.length || labels.length === 1);
-        if (ok && !dry) await admin.from("cards").update({ image_box: [...f, ...hide.flatMap((l) => l.box)] }).eq("id", c.id);
+        if (ok && !dry) await admin.from("cards").update({ image_box: [...f, ...hide.map((l) => l.box)] }).eq("id", c.id);
         out.push({ id: c.id, legendes: labels.map((l) => l.text), masque: x.masque ?? "", cachees: ok ? hide.map((l) => l.text) : [] });
       }
     } catch (e) { out.push({ path, error: String((e as Error).message).slice(0, 300) }); }
@@ -126,7 +126,7 @@ async function schemaAdd(ids: string[], only: number, dry: boolean) {
     for (const c of ((sc.cartes ?? []) as Any[]).slice(0, 2)) {
       const hide = labels.filter((l) => same(l.text, String(c.masque ?? "")));
       if (!c.front || !c.back || !hide.length || hide.length >= labels.length) continue;
-      rows.push({ user_id: ch.user_id, chapter_id: ch.id, front: String(c.front).slice(0, 500), back: String(c.back).slice(0, 2000), source_quote: ("Schéma : " + String(sc.titre ?? "")).slice(0, 400), needs_check: false, image_path: path, image_box: [...f, ...hide.flatMap((l) => l.box)] });
+      rows.push({ user_id: ch.user_id, chapter_id: ch.id, front: String(c.front).slice(0, 500), back: String(c.back).slice(0, 2000), source_quote: ("Schéma : " + String(sc.titre ?? "")).slice(0, 400), needs_check: false, image_path: path, image_box: [...f, ...hide.map((l) => l.box)] });
       made.push({ titre: sc.titre, front: c.front, cachee: hide.map((l) => l.text) });
     }
   }

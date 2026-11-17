@@ -1681,3 +1681,33 @@ body[data-flame="bonbon"] .streak,[data-flameprev="bonbon"]{background:linear-gr
 #bok.big,#bnok.big{font-size:1.05rem;min-height:54px;width:100%}
 @media (max-width:359px){.coinpill{padding:4px 7px;gap:3px}.homemusic{gap:0}.row.between > .logo{font-size:1.5rem}}
 .ctrlrow .ctdate,.ctrlrow .ctsub{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 17 nov. (2) — Matière : 4 tuiles d'outils égales, contrôles en petit en bas. */
+.subtools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+@media (min-width:900px){.subtools{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.stile{display:flex;align-items:center;gap:10px;min-height:64px;padding:10px 12px;border-radius:16px;background:var(--card);border:1px solid var(--line);color:var(--fg);text-decoration:none;font:inherit;text-align:left;cursor:pointer}
+.stile>svg{flex:none;width:22px;height:22px;color:var(--accent2,#9483ff)}
+.stile b{display:block;font-size:.95rem}
+.stile .small{display:block;font-size:.78rem;line-height:1.25}
+.stile[aria-expanded="true"]{border-color:var(--accent2,#9483ff)}
+@media (hover:hover) and (pointer:fine){.stile:hover{background:var(--card2)}}
+.ctrlbox.small2{gap:6px;padding-top:4px;border-top:1px solid var(--line)}
+.ctrlbox.small2 h3{margin:0;font-size:1rem;color:var(--muted)}
+.ctrlbox.small2 .linkbtn{display:inline-flex;align-items:center;gap:6px;min-height:44px;font-weight:800;font-size:.9rem}
+.ctrlbox.small2 .linkbtn svg{width:16px;height:16px}
+.switch.sm span{font-size:.88rem;color:var(--muted)}
+/* Accueil : carte du jour en grand, bouton « Réviser » sur deux lignes. */
+.today.mission{background:linear-gradient(135deg,#3b2bb0,#4b39c8 60%,#5b45d8);color:#fff;border:0;padding:20px;gap:14px}
+.today.mission .muted,.today.mission .small.muted{color:#d9d3ff}
+.today.mission .mring{background:conic-gradient(#fff calc(var(--p)*1%),rgba(255,255,255,.22) 0)}
+.today.mission .mring::before{background:#4535c0}
+.today.mission .mring b{color:#fff}
+.today.mission .mstreak{color:#d9d3ff}.today.mission .mstreak.on{color:#ffd29a}
+.today.mission .btn.mgo{background:#fff;color:#2b2190;min-height:88px;border-radius:24px;justify-content:center;gap:14px;padding:10px 20px}
+.today.mission .btn.mgo svg{width:28px;height:28px;flex:none}
+.mgot{display:flex;flex-direction:column;align-items:flex-start;line-height:1.15;min-width:0}
+.mgot b{font-size:1.6rem;font-weight:900}
+.mgot span{font-size:.95rem;font-weight:700;color:#4b3fb0;white-space:nowrap}
+.today.mission .btn.ghost{background:rgba(255,255,255,.12);color:#fff;border-color:transparent}
+.today.mission h2{font-size:1.3rem}
+@media (min-width:900px){.today.mission{padding:26px 30px}.today.mission .btn.mgo{min-height:104px}.mgot b{font-size:1.9rem}.mgot span{font-size:1.05rem}.today.mission .mring{width:108px;height:108px}}

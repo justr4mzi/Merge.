@@ -167,8 +167,15 @@
     const b = c && c.image_path && Array.isArray(c.image_box) ? c.image_box.slice(0, 4).map(Number) : null;
     return b && b.length === 4 && b.every(Number.isFinite) && b[2] > b[0] && b[3] > b[1] ? b : null;
   }
+  // Les cadres à cacher arrivent en groupes [y0, x0, y1, x1] (studio) ou à plat, 4 nombres par légende (réparations du 17 nov.) : on accepte les deux.
   function schMasks(c) {
-    return schBox(c) ? c.image_box.slice(4).filter(m => Array.isArray(m) && m.length === 4 && m.map(Number).every(Number.isFinite)).map(m => m.map(Number)) : [];
+    if (!schBox(c)) return [];
+    const rest = c.image_box.slice(4), out = [];
+    for (let i = 0; i < rest.length; i++) {
+      if (Array.isArray(rest[i])) out.push(rest[i]);
+      else if (i + 3 < rest.length && !rest.slice(i, i + 4).some(Array.isArray)) { out.push(rest.slice(i, i + 4)); i += 3; }
+    }
+    return out.filter(m => m.length === 4 && m.map(Number).every(Number.isFinite)).map(m => m.map(Number));
   }
   // Rapport largeur / hauteur du schéma : la photo est supposée en 3:4 jusqu'à son chargement, puis on prend sa vraie taille.
   const schRatio = (b, w, h) => ((b[3] - b[1]) * (w || 3)) / ((b[2] - b[0]) * (h || 4));

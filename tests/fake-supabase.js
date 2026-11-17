@@ -171,6 +171,8 @@
     // fake.schema = 1 : une carte de schéma (photo de la page + cadre du schéma), comme après l'import d'un cahier.
     // schema = 1 : carte récente, avec une légende à cacher (cadre 5 et suivants) ; schema = 2 : ancienne carte, sans légende connue.
     if (opt("schema") === "1") Object.assign(DB.cards[0], { front: "Sur ce schéma S1 de la mitose, que se passe-t-il pendant l'anaphase ?", image_path: "user-1/c1/page-1.jpg", image_box: [180, 120, 620, 880, [300, 400, 340, 560]] });
+    // schema = 3 : légende à cacher enregistrée « à plat » (4 nombres après le cadre), comme les cartes réparées le 17 nov.
+    if (opt("schema") === "3") Object.assign(DB.cards[0], { front: "Sur ce schéma de la mitose, que se passe-t-il pendant l'anaphase ?", image_path: "user-1/c1/page-1.jpg", image_box: [180, 120, 620, 880, 300, 400, 340, 560] });
     if (opt("schema") === "2") Object.assign(DB.cards[0], { front: "Sur ce schéma de la mitose, que se passe-t-il pendant l'anaphase ?", image_path: "user-1/c1/page-1.jpg", image_box: [180, 120, 620, 880] });
     DB.sources.push(defaults("sources", { chapter_id: "c1", filename: "cours.pdf", extracted_text: COURS }));
     DB.summaries.push(defaults("summaries", { chapter_id: "c1", markdown: "## À quoi sert ce chapitre\nComprendre comment une cellule se divise.\n\n## Notions clés\n- **Mitose** : deux cellules filles identiques\n- **Méiose** : quatre cellules haploïdes" }));

@@ -300,7 +300,7 @@ async function v10(browser) {
   const page = await open(browser, { w: 390, h: 844, theme: "dark" });
   await page.evaluate(() => { localStorage.setItem("merge.typed", "1"); localStorage.setItem("merge.cmore", "1"); });
   let t = await txt(page);
-  ok(t.includes("Ton plan du jour") && t.includes("Mission du jour") && t.includes("Installe Merge"), "v10 accueil : mission du jour, plan du jour et installation (le niveau est dans Progrès)");
+  ok(t.includes("Ton plan du jour") && t.includes("À réviser aujourd'hui") && t.includes("Installe Merge"), "v10 accueil : mission du jour, plan du jour et installation (le niveau est dans Progrès)");
   let o = await overflow(page); ok(o.sw <= o.iw, "v10 accueil : pas de débordement", JSON.stringify(o));
   let sm = await small(page); ok(!sm.length, "v10 accueil : boutons de 44 px minimum", sm.join(" | "));
   await page.click("[data-qs]"); await page.fill("#qs", "mito"); await page.waitForTimeout(150);
@@ -453,7 +453,7 @@ async function melange(browser) {
   const page = await open(browser, { w: 390, h: 844, theme: "light" });
   ok(await page.locator('a[href="#melange"]').count() === 1, "révision mélangée : bouton sur l'accueil");
   await go(page, "#melange", 500); ok(await page.locator("#flip").count() === 1, "révision mélangée : séance lancée");
-  await go(page, "#matiere-s1", 400); ok((await txt(page)).includes("Réviser tous les chapitres de la matière"), "matière : réviser tous les chapitres bien visible");
+  await go(page, "#matiere-s1", 400); ok(await page.locator("a.revall").isVisible() && (await txt(page)).includes("Toute la matière"), "matière : réviser tous les chapitres bien visible");
   let sm = await small(page); ok(!sm.length, "matière : boutons de 44 px minimum", sm.join(" | "));
   ok(!page.errors.length, "révision mélangée : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
 }
@@ -671,6 +671,26 @@ async function adminPage(browser) {
     const o = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: innerWidth })); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
     ok(!errors.length, tag + " : aucune erreur JavaScript", errors.slice(0, 3).join(" | ")); await ctx.close();
   }
+}
+
+// Toucher l'onglet où l'on est déjà ramène à son écran d'arrivée (Réglages : referme la catégorie ouverte).
+async function ongletRetour(browser) {
+  for (const [w, h] of [[390, 844], [1440, 900]]) {
+    const page = await open(browser, { w, h, theme: "dark" }), tag = "onglet " + w;
+    await go(page, "#reglages", 300); await page.click('[data-open="apparence"]'); await page.waitForTimeout(200);
+    ok(await page.evaluate(() => document.getElementById("app").dataset.sec === "apparence"), tag + " : catégorie Apparence ouverte");
+    await page.click('#tabs a[href="#reglages"]'); await page.waitForTimeout(300);
+    ok(await page.evaluate(() => !document.getElementById("app").dataset.sec) && await page.locator('[data-open="apparence"]').isVisible(), tag + " : l'onglet Réglages revient à la liste");
+    ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+  }
+}
+
+// Cartes de schéma dont la légende à cacher est enregistrée à plat (4 nombres après le cadre) : le schéma est bien sur la question, légende cachée.
+async function schemaPlat(browser) {
+  const page = await open(browser, { w: 390, h: 844, theme: "dark", extra: { schema: "3" } });
+  await go(page, "#cartes-c1", 900);
+  ok(await page.locator(".flipwrap .front .schmask, .card3d .front .schmask, .schmask").count() >= 1, "schéma à plat : la légende est cachée sur la question");
+  ok(!page.errors.length, "schéma à plat : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
 }
 
 async function voixMerge(browser) {
@@ -1280,7 +1300,7 @@ async function saison(browser) {
 async function revisionControle(browser) {
   // Avant un contrôle (SVT dans 9 jours) : les cartes de ses chapitres reviennent tous les jours, même réussies.
   const page = await open(browser, { w: 390, h: 844, theme: "dark" });
-  const dueTxt = async () => parseInt((await page.locator(".today .big").innerText()), 10);
+  const dueTxt = async () => parseInt((await page.locator(".today .mgot span, .today .big").first().innerText()), 10);
   await page.evaluate(() => localStorage.setItem("merge.boostj", "0")); await go(page, "#calendrier", 200); await go(page, "#accueil", 400); const base = await dueTxt();
   await page.evaluate(() => localStorage.setItem("merge.boostj", "7")); await go(page, "#calendrier", 200); await go(page, "#accueil", 400);
   ok(await dueTxt() === base, "contrôle proche : à 9 jours, rien en plus avec le réglage 7 jours");
@@ -1841,7 +1861,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => only ? only.includes(n) : n !== "chasse" && n !== "apercu";
     if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
-    const SUITES = { apercu, paris, adminPage, schemasAnciens, cartesFormules, chronoBlanc, plusOptions, refonte, multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
+    const SUITES = { apercu, schemaPlat, ongletRetour, paris, adminPage, schemasAnciens, cartesFormules, chronoBlanc, plusOptions, refonte, multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
     for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();
