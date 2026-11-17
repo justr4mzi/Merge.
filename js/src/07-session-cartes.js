@@ -230,6 +230,8 @@
   }
   // Toucher un schéma l'agrandit (sauf dans un bouton ou un lien : la carte se retourne, le lien s'ouvre).
   document.addEventListener("click", e => {
+    const z = e.target.closest && e.target.closest("[data-schzoom]");
+    if (z) { const c = (state.cards || []).find(x => String(x.id) === z.dataset.schzoom); if (c) { e.preventDefault(); openSchema(c, ""); } return; }
     const f = e.target.closest && e.target.closest(".schema[data-sch]");
     if (!f || f.closest("button,a,#schview")) return;
     const c = (state.cards || []).find(x => x.id === f.dataset.sch); if (c) { e.preventDefault(); openSchema(c, f.dataset.mode || ""); }

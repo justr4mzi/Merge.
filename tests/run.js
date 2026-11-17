@@ -588,6 +588,10 @@ async function apercu(browser) {
     if (process.env.EDT) { await page.evaluate(() => { const d = (new Date().getDay() + 6) % 7; localStorage.setItem("merge.edt", JSON.stringify({ slots: [["07:55", "09:50", "SVT"], ["10:10", "11:10", "Physique-chimie"], ["13:10", "15:05", "SVT"], ["15:25", "17:25", "Physique-chimie"]].map(([a, b, s]) => ({ day: d, start: a, end: b, subject: s, room: "B12", week: "" })), ab: false })); }); await page.evaluate(() => location.reload()); await page.waitForSelector("#app > *"); }
     for (const r of (process.env.ROUTES || "accueil,matieres,matiere-s1,chapitre-c1,reglages,progres,exos-c1,flash-c1,associer-c1,ecouter-c1,bus-c1,interro-c1,blanc-c1,cartes-c1,journee").split(",")) {
       await go(page, "#" + r, 500); const later = page.locator("button", { hasText: "Plus tard" }); if (await later.count()) { await later.first().click(); await page.waitForTimeout(300); }
+      if (process.env.FAKE && process.env.FAKE.includes("schema") && /^exos/.test(r)) {
+        if (r === "exos" && await page.locator('[data-rch="c1"]').count()) { await page.click('[data-rch="c1"]'); await page.waitForTimeout(150); }
+        await page.fill("#exq", "Montre-moi les schémas à connaître"); await page.click("#exsend"); await page.waitForTimeout(600);
+      }
       await page.screenshot({ path: path.join(SHOTS, w + "-" + r + ".png"), fullPage: r !== "journee" });
       if (r === "exos" && await page.locator("#pplus").count()) { await page.click("#pplus"); await page.waitForTimeout(250); await page.screenshot({ path: path.join(SHOTS, w + "-exos-plus.png") }); await page.keyboard.press("Escape"); await page.waitForTimeout(150); }
       if (process.env.DBG) console.log(w, r, JSON.stringify(await page.evaluate(process.env.DBG)));
@@ -742,6 +746,35 @@ async function profFichier(browser) {
   ok(b && b.doc && b.doc.name === "cours-loi-ohm.txt" && b.doc.text.includes("loi d'Ohm"), "prof fichier : le texte du document part avec le message", JSON.stringify(b && b.doc).slice(0, 200));
   ok((await page.locator("#exth").innerText()).includes("cours-loi-ohm.txt"), "prof fichier : le message rappelle le fichier envoyé");
   ok(!page.errors.length, "prof fichier : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
+}
+
+// Prof : montrer les vrais schémas du cours lié (image recadrée sans masque, légende courte, agrandissement, déduplication par page, rien de lourd dans merge.prof).
+async function profSchemas(browser) {
+  for (const [w, h] of [[393, 852], [1440, 900]]) {
+    const page = await open(browser, { w, h, theme: "dark", extra: { schema: "1" } }), tag = "prof schémas " + w;
+    // 2e carte sur la même page : doit être dédupliquée (image montrée une seule fois).
+    await page.evaluate(() => { Object.assign(window.__fake.DB.cards[1], { image_path: "user-1/c1/page-1.jpg", image_box: [180, 120, 620, 880, [420, 350, 460, 520]] }); });
+    await go(page, "#exos", 400);
+    await page.fill("#exq", "Montre-moi les schémas du cours"); await page.click("#exsend"); await page.waitForTimeout(450);
+    ok((await page.locator(".exmsg.ai").last().innerText()).includes("Lier un cours") && await page.locator(".profsch").count() === 0, tag + " : sans cours lié, invite à lier un chapitre");
+    // Lier le chapitre c1 et demander les schémas (+ un id inconnu et un doublon).
+    await page.click("#pctx"); await page.waitForTimeout(150); await page.click('[data-cc="c1"]'); await page.click("#pctxok"); await page.waitForTimeout(200);
+    await page.fill("#exq", "Montre-moi les schémas à connaître (et id inconnu)"); await page.click("#exsend"); await page.waitForTimeout(600);
+    const sent = await page.evaluate(() => window.__fake.exo && window.__fake.exo.schemas);
+    ok(Array.isArray(sent) && sent.length === 1 && sent[0].id === "k0" && sent[0].label.includes("cellules filles"), tag + " : schémas dédupliqués par page envoyés au serveur (légendes seules)", JSON.stringify(sent));
+    ok(await page.locator(".profsch .schema.ok img").count() === 1 && await page.locator(".profsch .schmask, .profsch .schhit").count() === 0, tag + " : image du schéma affichée une seule fois, sans masque");
+    ok(!(await page.locator("#exth").innerText()).includes("id-inconnu-999"), tag + " : un id inconnu est ignoré sans casser l'affichage");
+    ok((await page.locator(".profschcap").innerText()).includes("cellules filles") && await page.locator('.profschcap [data-schzoom="k0"]').count() === 1, tag + " : légende courte et bouton « Agrandir le schéma »");
+    await page.click('.profschcap [data-schzoom="k0"]'); await page.waitForTimeout(300);
+    ok(await page.locator("#schview .schema.big").count() === 1 && await page.locator("#schview [data-schfull]").count() === 1, tag + " : zoom ouvert au tap sur « Agrandir le schéma »");
+    await page.keyboard.press("Escape"); await page.waitForTimeout(150);
+    const raw = await page.evaluate(() => localStorage.getItem("merge.prof") || "");
+    ok(raw.includes("[[schema:k0]]") && raw.length < 2500 && !raw.includes("<figure") && !raw.includes("photo-feuille"), tag + " : rien de lourd dans merge.prof (seulement [[schema:ID]])", "len=" + raw.length);
+    const sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px minimum", sm.join(" | "));
+    const o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
+    ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | "));
+    await page.context().close();
+  }
 }
 
 async function voixMerge(browser) {
@@ -1948,7 +1981,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => only ? only.includes(n) : n !== "chasse" && n !== "apercu";
     if (want("sweep")) await Promise.all([[390, 844, "light"], [390, 844, "dark"], [1280, 800, "light"], [1280, 800, "dark"]].map(([w, h, theme]) => sweep(browser, w, h, theme)));
-    const SUITES = { apercu, profFichier, schemaPlat, ongletRetour, paris, adminPage, schemasAnciens, cartesFormules, chronoBlanc, plusOptions, refonte, multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
+    const SUITES = { apercu, profFichier, profSchemas, schemaPlat, ongletRetour, paris, adminPage, schemasAnciens, cartesFormules, chronoBlanc, plusOptions, refonte, multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
     const todo = Object.entries(SUITES).filter(([n]) => want(n)), jobs = Math.max(1, +(process.env.JOBS || 4));
     let idx = 0;
     await Promise.all(Array.from({ length: Math.min(jobs, todo.length) }, async () => { while (idx < todo.length) { const [, f] = todo[idx++]; await f(browser); } }));

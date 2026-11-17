@@ -106,6 +106,7 @@ Objectif : que Gemini juge **l'image découpée réelle**, pas des coordonnées.
 - Tous les schémas existants ont été repassés (`schema_recheck`). Quelques cadres ont été resserrés à la main.
 - Sujets d'examen (`#bac-<id>`) : barre de progression animée par étapes et notification (locale + Web Push serveur « Sujet prêt ») à la fin du chargement.
 - Résumé du chapitre (`#resume-<id>`) : 4 boutons de format (`Cours complet`, `Résumé`, `Plus court`, `Encore plus court`), mis en cache par chapitre (`merge.sumv.<id>`) et gérés par la fonction `ai`.
+- Prof (`#exos`) : affiche les vrais schémas recadrés des chapitres liés (`[[schema:ID]]`, sans masque, avec légende courte et zoom « Agrandir le schéma », dédupliqués par page et cadre, testés dans `profSchemas`).
 
 ## 6. Phase actuelle
 

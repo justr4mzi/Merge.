@@ -2433,6 +2433,8 @@
   }
   // Toucher un schéma l'agrandit (sauf dans un bouton ou un lien : la carte se retourne, le lien s'ouvre).
   document.addEventListener("click", e => {
+    const z = e.target.closest && e.target.closest("[data-schzoom]");
+    if (z) { const c = (state.cards || []).find(x => String(x.id) === z.dataset.schzoom); if (c) { e.preventDefault(); openSchema(c, ""); } return; }
     const f = e.target.closest && e.target.closest(".schema[data-sch]");
     if (!f || f.closest("button,a,#schview")) return;
     const c = (state.cards || []).find(x => x.id === f.dataset.sch); if (c) { e.preventDefault(); openSchema(c, f.dataset.mode || ""); }
@@ -3687,6 +3689,44 @@
   const curConv = p => p.convs.find(c => c.id === p.cur);
   // Chapitres réellement envoyés : ceux cochés + tous ceux des matières liées (20 au plus).
   const ctxChapters = ctx => [...new Set(ctx.ch.concat(state.chapters.filter(c => ctx.s.includes(c.subject_id)).map(c => c.id)))].slice(0, 20);
+  // Deux cartes de schéma de la même page dont les cadres se recoupent montrent le même schéma : on ne l'envoie et ne l'affiche qu'une fois.
+  function sameSch(a, b) {
+    if (!a || !b || a.image_path !== b.image_path) return false;
+    const ba = schBox(a), bb = schBox(b); if (!ba || !bb) return false;
+    const iy = Math.max(0, Math.min(ba[2], bb[2]) - Math.max(ba[0], bb[0])), ix = Math.max(0, Math.min(ba[3], bb[3]) - Math.max(ba[1], bb[1]));
+    const inter = iy * ix, minA = Math.min((ba[2] - ba[0]) * (ba[3] - ba[1]), (bb[2] - bb[0]) * (bb[3] - bb[1]));
+    return minA > 0 && inter / minA >= 0.3;
+  }
+  function schCaption(c) {
+    const all = (state.cards || []).filter(x => x.chapter_id === c.chapter_id && sameSch(c, x));
+    const backs = [...new Set([c, ...all].map(x => String(x.back || "").replace(/\s+/g, " ").replace(/\.$/, "").trim()).filter(Boolean))];
+    const txt = backs.slice(0, 3).join(" · ");
+    return txt.length > 130 ? txt.slice(0, 127) + "…" : (txt || "Schéma du cours");
+  }
+  function ctxSchemas(ctx) {
+    const chIds = new Set(ctxChapters(ctx)), kept = [], out = [];
+    for (const c of (state.cards || [])) {
+      if (!chIds.has(c.chapter_id) || !schBox(c)) continue;
+      if (kept.some(x => sameSch(x, c) || x.image_path === c.image_path)) continue;
+      kept.push(c);
+      const ch = state.chapters.find(x => x.id === c.chapter_id);
+      out.push({ id: String(c.id), chap: ch ? ch.name : "", label: schCaption(c) });
+      if (out.length >= 40) break;
+    }
+    return out;
+  }
+  function profMd(text) {
+    const parts = String(text || "").split(/\[\[\s*schema\s*:\s*([^\]]+?)\s*\]\]/gi), shown = [];
+    let html = "";
+    for (let i = 0; i < parts.length; i++) {
+      if (i % 2 === 0) { if (parts[i].trim()) html += md(parts[i]); continue; }
+      const sid = parts[i].trim(), c = (state.cards || []).find(x => String(x.id) === sid);
+      if (!c || !schBox(c) || shown.some(x => sameSch(x, c) || x.image_path === c.image_path)) continue;
+      shown.push(c);
+      html += `<figure class="profsch" data-psch="${esc(c.id)}">${schemaHtml(c, false, "")}<figcaption class="profschcap"><span class="small muted">${mx(schCaption(c))}</span><button type="button" class="chip sm schbtn" data-schzoom="${esc(c.id)}">${I.search}Agrandir le schéma</button></figcaption></figure>`;
+    }
+    return html;
+  }
   function ctxChips(ctx) {
     const subj = id => state.subjects.find(x => x.id === id) || {};
     return ctx.s.map(id => `<span class="pchip" style="--c:${esc(subj(id).color || "#9483ff")}"><span class="dot"></span>${esc(subj(id).name || "")} · toute la matière<button class="pchipx" data-unctx="s:${id}" aria-label="Retirer ${esc(subj(id).name || "")}">${I.x}</button></span>`).join("")
@@ -3720,7 +3760,7 @@
     // Sur grand écran (PC) : historique toujours visible à gauche, conversation sur tout le reste.
     app.innerHTML = `<aside class="pside" aria-label="Mes discussions"><button class="btn" id="psnew">${I.plus}Nouvelle discussion</button><div class="pdlist">${histRows(p)}</div></aside><div class="pmain"><div class="row profhead"><button class="iconbtn flat" id="phist" aria-label="Mes discussions" title="Mes discussions">${I.menu}</button><h1 class="grow ptitle">${esc(conv.t || "Prof")}</h1><button class="iconbtn flat" id="pnew" aria-label="Nouvelle discussion" title="Nouvelle discussion">${I.edit}</button></div>
       <div class="pctx">${ctxChips(conv.ctx)}<button class="pchip add" id="pctx">${I.book}${linked ? "Modifier" : "Lier un cours"}</button></div>
-      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") + (m.doc ? `<span class="small muted"> · ${esc(m.doc)}</span>` : "") : md(m.t) + qcmHtml(m, i) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.prof}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur tes cours liés." : "Un exercice, une explication ou un fichier joint avec +."}</p>${showTip ? `<div class="ptip" id="ptip"><span class="small grow">Lie un chapitre pour que le prof s'appuie sur ton cours.</span><button class="btn sm" id="ptipgo">Lier un cours</button><button class="iconbtn flat" id="ptipx" aria-label="Fermer">${I.x}</button></div>` : ""}${linked ? "" : recentChips()}</div>`}</div>
+      <div class="exthread" id="exth">${msgs.length ? msgs.map((m, i) => `<div class="exmsg ${m.r === "u" ? "me" : "ai"}">${m.r === "u" ? esc(m.t).replace(/\n/g, "<br>") + (m.img ? '<span class="small muted"> · photo envoyée</span>' : "") + (m.doc ? `<span class="small muted"> · ${esc(m.doc)}</span>` : "") : profMd(m.t) + qcmHtml(m, i) + fieldsHtml(m, i)}</div>`).join("") : `<div class="pempty"><span class="pico">${I.prof}</span><b>Pose-moi n'importe quelle question</b><p class="small muted">${linked ? "Je m'appuie sur tes cours liés." : "Un exercice, une explication ou un fichier joint avec +."}</p>${showTip ? `<div class="ptip" id="ptip"><span class="small grow">Lie un chapitre pour que le prof s'appuie sur ton cours.</span><button class="btn sm" id="ptipgo">Lier un cours</button><button class="iconbtn flat" id="ptipx" aria-label="Fermer">${I.x}</button></div>` : ""}${linked ? "" : recentChips()}</div>`}</div>
       <div class="pcomp"><div id="eximg" class="pimg" hidden></div><div class="pbar"><button class="iconbtn flat" id="pplus" aria-label="Ajouter une photo, un cours ou une demande rapide">${I.plus}</button><textarea id="exq" rows="1" maxlength="2000" placeholder="Écris ton message…"></textarea>${canDictate() ? `<button class="iconbtn flat" id="exmic" aria-label="Dicter">${I.mic}</button>` : ""}<button class="iconbtn psend" id="exsend" aria-label="Envoyer">${I.send}</button></div>
       <input id="exphoto" type="file" accept="image/*" capture="environment" hidden><input id="exfile" type="file" accept="${FILE_ACCEPT}" multiple hidden></div></div>`;
     const save = () => { conv.at = Date.now(); profSave(p); };
@@ -3804,7 +3844,7 @@
       const photo = img; img = null; showImg();
       try {
         const subjNames = conv.ctx.s.map(id => (state.subjects.find(x => x.id === id) || {}).name).filter(Boolean);
-        const r = await ai({ action: "exochat", want_title: !conv.named, chapter_ids: ctxChapters(conv.ctx), matieres: subjNames, messages: msgs.slice(-12).map(m => ({ r: m.r, t: m.t })), image: photo, doc: conv.doc ? { name: conv.doc.name, text: conv.doc.text, images: docImgs } : undefined }, "studio");
+        const r = await ai({ action: "exochat", want_title: !conv.named, chapter_ids: ctxChapters(conv.ctx), matieres: subjNames, schemas: ctxSchemas(conv.ctx), messages: msgs.slice(-12).map(m => ({ r: m.r, t: m.t })), image: photo, doc: conv.doc ? { name: conv.doc.name, text: conv.doc.text, images: docImgs } : undefined }, "studio");
         if (conv.doc && conv.doc.fresh) { delete conv.doc.fresh; docImgs = []; save(); showDoc(); }
         if (!conv.named && r.title) { conv.t = String(r.title).slice(0, 60); conv.named = true; }
         const qcm = cleanQcm(r.qcm);
