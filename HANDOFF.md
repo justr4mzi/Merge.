@@ -59,7 +59,7 @@ Fonctions principales : matières → chapitres → import de cours (PDF, PowerP
    `curl -s https://raw.githubusercontent.com/justr4mzi/Merge./<sha>/supabase/functions/<fn>/index.ts | sha256sum`, à comparer avec le sha256 local.
 4. Déployer une **amorce** de 1 ligne : `index.ts` = `import "https://raw.githubusercontent.com/justr4mzi/Merge./<sha>/supabase/functions/<fn>/index.ts";`
    - `verify_jwt` à **false** pour studio, diag, remind, admin, voix ; `ai` garde le JWT.
-   - Version actuelle : studio v22 (commit 1f4ea7d) ; diag v11 (commit 2bf4966).
+   - Version actuelle : studio v25 (commit 3464ae7) ; diag v14 (commit 3464ae7).
 5. Vérifier dans les logs Supabase : `POST | 200`. Une erreur `546` = limite mémoire/temps de la fonction : relancer (une page photo trop lourde).
 
 **Lancer une action `diag`** (depuis l'éditeur SQL ou l'outil SQL) :
@@ -83,26 +83,18 @@ Les réponses de pg_net ne sont pas fiables. Les résultats sont écrits avec `c
   - Esteban : 98 (87 / 11), une copie des cours de Déborah ;
   - Ramzi : 3.
 
-### TÂCHE N°1 à faire : vérification du découpage par Gemini (validée par Ramzi)
+### TÂCHE N°1 : vérification du découpage par Gemini (CODE EN LIGNE le 17 nov., `studio` v25 et `diag` v14)
 
 Objectif : que Gemini juge **l'image découpée réelle**, pas des coordonnées.
 
-1. Dans `studio` (étape `schcheck`) et dans `diag` (`schema_recheck`), après avoir obtenu le cadre :
-   - **découper** la page avec ce cadre (lib Deno d'images, par ex. `https://deno.land/x/imagescript` : `Image.decode` → `crop` → `encodeJPEG(80)`) ;
-   - dessiner les masques en aplat ;
-   - envoyer **cette image découpée** à Gemini.
-2. Lui demander, en JSON :
-   `{ "texte_parasite": bool, "ou": "haut|bas|gauche|droite", "reponse_visible": bool, "nouveau_cadre": [y0,x0,y1,x1] }`
-   - texte parasite = titre de page, titre d'activité, phrase ou paragraphe qui n'est pas une légende du schéma ;
-   - réponse visible = la réponse de la carte est lisible quelque part sur l'image.
-3. S'il y a du texte parasite : appliquer le nouveau cadre (ou rogner le bord indiqué) et recommencer, **3 essais maximum**.
-4. Si la réponse est visible : ajouter un masque, sinon passer la carte au dos seulement (4 nombres).
-   - **Ne jamais supprimer de carte.**
-5. Faire attention à la mémoire : traiter une page à la fois et réduire la page (environ 1600 px de large max) avant le découpage, sinon erreur 546.
-   - Dans `studio`, garder le compteur d'essais par page (`st.pitry`, une page qui plante est sautée au 3e essai).
-6. Tester avec `deno check`. Tester `schemas.mjs` avec `ONLY=schemasServeur node tests/run.js`. Déployer avec la méthode de l'amorce.
-7. Lancer sur l'existant : `diag` `schema_recheck` page par page (`only: 0`, puis 1, 2…, environ 63 pages, triées par `image_path`). Lire les logs.
-8. Expliquer à Ramzi, en simple, combien de cadres ont été resserrés.
+1. **Codé et déployé** dans `supabase/functions/studio/schemas.mjs` (`groups`, `cropRect`, `maskPixels`, `cropToPageBox`, `tightenFrame`, `cropCheckPrompt`, `checkCroppedSchema`), `supabase/functions/studio/index.ts` (étape `schcheck`, v25) et `supabase/functions/diag/index.ts` (`schemaRecheck`, v14) :
+   - découpe directe en mémoire des pixels du cadre sans dupliquer toute la page (2 ms, évite l'erreur `546`), réduction à 900 px max de la découpe et encodage JPEG (qualité 80) ;
+   - masques dessinés en aplat violet (`#4b39c8`) sur la découpe ;
+   - envoi de l'image découpée à Gemini (jusqu'à **3 essais maximum** pour resserrer un cadre qui contient du texte parasite : titre de page/diapo, « Activité 2 : … », paragraphe) ;
+   - garde-fous : ne jamais agrandir le cadre, refuser `< 15 %` de la surface, ne jamais couper un masque existant, garder l'ancien cadre si Gemini échoue ;
+   - si la réponse reste visible sans masque possible : passage au dos seulement (4 nombres), **aucune carte n'est jamais supprimée** ;
+   - dans `diag`, une carte mise à jour chez Déborah met aussi à jour sa copie identique chez Esteban (`copies: 2`), ce qui réduit les 63 pages à **34 pages uniques** (`only: 0..31, 40, 41`).
+2. **Reste à lancer** (`schema_recheck` sur les 34 pages uniques `0..31, 40, 41`) dès que le plafond de dépenses Google Cloud (`Spend cap breached for project: projects/172976781026 for service: aiplatform.googleapis.com`, erreur 403 Vertex AI) est relevé.
 
 ## 5. Ce qui vient d'être fait (17 nov.)
 
