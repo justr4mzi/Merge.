@@ -59,7 +59,7 @@ Fonctions principales : matières → chapitres → import de cours (PDF, PowerP
    `curl -s https://raw.githubusercontent.com/justr4mzi/Merge./<sha>/supabase/functions/<fn>/index.ts | sha256sum`, à comparer avec le sha256 local.
 4. Déployer une **amorce** de 1 ligne : `index.ts` = `import "https://raw.githubusercontent.com/justr4mzi/Merge./<sha>/supabase/functions/<fn>/index.ts";`
    - `verify_jwt` à **false** pour studio, diag, remind, admin, voix ; `ai` garde le JWT.
-   - Version actuelle : studio v25 (commit 3464ae7) ; diag v14 (commit 3464ae7).
+   - Version actuelle : studio v25 (commit 3464ae7) ; diag v17 (commit 6fd7099).
 5. Vérifier dans les logs Supabase : `POST | 200`. Une erreur `546` = limite mémoire/temps de la fonction : relancer (une page photo trop lourde).
 
 **Lancer une action `diag`** (depuis l'éditeur SQL ou l'outil SQL) :
@@ -78,23 +78,23 @@ Les réponses de pg_net ne sont pas fiables. Les résultats sont écrits avec `c
   - Le client accepte aussi les masques « à plat » (4 nombres à la suite).
 - Avec des masques : le schéma est sur la question, légende cachée. Sans masques (4 nombres seulement) : le schéma n'est montré qu'au dos. Dans ce cas, le client retire « Sur ce schéma, » de la question (`noSchRef` dans `07-session-cartes.js`).
 - Problème restant : le **cadre** contient parfois encore du texte (titre de page, « Activité 2 : … », paragraphes). Gemini donne des coordonnées sans voir le résultat.
-- Comptes actuels de cartes de schéma :
-  - Déborah : 90 (86 cachées, 4 au dos seulement) ;
-  - Esteban : 98 (87 / 11), une copie des cours de Déborah ;
-  - Ramzi : 3.
+- Comptes actuels de cartes de schéma (après `schema_recheck` sur images découpées, 17 nov.) :
+  - Déborah : 90 (90 cachées, 0 au dos seulement — 82 cadres resserrés sur 90) ;
+  - Esteban : 98 (92 cachées, 6 au dos seulement — 88 cadres resserrés sur 98) ;
+  - Ramzi : 3 (2 cachées, 1 au dos seulement — 3 cadres resserrés sur 3).
 
-### TÂCHE N°1 : vérification du découpage par Gemini (CODE EN LIGNE le 17 nov., `studio` v25 et `diag` v14)
+### TÂCHE N°1 : vérification du découpage par Gemini (FAIT le 17 nov., `studio` v25 et `diag` v17)
 
 Objectif : que Gemini juge **l'image découpée réelle**, pas des coordonnées.
 
-1. **Codé et déployé** dans `supabase/functions/studio/schemas.mjs` (`groups`, `cropRect`, `maskPixels`, `cropToPageBox`, `tightenFrame`, `cropCheckPrompt`, `checkCroppedSchema`), `supabase/functions/studio/index.ts` (étape `schcheck`, v25) et `supabase/functions/diag/index.ts` (`schemaRecheck`, v14) :
+1. **Codé, déployé et exécuté sur toutes les pages** dans `supabase/functions/studio/schemas.mjs` (`groups`, `cropRect`, `maskPixels`, `cropToPageBox`, `tightenFrame`, `cropCheckPrompt`, `checkCroppedSchema`), `supabase/functions/studio/index.ts` (étape `schcheck`, v25) et `supabase/functions/diag/index.ts` (`schemaRecheck`, v17) :
    - découpe directe en mémoire des pixels du cadre sans dupliquer toute la page (2 ms, évite l'erreur `546`), réduction à 900 px max de la découpe et encodage JPEG (qualité 80) ;
    - masques dessinés en aplat violet (`#4b39c8`) sur la découpe ;
    - envoi de l'image découpée à Gemini (jusqu'à **3 essais maximum** pour resserrer un cadre qui contient du texte parasite : titre de page/diapo, « Activité 2 : … », paragraphe) ;
    - garde-fous : ne jamais agrandir le cadre, refuser `< 15 %` de la surface, ne jamais couper un masque existant, garder l'ancien cadre si Gemini échoue ;
    - si la réponse reste visible sans masque possible : passage au dos seulement (4 nombres), **aucune carte n'est jamais supprimée** ;
-   - dans `diag`, une carte mise à jour chez Déborah met aussi à jour sa copie identique chez Esteban (`copies: 2`), ce qui réduit les 63 pages à **34 pages uniques** (`only: 0..31, 40, 41`).
-2. **Reste à lancer** (`schema_recheck` sur les 34 pages uniques `0..31, 40, 41`) dès que le plafond de dépenses Google Cloud (`Spend cap breached for project: projects/172976781026 for service: aiplatform.googleapis.com`, erreur 403 Vertex AI) est relevé.
+   - dans `diag`, une carte mise à jour chez Déborah met aussi à jour sa copie identique chez Esteban (`copies: 2`), et `only` + `to` permet de traiter une plage de pages en séquence sans surcharge mémoire.
+2. **Résultat sur l'existant** : les 63 pages (191 cartes) ont toutes été traitées (`POST | 200`) : **173 cartes sur 191** ont eu leur cadre resserré (82/90 chez Déborah, 88/98 chez Esteban, 3/3 chez Ramzi ; la page témoin `1794679952176-5.jpg` est restée intacte). Aucune carte supprimée.
 
 ## 5. Ce qui vient d'être fait (17 nov.)
 
