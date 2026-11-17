@@ -112,3 +112,166 @@ export function dedupCards(cards, existingFronts, seuil = 0.75) {
   }
   return out;
 }
+
+// ---------- vérification sur l'image réellement découpée (Tâche n°1, 17 nov.) ----------
+// Extrait les masques [y0,x0,y1,x1] de image_box.slice(4), qu'ils soient en sous-tableaux ou à plat.
+export function groups(b) {
+  const r = [];
+  if (!Array.isArray(b)) return r;
+  for (let i = 0; i < b.length; i++) {
+    if (Array.isArray(b[i])) r.push(b[i].map(Number));
+    else if (i + 3 < b.length && !b.slice(i, i + 4).some(Array.isArray)) {
+      r.push(b.slice(i, i + 4).map(Number));
+      i += 3;
+    }
+  }
+  return r.filter((m) => m.length === 4 && m.every(Number.isFinite));
+}
+
+// Coordonnées en pixels du cadre [y0,x0,y1,x1] (0–1000) sur une page de largeur W et hauteur H.
+export function cropRect(frame, W, H) {
+  const [y0, x0, y1, x1] = frame.map((v) => Math.max(0, Math.min(1000, Number(v) || 0)));
+  const x = Math.max(0, Math.min(W - 1, Math.round((x0 * W) / 1000)));
+  const y = Math.max(0, Math.min(H - 1, Math.round((y0 * H) / 1000)));
+  const w = Math.max(1, Math.min(W - x, Math.round(((x1 - x0) * W) / 1000)));
+  const h = Math.max(1, Math.min(H - y, Math.round(((y1 - y0) * H) / 1000)));
+  return { x, y, w, h };
+}
+
+// Coordonnées en pixels d'un masque [my0,mx0,my1,mx1] (0–1000 page entière) sur la découpe (cw × ch) du cadre [y0,x0,y1,x1].
+export function maskPixels(mask, frame, cw, ch) {
+  const [y0, x0, y1, x1] = frame;
+  const [my0, mx0, my1, mx1] = mask;
+  const fw = Math.max(1, x1 - x0), fh = Math.max(1, y1 - y0);
+  const x = Math.max(0, Math.min(cw, Math.round(((mx0 - x0) / fw) * cw)));
+  const y = Math.max(0, Math.min(ch, Math.round(((my0 - y0) / fh) * ch)));
+  const x2 = Math.max(0, Math.min(cw, Math.round(((mx1 - x0) / fw) * cw)));
+  const y2 = Math.max(0, Math.min(ch, Math.round(((my1 - y0) / fh) * ch)));
+  return x2 > x && y2 > y ? { x, y, w: x2 - x, h: y2 - y } : null;
+}
+
+// Reconvertit un cadre [ry0,rx0,ry1,rx1] (0–1000 relatif à l'image découpée) en coordonnées 0–1000 de la page entière.
+export function cropToPageBox(rel, frame) {
+  const n = (Array.isArray(rel) ? rel : String(rel ?? "").split(/[,;\s]+/)).filter((x) => x !== "" && x != null).map(Number);
+  if (n.length !== 4 || n.some((x) => !Number.isFinite(x))) return null;
+  let [ry0, rx0, ry1, rx1] = n.map((x) => Math.max(0, Math.min(1000, x)));
+  if (ry1 < ry0) [ry0, ry1] = [ry1, ry0];
+  if (rx1 < rx0) [rx0, rx1] = [rx1, rx0];
+  const [y0, x0, y1, x1] = frame;
+  return [
+    Math.round(y0 + (ry0 / 1000) * (y1 - y0)),
+    Math.round(x0 + (rx0 / 1000) * (x1 - x0)),
+    Math.round(y0 + (ry1 / 1000) * (y1 - y0)),
+    Math.round(x0 + (rx1 / 1000) * (x1 - x0)),
+  ];
+}
+
+// Applique le nouveau cadre renvoyé par Gemini sur l'image découpée, avec garde-fous :
+// - ne jamais agrandir le cadre ;
+// - refuser un cadre plus petit que 15 % de l'ancien ;
+// - ne pas couper les masques existants ;
+// - si Gemini répond mal, garder l'ancien cadre.
+export function tightenFrame(frame, res, masks = []) {
+  const orig = frame.slice(0, 4).map((x) => Math.round(Number(x) || 0));
+  if (!res || typeof res !== "object" || !res.texte_parasite) return orig;
+  let rel = null;
+  const raw = res.nouveau_cadre;
+  const n = (Array.isArray(raw) ? raw : String(raw ?? "").split(/[,;\s]+/)).filter((x) => x !== "" && x != null).map(Number);
+  if (n.length === 4 && n.every(Number.isFinite)) {
+    let [ry0, rx0, ry1, rx1] = n.map((x) => Math.max(0, Math.min(1000, x)));
+    if (ry1 < ry0) [ry0, ry1] = [ry1, ry0];
+    if (rx1 < rx0) [rx0, rx1] = [rx1, rx0];
+    rel = [ry0, rx0, ry1, rx1];
+  }
+  const ou = String(res.ou ?? "").toLowerCase();
+  if ((!rel || (rel[0] <= 5 && rel[1] <= 5 && rel[2] >= 995 && rel[3] >= 995)) && /(haut|bas|gauche|droite)/.test(ou)) {
+    rel = [
+      /haut/.test(ou) ? 120 : 0,
+      /gauche/.test(ou) ? 120 : 0,
+      /bas/.test(ou) ? 880 : 1000,
+      /droite/.test(ou) ? 880 : 1000,
+    ];
+  }
+  if (!rel) return orig;
+  const pageBox = cropToPageBox(rel, orig);
+  if (!pageBox) return orig;
+  let [ny0, nx0, ny1, nx1] = pageBox;
+  // Ne jamais agrandir le cadre.
+  ny0 = Math.max(orig[0], ny0);
+  nx0 = Math.max(orig[1], nx0);
+  ny1 = Math.min(orig[2], ny1);
+  nx1 = Math.min(orig[3], nx1);
+  // Ne pas couper une légende déjà masquée à l'intérieur du schéma.
+  for (const m of groups(masks)) {
+    if (m[0] >= orig[0] - 30 && m[1] >= orig[1] - 30 && m[2] <= orig[2] + 30 && m[3] <= orig[3] + 30) {
+      ny0 = Math.min(ny0, Math.max(orig[0], m[0]));
+      nx0 = Math.min(nx0, Math.max(orig[1], m[1]));
+      ny1 = Math.max(ny1, Math.min(orig[2], m[2]));
+      nx1 = Math.max(nx1, Math.min(orig[3], m[3]));
+    }
+  }
+  const oldArea = Math.max(1, (orig[2] - orig[0]) * (orig[3] - orig[1]));
+  const newArea = (ny1 - ny0) * (nx1 - nx0);
+  if (ny1 - ny0 < 50 || nx1 - nx0 < 50 || newArea < oldArea * 0.15) return orig;
+  return [ny0, nx0, ny1, nx1].map(Math.round);
+}
+
+export function cropCheckPrompt(front, back) {
+  const q = String(front ?? "").replace(/\s+/g, " ").trim();
+  const a = String(back ?? "").replace(/\s+/g, " ").trim();
+  return `Voici l'image DÉCOUPÉE d'un schéma de cours telle que l'élève la voit sur sa carte de révision. Les rectangles violets pleins cachent la légende à deviner.\nQuestion de la carte : ${q}\nRéponse à deviner : ${a}\n\nVérifie deux choses en regardant uniquement cette image découpée :\n1) "texte_parasite" (true/false) : reste-t-il au bord de l'image du texte extérieur au schéma (titre de page, titre ou bandeau d'activité comme « Activité 2 : … », numéro de document « Doc. 1… », consigne ou paragraphe de cours) ?\nAttention : les légendes du schéma, les mots dans les boîtes d'un schéma fonctionnel, les flèches, symboles ou formules (H2O, CO2…) font partie du schéma et ne sont PAS du texte parasite. Si l'image ne contient que le schéma et ses légendes, mets "texte_parasite": false et "nouveau_cadre": null.\nSi "texte_parasite" est true : indique le bord dans "ou" ("haut", "bas", "gauche" ou "droite") et donne dans "nouveau_cadre" [ymin, xmin, ymax, xmax] (4 entiers de 0 à 1000 SUR CETTE IMAGE DÉCOUPÉE, où [0,0,1000,1000] = toute l'image actuelle) le cadre resserré qui retire le texte parasite sans couper le dessin ni ses légendes ni les rectangles violets.\n2) "reponse_visible" (true/false) : la réponse « ${a} » est-elle encore écrite en clair et lisible sur cette image (en dehors des rectangles violets, et hors mots déjà présents dans la question) ?\nSi "reponse_visible" est true : donne dans "cacher" [[ymin, xmin, ymax, xmax]] (de 0 à 1000 SUR CETTE IMAGE DÉCOUPÉE) le cadre serré de chaque endroit où la réponse est lisible, pour qu'on le recouvre d'un rectangle violet.\n\nRéponds uniquement en JSON :\n{"texte_parasite":false,"ou":"","nouveau_cadre":null,"reponse_visible":false,"cacher":[]}`;
+}
+
+// Vérifie et resserre le cadre d'une carte sur l'image réellement découpée (3 essais maximum, jamais de carte supprimée).
+export async function checkCroppedSchema({ frame, masks, front, back, renderCrop, askGemini }) {
+  const origFrame = frame.slice(0, 4).map((x) => Math.round(Number(x) || 0));
+  let curFrame = origFrame.slice();
+  let curMasks = groups(masks);
+  let tries = 0, lastRes = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    tries = attempt + 1;
+    let res = null;
+    try {
+      const imgB64 = await renderCrop(curFrame, curMasks);
+      res = await askGemini(cropCheckPrompt(front, back), imgB64);
+    } catch (_e) {
+      break;
+    }
+    if (!res || typeof res !== "object") break;
+    lastRes = res;
+    let addedMask = false;
+    if (res.reponse_visible === true && Array.isArray(res.cacher)) {
+      for (const rawBox of res.cacher) {
+        const pb = cropToPageBox(rawBox, curFrame);
+        const lb = pb ? cleanLabelBox(pb.join(",")) : null;
+        if (lb && !curMasks.some((m) => m.join(",") === lb.join(","))) {
+          curMasks.push(lb);
+          addedMask = true;
+        }
+      }
+    }
+    if (res.texte_parasite === true) {
+      const nf = tightenFrame(curFrame, res, curMasks);
+      if (nf.join(",") !== curFrame.join(",")) {
+        curFrame = nf;
+        curMasks = curMasks.filter((b) => b[0] >= curFrame[0] - 30 && b[1] >= curFrame[1] - 30 && b[2] <= curFrame[2] + 30 && b[3] <= curFrame[3] + 30);
+        if (attempt < 2) continue;
+      }
+    }
+    if (res.reponse_visible === true) {
+      if (addedMask && attempt < 2) continue;
+      if (!addedMask) curMasks = [];
+      break;
+    }
+    break;
+  }
+  curMasks = curMasks.filter((b) => b[0] >= curFrame[0] - 30 && b[1] >= curFrame[1] - 30 && b[2] <= curFrame[2] + 30 && b[3] <= curFrame[3] + 30);
+  return {
+    frame: curFrame,
+    masks: curMasks,
+    box: [...curFrame, ...curMasks],
+    tightened: curFrame.join(",") !== origFrame.join(","),
+    tries,
+    lastRes,
+  };
+}

@@ -8,6 +8,8 @@
 //    rien de caché). Chaque page est relue une fois par Gemini : légendes du schéma + celle(s) qui donnent la réponse de chaque carte.
 //    Seules ces légendes sont cachées ; si aucune ne correspond, la carte reste telle quelle (schéma montré au verso seulement).
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { Image } from "https://deno.land/x/imagescript@1.3.0/mod.ts";
+import { groups, cropRect, maskPixels, checkCroppedSchema } from "../studio/schemas.mjs";
 
 const URL_ = Deno.env.get("SUPABASE_URL")!;
 const admin = createClient(URL_, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -27,6 +29,24 @@ function b64(bytes: Uint8Array) {
   let s = "";
   for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(s);
+}
+async function decodePage(bytes: Uint8Array) {
+  const im = await Image.decode(bytes);
+  const m = Math.max(im.width, im.height);
+  if (m > 1600) {
+    const k = 1600 / m;
+    im.resize(Math.max(1, Math.round(im.width * k)), Math.max(1, Math.round(im.height * k)), Image.RESIZE_NEAREST_NEIGHBOR);
+  }
+  return im;
+}
+async function renderCropB64(pageImg: Any, frame: number[], masks: number[][]) {
+  const r = cropRect(frame, pageImg.width, pageImg.height);
+  const sub = pageImg.clone().crop(r.x, r.y, r.w, r.h);
+  for (const m of masks) {
+    const mp = maskPixels(m, frame, sub.width, sub.height);
+    if (mp) sub.drawBox(mp.x, mp.y, mp.w, mp.h, 0x4b39c8ff);
+  }
+  return b64(await sub.encodeJPEG(80));
 }
 async function accessToken(sa: Any) {
   const now = Math.floor(Date.now() / 1000), aud = sa.token_uri ?? "https://oauth2.googleapis.com/token";
@@ -136,9 +156,8 @@ async function schemaAdd(ids: string[], only: number, dry: boolean) {
 }
 // Revérification des cartes de schéma déjà créées (17 nov.), comme l'étape « schcheck » de studio pour les nouveaux imports.
 // { action: "schema_recheck", only: n, dry?: true } : n = numéro de la page (toutes les photos qui ont des cartes de schéma).
-// Pour chaque carte : réponse vraiment cachée ? écrite ailleurs dans le cadre ? cadre qui déborde ? question qui colle ?
-// On ajoute des cases, on resserre le cadre ; une carte impossible à rendre sûre garde seulement son schéma au verso (rien de supprimé).
-const groups = (b: Any[]) => { const r: number[][] = []; for (let i = 0; i < b.length; i++) { if (Array.isArray(b[i])) r.push(b[i].map(Number)); else if (i + 3 < b.length && !b.slice(i, i + 4).some(Array.isArray)) { r.push(b.slice(i, i + 4).map(Number)); i += 3; } } return r.filter((m) => m.length === 4 && m.every(Number.isFinite)); };
+// Pour chaque carte : on découpe réellement la page avec son cadre, on dessine ses masques en aplat et on envoie la découpe à Gemini
+// (jusqu'à 3 essais pour resserrer un cadre qui contient du texte parasite ; jamais de carte supprimée).
 async function schemaRecheck(only: number, dry: boolean) {
   const { data: rows } = await admin.from("cards").select("id,front,back,image_path,image_box").not("image_box", "is", null).limit(2000);
   const todo = ((rows ?? []) as Any[]).filter((c) => Array.isArray(c.image_box) && c.image_box.length >= 4 && c.image_path);
@@ -152,24 +171,34 @@ async function schemaRecheck(only: number, dry: boolean) {
   const sa = JSON.parse(raw), token = await accessToken(sa), out: Any[] = [];
   const dl = await admin.storage.from("cours").download(path);
   if (dl.error || !dl.data) return { path, error: "image introuvable" };
-  const lines = cs.map((c, i) => { const f = c.image_box.slice(0, 4), h = groups(c.image_box.slice(4)); return `${i + 1}. cadre ${f.join(",")} | cases cachées : ${h.length ? h.map((m) => "[" + m.join(",") + "]").join(" ") : "aucune"} | question : ${String(c.front).replace(/\s+/g, " ")} | réponse : ${String(c.back).replace(/\s+/g, " ")}`; }).join("\n");
-  const j = await geminiJson(sa, token, [{ text: "Tu vérifies des cartes de révision faites à partir des schémas d'un cours. Tu es très exigeant : une carte dont la réponse se lit sur l'image est inutile.\nVoici la photo d'une page de cours et des cartes de révision sur ses schémas. Pour chaque carte, l'élève voit côté question seulement le CADRE (ymin,xmin,ymax,xmax de 0 à 1000 sur la page, 0,0 = coin en haut à gauche), avec les CASES CACHÉES recouvertes par un « ? ». Vérifie chaque carte avec soin :\n1) Avec ces cases cachées, la réponse (ou un mot qui la donne) se lit-elle encore QUELQUE PART dans le cadre : une autre légende, la même légende écrite deux fois, un titre, une phrase, une note ? Si oui, donne dans \"cacher\" le cadre SERRÉ de chaque endroit à cacher en plus (même repère).\n2) Si la réponse est une légende du schéma : chaque case cachée recouvre-t-elle bien toute cette légende ? Sinon (ou s'il n'y a aucune case), donne dans \"cacher\" le bon cadre serré de la légende réponse.\n3) Le cadre contient-il du texte qui n'appartient pas au schéma (titre du document, paragraphe, autre schéma) ? Si oui, donne dans \"cadre\" un cadre plus serré qui garde tout le dessin et toutes ses légendes ; sinon \"cadre\" = null.\n4) La question correspond-elle à la légende cachée, et la réponse est-elle juste d'après la page ?\n\"garder\" = false si la carte ne peut pas être rendue sûre côté question (réponse lisible ailleurs qu'on ne peut pas cacher sans détruire le schéma, question qui ne correspond pas, réponse fausse, réponse qui n'est pas écrite sur le schéma). Ne garde jamais une carte douteuse.\nRéponds en JSON : {\"cartes\":[{\"n\":1,\"garder\":true,\"cadre\":null,\"cacher\":[[0,0,0,0]],\"raison\":\"courte\"}]}\n\nCartes :\n" + lines }, { inlineData: { mimeType: "image/jpeg", data: b64(new Uint8Array(await dl.data.arrayBuffer())) } }]);
-  for (const x of (j.cartes ?? []) as Any[]) {
-    const c = cs[(+x.n || 0) - 1]; if (!c) continue;
-    let frame = c.image_box.slice(0, 4).map(Number);
-    const hid0 = groups(c.image_box.slice(4));
-    // Carte qui ne peut pas être rendue sûre : on retire les cases → l'appli ne montre plus le schéma que sur la réponse.
-    if (x.garder === false) { if (!dry) await admin.from("cards").update({ image_box: frame }).eq("id", c.id); out.push({ id: c.id, f: String(c.front).slice(0, 70), garder: false, raison: x.raison }); continue; }
-    const nf = x.cadre ? cleanFrame(x.cadre) : null;
-    const extra = ((x.cacher ?? []) as Any[]).map((b) => cleanLabelBox(b)).filter(Boolean) as number[][];
-    const all = [...hid0, ...extra.filter((b) => !hid0.some((h) => h.join() === b.join()))];
-    if (nf && all.every((b) => b[0] >= nf[0] - 5 && b[1] >= nf[1] - 5 && b[2] <= nf[2] + 5 && b[3] <= nf[3] + 5)) frame = nf;
-    const keep = all.filter((b) => b[0] >= frame[0] - 30 && b[1] >= frame[1] - 30 && b[2] <= frame[2] + 30 && b[3] <= frame[3] + 30);
-    const box = [...frame, ...keep];
-    if (!dry && JSON.stringify(box) !== JSON.stringify(c.image_box)) await admin.from("cards").update({ image_box: box }).eq("id", c.id);
-    out.push({ id: c.id, f: String(c.front).slice(0, 70), cadre: !!nf, ajout: extra.length, cases: keep.length, raison: x.raison });
-  }
-  return { pages: pages.length, path, dry, out };
+  const pageImg = await decodePage(new Uint8Array(await dl.data.arrayBuffer()));
+  await Promise.all(cs.map(async (c) => {
+    const frame0 = c.image_box.slice(0, 4).map(Number);
+    const masks0 = groups(c.image_box.slice(4));
+    const res = await checkCroppedSchema({
+      frame: frame0,
+      masks: masks0,
+      front: c.front,
+      back: c.back,
+      renderCrop: (f: number[], m: number[][]) => renderCropB64(pageImg, f, m),
+      askGemini: (prompt: string, imgB64: string) => geminiJson(sa, token, [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: imgB64 } }]),
+    });
+    if (!dry && JSON.stringify(res.box) !== JSON.stringify(c.image_box)) {
+      await admin.from("cards").update({ image_box: res.box }).eq("id", c.id);
+    }
+    out.push({
+      id: c.id,
+      f: String(c.front).slice(0, 60),
+      avant: frame0,
+      apres: res.frame,
+      resserre: res.tightened,
+      essais: res.tries,
+      cases: res.masks.length,
+      dos: res.masks.length === 0,
+      ou: res.lastRes?.ou || "",
+    });
+  }));
+  return { only, pages: pages.length, path, dry, resserres: out.filter((x) => x.resserre).length, out };
 }
 
 // Cadre d'un schéma (mêmes règles que studio/schemas.mjs : assez grand, marge de 2,5 %).

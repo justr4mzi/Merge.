@@ -3,8 +3,9 @@
 // Appels élève : jeton de connexion. Appels internes (étape suivante) : secret `cron` de la table app_secrets.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
+import { Image } from "https://deno.land/x/imagescript@1.3.0/mod.ts";
 import { autoTitle } from "./titre.mjs";
-import { extractSchemas, dedupCards, labelMasks, cleanBox, cleanLabelBox, words } from "./schemas.mjs";
+import { extractSchemas, dedupCards, labelMasks, cleanBox, cleanLabelBox, words, cropRect, maskPixels, checkCroppedSchema } from "./schemas.mjs";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 const CORS = {
@@ -36,6 +37,24 @@ function b64(bytes: Uint8Array) {
   let s = "";
   for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(s);
+}
+async function decodePage(bytes: Uint8Array) {
+  const im = await Image.decode(bytes);
+  const m = Math.max(im.width, im.height);
+  if (m > 1600) {
+    const k = 1600 / m;
+    im.resize(Math.max(1, Math.round(im.width * k)), Math.max(1, Math.round(im.height * k)), Image.RESIZE_NEAREST_NEIGHBOR);
+  }
+  return im;
+}
+async function renderCropB64(pageImg: Any, frame: number[], masks: number[][]) {
+  const r = cropRect(frame, pageImg.width, pageImg.height);
+  const sub = pageImg.clone().crop(r.x, r.y, r.w, r.h);
+  for (const m of masks) {
+    const mp = maskPixels(m, frame, sub.width, sub.height);
+    if (mp) sub.drawBox(mp.x, mp.y, mp.w, mp.h, 0x4b39c8ff);
+  }
+  return b64(await sub.encodeJPEG(80));
 }
 
 let cachedToken: { token: string; exp: number } | null = null;
@@ -296,50 +315,46 @@ async function stepRun(id: string) {
       await setJob(id, { state: st, stage: more ? "gen" : chk ? "schcheck" : "save", progress: Math.round(60 + 32 * st.ci / chunks.length), message: more ? `L'IA prépare le résumé et les cartes (partie ${st.ci + 1} sur ${chunks.length})…` : chk ? "Vérification des schémas…" : "Enregistrement…" });
       return await kick(id);
     }
-    // Revérification des cartes de schéma (17 nov.) : une page à la fois, l'IA regarde la photo avec les cases à cacher
-    // et contrôle chaque carte : la réponse est-elle vraiment cachée ? écrite ailleurs dans le cadre (titre, phrase, légende
-    // en double) ? le cadre déborde-t-il sur du texte inutile ? la question correspond-elle à la légende cachée ?
-    // Elle peut resserrer le cadre, ajouter des cases ; une carte impossible à rendre sûre est retirée.
+    // Revérification des cartes de schéma (17 nov.) : une page à la fois, on découpe réellement chaque schéma avec ses cases
+    // cachées en aplat et Gemini juge l'image découpée (jusqu'à 3 essais pour resserrer un cadre qui contient du texte parasite ;
+    // jamais de carte supprimée : si la réponse reste visible, la carte passe avec le schéma au dos seulement).
     if (job.stage === "schcheck") {
       const paths = [...new Set(st.cards.filter((c: Any) => c.sch).map((c: Any) => (schemas.find((x) => x.id === c.sch) ?? {}).path).filter(Boolean))] as string[];
       st.pi ??= 0;
-      // Une page qui fait planter l'étape (photo trop lourde pour la fonction) : au 2e essai on la passe, sinon l'import resterait bloqué.
+      // Une page qui fait planter l'étape (photo trop lourde pour la fonction) : au 3e essai on la passe, sinon l'import resterait bloqué.
       st.pitry = st.pitry && st.pitry.pi === st.pi ? { pi: st.pi, n: st.pitry.n + 1 } : { pi: st.pi, n: 1 };
       await setJob(id, { state: st });
-      const pth = st.pitry.n <= 2 ? paths[st.pi] : null;
+      const pth = st.pitry.n < 3 ? paths[st.pi] : null;
       if (pth) {
         try {
           const list = st.cards.map((c: Any, k: number) => ({ c, k })).filter(({ c }: Any) => c.sch && (schemas.find((x) => x.id === c.sch) ?? {}).path === pth);
-          const lines = list.map(({ c }: Any, i: number) => {
-            const sc = schemas.find((x) => x.id === c.sch), box = c.frame ?? sc.box, hid = c.boxes ?? labelMasks(sc, c.masque);
-            const txts = (sc.labels ?? []).filter((l: Any) => hid.some((h: number[]) => h.join() === l.box.join())).map((l: Any) => l.text);
-            return `${i + 1}. cadre ${box.join(",")} | cases cachées : ${hid.length ? hid.map((h: number[]) => "[" + h.join(",") + "]").join(" ") + " (" + txts.join(" ; ") + ")" : "aucune"} | question : ${String(c.front).replace(/\s+/g, " ")} | réponse : ${String(c.back).replace(/\s+/g, " ")}`;
-          }).join("\n");
           const dl = await admin.storage.from("cours").download(pth);
           if (!dl.error && dl.data && list.length) {
-            const r = await gemini(sa, "Tu vérifies des cartes de révision faites à partir des schémas d'un cours. Tu es très exigeant : une carte dont la réponse se lit sur l'image est inutile.", [{ text: "Voici la photo d'une page de cours et des cartes de révision sur ses schémas. Pour chaque carte, l'élève voit seulement le CADRE (ymin,xmin,ymax,xmax de 0 à 1000 sur la page, 0,0 = coin en haut à gauche), avec les CASES CACHÉES recouvertes par un « ? ». Vérifie chaque carte avec soin :\n1) Avec ces cases cachées, la réponse (ou un mot qui la donne) se lit-elle encore QUELQUE PART dans le cadre : une autre légende, la même légende écrite deux fois, un titre, une phrase, une note ? Si oui, donne dans \"cacher\" le cadre SERRÉ de chaque endroit à cacher en plus (même repère).\n2) Chaque case cachée recouvre-t-elle bien toute la légende réponse ? Sinon, donne dans \"cacher\" le bon cadre serré.\n3) Le cadre contient-il du texte qui n'appartient pas au schéma (titre du document, paragraphe, autre schéma) ? Si oui, donne dans \"cadre\" un cadre plus serré qui garde tout le dessin et toutes ses légendes ; sinon \"cadre\" = null.\n4) La question correspond-elle à la légende cachée, et la réponse est-elle juste d'après la page ?\n\"garder\" = false si la carte ne peut pas être rendue sûre (réponse lisible ailleurs qu'on ne peut pas cacher sans détruire le schéma, question qui ne correspond pas, réponse fausse). Ne garde jamais une carte douteuse.\nRéponds en JSON : {\"cartes\":[{\"n\":1,\"garder\":true,\"cadre\":null,\"cacher\":[[0,0,0,0]],\"raison\":\"courte\"}]}\n\nCartes :\n" + lines }, { inlineData: { mimeType: "image/jpeg", data: b64(new Uint8Array(await dl.data.arrayBuffer())) } }], true, 0, "high");
-            const j: Any = parseJson(r.text) ?? {};
-            for (const x of (j.cartes ?? []) as Any[]) {
-              const it = list[(+x.n || 0) - 1]; if (!it) continue;
-              const c = it.c, sc = schemas.find((y) => y.id === c.sch);
-              if (x.garder === false) { c.drop = true; continue; }
-              let frame = c.frame ?? sc.box;
-              const nf = x.cadre ? cleanBox(Array.isArray(x.cadre) ? x.cadre.join(",") : x.cadre) : null;
-              const hid0 = c.boxes ?? labelMasks(sc, c.masque);
-              const extra = ((x.cacher ?? []) as Any[]).map((b) => cleanLabelBox(Array.isArray(b) ? b.join(",") : b)).filter(Boolean) as number[][];
-              const all = [...hid0, ...extra.filter((b) => !hid0.some((h: number[]) => h.join() === b.join()))];
-              // Le cadre resserré doit garder toutes les cases cachées.
-              if (nf && all.every((b) => b[0] >= nf[0] - 5 && b[1] >= nf[1] - 5 && b[2] <= nf[2] + 5 && b[3] <= nf[3] + 5)) frame = nf;
-              c.frame = frame; c.boxes = all.filter((b) => b[0] >= frame[0] - 30 && b[1] >= frame[1] - 30 && b[2] <= frame[2] + 30 && b[3] <= frame[3] + 30);
+            const pageImg = await decodePage(new Uint8Array(await dl.data.arrayBuffer()));
+            await Promise.all(list.map(async ({ c }: Any) => {
+              const sc = schemas.find((x) => x.id === c.sch); if (!sc) return;
+              const frame0 = c.frame ?? sc.box, masks0 = c.boxes ?? labelMasks(sc, c.masque);
+              const res = await checkCroppedSchema({
+                frame: frame0,
+                masks: masks0,
+                front: c.front,
+                back: c.back,
+                renderCrop: (f: number[], m: number[][]) => renderCropB64(pageImg, f, m),
+                askGemini: async (prompt: string, imgB64: string) => {
+                  const r = await gemini(sa, "Tu vérifies des cartes de révision faites à partir des schémas d'un cours. Tu juges uniquement l'image découpée qu'on te montre.", [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: imgB64 } }], true, 0, "high");
+                  return parseJson(r.text);
+                },
+              });
+              c.frame = res.frame;
+              c.boxes = res.masks;
               c.checked = true;
-            }
+            }));
           }
         } catch (_e) { /* une page qu'on n'arrive pas à revérifier garde ses cartes telles qu'elles sont */ }
       }
       st.pi += 1;
       const more = st.pi < paths.length;
       if (!more) {
-        st.cards = st.cards.filter((c: Any) => !c.drop);
         // Une même légende ne fait qu'une carte de schéma (le schéma revient souvent sur plusieurs diapositives ou pages).
         const seen = new Set<string>();
         st.cards = st.cards.filter((c: Any) => { if (!c.sch) return true; const k = words(c.masque || c.back).join(" "); if (!k) return true; if (seen.has(k)) return false; seen.add(k); return true; });

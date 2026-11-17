@@ -1481,6 +1481,35 @@ async function schemasServeur() {
   ok(S.similar("Que donne la mitose ?", "Qu'est-ce que donne la mitose ?") >= 0.75 && S.similar("Que donne la mitose ?", "Que donne la méiose ?") < 0.5, tag + " : questions presque identiques reconnues, différentes séparées");
   const kept = S.dedupCards([{ front: "Que donne la mitose ?" }, { front: "Combien de chromosomes chez l'humain ?" }, { front: "Combien de chromosomes chez l'humain ?" }], ["Qu'est-ce que donne la mitose ?"]);
   ok(kept.length === 1 && kept[0].front.startsWith("Combien"), tag + " : doublons retirés (avec l'existant et entre nouvelles cartes)", JSON.stringify(kept));
+  // Vérification sur l'image réellement découpée (Tâche n°1, 17 nov.) : conversion des coordonnées, garde-fous et boucle en 3 essais max.
+  ok(JSON.stringify(S.groups([[10, 20, 30, 40], 50, 60, 70, 80])) === "[[10,20,30,40],[50,60,70,80]]", tag + " : masques lus en sous-tableaux ou à plat");
+  ok(JSON.stringify(S.cropRect([100, 200, 500, 800], 1000, 2000)) === '{"x":200,"y":200,"w":600,"h":800}', tag + " : cadre 0–1000 converti en pixels de découpe");
+  ok(JSON.stringify(S.maskPixels([200, 350, 300, 650], [100, 200, 500, 800], 600, 400)) === '{"x":150,"y":100,"w":300,"h":100}', tag + " : masque converti en pixels sur la découpe");
+  ok(JSON.stringify(S.cropToPageBox([200, 100, 900, 900], [100, 200, 600, 800])) === "[200,260,550,740]", tag + " : nouveau_cadre relatif à la découpe reconverti sur la page entière");
+  ok(JSON.stringify(S.tightenFrame([100, 200, 600, 800], { texte_parasite: true, ou: "haut", nouveau_cadre: [200, 0, 1000, 1000] })) === "[200,200,600,800]", tag + " : texte parasite en haut retiré");
+  ok(JSON.stringify(S.tightenFrame([100, 200, 600, 800], { texte_parasite: true, ou: "haut", nouveau_cadre: null })) === "[160,200,600,800]", tag + " : rognage du bord indiqué si nouveau_cadre absent");
+  ok(JSON.stringify(S.tightenFrame([100, 200, 600, 800], { texte_parasite: true, nouveau_cadre: [-200, -200, 1200, 1200] })) === "[100,200,600,800]", tag + " : garde-fou, ne jamais agrandir le cadre");
+  ok(JSON.stringify(S.tightenFrame([100, 200, 600, 800], { texte_parasite: true, nouveau_cadre: [0, 0, 200, 200] })) === "[100,200,600,800]", tag + " : garde-fou, cadre < 15 % de l'ancien refusé");
+  ok(JSON.stringify(S.tightenFrame([100, 200, 600, 800], { texte_parasite: true, nouveau_cadre: [500, 0, 1000, 1000] }, [[220, 300, 260, 450]])) === "[220,200,600,800]", tag + " : garde-fou, un masque existant n'est jamais coupé");
+  let calls = 0;
+  const r1 = await S.checkCroppedSchema({
+    frame: [100, 100, 600, 900],
+    masks: [[300, 300, 340, 420]],
+    front: "Quelle est cette partie ?",
+    back: "Axone",
+    renderCrop: async (f) => f.join(","),
+    askGemini: async () => { calls++; return calls < 3 ? { texte_parasite: true, ou: "haut", nouveau_cadre: [100, 0, 1000, 1000], reponse_visible: false } : { texte_parasite: false, reponse_visible: false }; },
+  });
+  ok(r1.tightened && r1.tries === 3 && r1.frame[0] > 100 && r1.masks.length === 1, tag + " : resserrage vérifié sur l'image découpée (3 essais max)", JSON.stringify(r1));
+  const r2 = await S.checkCroppedSchema({
+    frame: [100, 100, 600, 900],
+    masks: [[300, 300, 340, 420]],
+    front: "Quelle est cette partie ?",
+    back: "Axone",
+    renderCrop: async () => "img",
+    askGemini: async () => ({ texte_parasite: false, reponse_visible: true, cacher: [] }),
+  });
+  ok(r2.box.length === 4 && r2.masks.length === 0, tag + " : réponse visible non masquable → schéma au dos seulement (4 nombres, jamais supprimée)", JSON.stringify(r2));
 }
 // Schémas (appli) : carte de schéma recadrée, agrandissement, page entière ; message quand un 2e import n'apporte rien.
 async function schemasCartes(browser) {
@@ -1895,9 +1924,11 @@ let BASE;
   const browser = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] });
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => only ? only.includes(n) : n !== "chasse" && n !== "apercu";
-    if (want("sweep")) for (const [w, h] of [[390, 844], [1280, 800]]) for (const theme of ["light", "dark"]) await sweep(browser, w, h, theme);
+    if (want("sweep")) await Promise.all([[390, 844, "light"], [390, 844, "dark"], [1280, 800, "light"], [1280, 800, "dark"]].map(([w, h, theme]) => sweep(browser, w, h, theme)));
     const SUITES = { apercu, profFichier, schemaPlat, ongletRetour, paris, adminPage, schemasAnciens, cartesFormules, chronoBlanc, plusOptions, refonte, multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
-    for (const [n, f] of Object.entries(SUITES)) if (want(n)) await f(browser);
+    const todo = Object.entries(SUITES).filter(([n]) => want(n)), jobs = Math.max(1, +(process.env.JOBS || 4));
+    let idx = 0;
+    await Promise.all(Array.from({ length: Math.min(jobs, todo.length) }, async () => { while (idx < todo.length) { const [, f] = todo[idx++]; await f(browser); } }));
   } catch (e) { failures++; log.push("EXCEPTION " + (e.stack || e)); }
   await browser.close(); server.close();
   const bad = log.filter(l => !l.startsWith("ok"));
