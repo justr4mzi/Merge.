@@ -121,7 +121,23 @@ function texSafeJson(t: string) {
 }
 function parseJson(text: string) {
   const t = text.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
-  return JSON.parse(texSafeJson(t));
+  const j = texSafeJson(t);
+  try { return JSON.parse(j); } catch (_) { return JSON.parse(ctrlSafe(j)); }
+}
+// L'IA met parfois un vrai retour à la ligne (ou une tabulation) DANS un texte JSON : « Bad control character ». On les échappe, seulement à l'intérieur des chaînes.
+function ctrlSafe(t: string) {
+  let out = "", inStr = false, esc = false;
+  for (const ch of t) {
+    if (inStr) {
+      if (esc) { esc = false; out += ch; continue; }
+      if (ch === "\\") { esc = true; out += ch; continue; }
+      if (ch === '"') { inStr = false; out += ch; continue; }
+      const c = ch.charCodeAt(0);
+      if (c < 0x20) { out += ch === "\n" ? "\\n" : ch === "\r" ? "\\r" : ch === "\t" ? "\\t" : "\\u" + c.toString(16).padStart(4, "0"); continue; }
+      out += ch;
+    } else { if (ch === '"') inStr = true; out += ch; }
+  }
+  return out;
 }
 const cours = (t: string) => `Voici le cours :\n<<<\n${t}\n>>>\n\n`;
 const clip = (v: unknown, n: number) => String(v ?? "").slice(0, n);
