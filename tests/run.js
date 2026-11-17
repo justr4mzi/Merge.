@@ -524,10 +524,28 @@ async function methodeBac(browser) {
   ok(await page.evaluate(() => !!localStorage.getItem("merge.methode.s1") && window.__mergeSync.synced("merge.methode.s1")), "fiche méthode : gardée et synchronisée");
   await go(page, "#bac-s1", 300); await page.fill("#by", "1999"); await page.click("#bgo"); await page.waitForTimeout(400);
   ok((await txt(page)).includes("Pas de sujet officiel"), "sujets : rien d'inventé si introuvable");
-  await page.fill("#by", ""); await page.click("#bgo"); await page.waitForTimeout(400);
+  await page.evaluate(() => { window.__fake.bacDelay = 220; window.__notifs = []; function FakeNotif(title, opts) { window.__notifs.push({ title, body: opts && opts.body }); } FakeNotif.permission = "granted"; FakeNotif.requestPermission = async () => "granted"; window.Notification = FakeNotif; try { delete navigator.serviceWorker; } catch (e) {} });
+  await page.fill("#by", ""); await page.click("#bgo"); await page.waitForTimeout(40);
+  ok(await page.locator("#bprog").count() === 1 && (await page.locator("#bstat").innerText()).includes("Recherche du sujet officiel"), "sujets : barre de progression affichée pendant la recherche");
+  await page.screenshot({ path: path.join(SHOTS, "393-bac-prog.png") });
+  await page.waitForTimeout(350);
   ok((await txt(page)).includes("Source") && (await txt(page)).includes("2024") && await page.evaluate(() => window.__fake.bacStudio === 2), "sujets : épreuve avec source et année (recherche faite par la fonction studio)");
+  ok(await page.evaluate(() => window.__notifs.some(n => n.title === "Sujet prêt" && /SVT/.test(n.body))), "sujets : notification envoyée à la fin du chargement");
   await page.click("[data-k]"); await page.waitForTimeout(150); ok((await txt(page)).includes("Correction"), "sujets : correction affichée");
   let sm = await small(page); ok(!sm.length, "sujets : boutons de 44 px minimum", sm.join(" | ")); let o = await overflow(page); ok(o.sw <= o.iw, "sujets : pas de débordement", JSON.stringify(o));
+  // Résumé : 4 types (Cours complet, Résumé, Plus court, Encore plus court) et mise en cache de chaque version.
+  await go(page, "#resume-c1", 300);
+  ok(await page.locator(".summodes [data-sm]").count() === 4 && await page.locator('#norm[aria-pressed="true"]').count() === 1, "résumé : 4 boutons de format, « Résumé » actif par défaut");
+  await page.click("#long"); await page.waitForTimeout(250);
+  ok((await page.locator("#sumbox").innerText()).includes("Résumé detailler") && await page.locator('#long[aria-pressed="true"]').count() === 1, "résumé : bouton « Cours complet »");
+  await page.click("#short"); await page.waitForTimeout(250);
+  ok((await page.locator("#sumbox").innerText()).includes("Résumé raccourcir") && await page.locator('#short[aria-pressed="true"]').count() === 1, "résumé : bouton « Plus court »");
+  await page.click("#vshort"); await page.waitForTimeout(250);
+  ok((await page.locator("#sumbox").innerText()).includes("Résumé ultracourt") && await page.locator('#vshort[aria-pressed="true"]').count() === 1, "résumé : bouton « Encore plus court »");
+  const callsBefore = await page.evaluate(() => window.__fake.calls);
+  await page.click("#norm"); await page.waitForTimeout(100);
+  await page.click("#long"); await page.waitForTimeout(100);
+  ok(await page.evaluate(() => window.__fake.calls) === callsBefore && (await page.locator("#sumbox").innerText()).includes("Résumé detailler"), "résumé : revenir à un format déjà généré est immédiat (0 appel IA)");
   ok(!page.errors.length, "méthode et sujets : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
 }
 

@@ -208,7 +208,7 @@
   function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   // Ces clés sont gardées sur l'appareil ET dans le compte (table user_kv) : on retrouve la même chose sur téléphone et sur PC.
   // Restent sur l'appareil seulement : kvts (horodatages), file (révisions en attente d'envoi), cache.* et gen.* (copies de la base), erreurs.* (copie de secours de la table mistakes). Le thème est dans le profil.
-  const SYNC = /^merge\.(paris|fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|profTip|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|controles|boostnext|boostj|journee|exo\..+|prof|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
+  const SYNC = /^merge\.(paris|fav|typed|resume|pomomute|pomocfg|badges|level|voice|rate|lofivol|lofi|cmore|noinstall|tuto|profTip|note\..+|hl\..+|occl\..+|hist\..+|time\..+|libre\..+|examch\..+|mixsel|controles|boostnext|boostj|journee|exo\..+|prof|boss\..+|mnemo\..+|rewards|wallet|edt|vengine|redresse|methode\..+|bac\..+|sumv\..+|ecoute\..+|flash\..+|jobseen\..+)$/;
   let kvTs = {}, kvQueue = {}, kvTimer = null, kvOff = false, kvAt = 0;
   try { kvTs = JSON.parse(localStorage.getItem("merge.kvts") || "{}") || {}; } catch (e) { kvTs = {}; }
   const kvSaveTs = () => { try { localStorage.setItem("merge.kvts", JSON.stringify(kvTs)); } catch (e) { /* rien */ } };
@@ -1718,6 +1718,12 @@
   }
 
   // ---------- résumé ----------
+  const SUM_MODES = [
+    ["detailler", "Cours complet", "long", "Tout le cours développé avec explications et exemples"],
+    ["normal", "Résumé", "norm", "L'essentiel du chapitre, écrit uniquement à partir de ton cours"],
+    ["raccourcir", "Plus court", "short", "Résumé plus court : le but du chapitre, les définitions et les notions clés"],
+    ["ultracourt", "Encore plus court", "vshort", "Résumé très court : uniquement les points indispensables à retenir"],
+  ];
   async function screenSummary(id) {
     const ch = state.chapters.find(c => c.id === id); if (!ch) { location.hash = "#accueil"; return; }
     tabs.hidden = true; app.innerHTML = `<p class="muted">Chargement…</p>`;
@@ -1725,14 +1731,19 @@
     try { const r = state.offline ? { error: { message: "hors ligne" } } : await sb.from("summaries").select("*").eq("chapter_id", id).maybeSingle(); sum = r.data; error = r.error; } catch (e) { error = e; }
     if (sum) offlineKeep("merge.sum." + id, sum); else if (error) { try { sum = JSON.parse(safeGet("merge.sum." + id) || "null"); } catch (e) { sum = null; } if (sum) toast("Hors ligne : résumé enregistré sur cet appareil."); }
     if (!sum) { location.hash = "#chapitre-" + id; return; }
+    const vk = "merge.sumv." + id; let vers = jget(vk, null) || {};
+    if (!SUM_MODES.some(m => vers[m[0]])) { vers = { active: "normal", normal: sum.markdown }; jset(vk, vers); }
+    let curMode = SUM_MODES.some(m => m[0] === vers.active) ? vers.active : "normal";
+    if (!vers[curMode]) { vers[curMode] = sum.markdown; jset(vk, vers); }
     function view() {
+      const mInfo = SUM_MODES.find(m => m[0] === curMode) || SUM_MODES[1];
       app.innerHTML = `<div class="row between"><a class="iconbtn" href="#chapitre-${id}" aria-label="Retour au chapitre">${I.back}</a><button class="btn sm ghost" id="edit">Modifier</button></div>
-        <h1>${esc(ch.name)}</h1><p class="small muted">L'essentiel du chapitre, écrit uniquement à partir de ton cours${sum.edited_by_user ? ", modifié par toi" : ""}.</p>
+        <h1>${esc(ch.name)}</h1><p class="small muted">${esc(mInfo[3])}${sum.edited_by_user ? ", modifié par toi" : ""}.</p>
+        <div class="summodes" role="group" aria-label="Type de résumé">${SUM_MODES.map(m => `<button class="btn sm ${curMode === m[0] ? "" : "ghost"}" id="${m[2]}" data-sm="${m[0]}" aria-pressed="${curMode === m[0]}">${m[1]}</button>`).join("")}</div>
+        <div id="msg" class="note"></div>
         <div class="card pad md" id="sumbox">${md(sum.markdown)}</div>
         <div class="row" style="flex-wrap:wrap"><button class="btn sm" id="hlb">Surligner la sélection</button><span class="small muted">Sélectionne un passage du résumé, puis touche ce bouton.</span></div>
-        <div class="card pad stack" id="hlbox"></div>
-        <div class="row"><button class="btn ghost grow" id="short">Raccourcir</button><button class="btn ghost grow" id="long">Détailler</button></div>
-        <div id="msg" class="note"></div>`;
+        <div class="card pad stack" id="hlbox"></div>`;
       $("edit").onclick = edit;
       const hk = "merge.hl." + id; let hls = jget(hk, []), lastSel = "";
       const wrap = (t) => { const w = document.createTreeWalker($("sumbox"), NodeFilter.SHOW_TEXT), nodes = []; while (w.nextNode()) nodes.push(w.currentNode); for (const n of nodes) { if (n.parentElement.closest("mark")) continue; const i = n.nodeValue.indexOf(t); if (i < 0) continue; const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + t.length); const mk = document.createElement("mark"); mk.className = "hl user"; r.surroundContents(mk); return true; } return false; };
@@ -1741,17 +1752,24 @@
       document.onselectionchange = () => { const sel = document.getSelection(), box = $("sumbox"); if (box && sel && sel.rangeCount && !sel.isCollapsed && box.contains(sel.anchorNode)) lastSel = sel.toString(); };
       $("hlb").onmousedown = e => e.preventDefault();
       $("hlb").onclick = () => { const parts = lastSel.split(/\n+/).map(x => x.trim()).filter(x => x.length >= 3); if (!parts.length) return toast("Sélectionne d'abord un passage du résumé."); let n = 0; parts.forEach(t => { if (!hls.includes(t) && wrap(t)) { hls.push(t); n++; } }); lastSel = ""; try { document.getSelection().removeAllRanges(); } catch (e) { /* rien */ } if (!n) return toast("Sélectionne un passage sans mise en forme au milieu (pas de gras)."); jset(hk, hls.slice(-40)); view(); };
+      const setBtns = (dis) => app.querySelectorAll("[data-sm]").forEach(b => { b.disabled = dis; });
       const regen = async (mode) => {
+        if (vers[mode] && !sum.edited_by_user) {
+          if (curMode === mode) return;
+          curMode = mode; vers.active = mode; sum.markdown = vers[mode]; jset(vk, vers); offlineKeep("merge.sum." + id, sum);
+          if (!state.offline) sb.from("summaries").update({ markdown: sum.markdown, updated_at: new Date().toISOString() }).eq("chapter_id", id);
+          view(); return;
+        }
         if (sum.edited_by_user && $("msg").dataset.ok !== mode) { $("msg").dataset.ok = mode; $("msg").textContent = "Tu as modifié ce résumé. Appuie encore une fois pour le remplacer."; return; }
-        $("short").disabled = $("long").disabled = true; $("msg").className = "note"; $("msg").textContent = "L'IA réécrit le résumé (1 appel)…";
+        setBtns(true); $("msg").className = "note"; $("msg").textContent = "L'IA prépare cette version (1 appel)…";
         try {
           const text = await courseText(id); if (!text.trim()) throw new Error("Le texte du cours n'est plus disponible.");
           const r = await ai({ action: "summary", mode, text });
           const up = await sb.from("summaries").update({ markdown: r.summary, edited_by_user: false, updated_at: new Date().toISOString() }).eq("chapter_id", id); if (up.error) throw up.error;
-          sum.markdown = r.summary; sum.edited_by_user = false; view();
-        } catch (e) { showErr($("msg"), e); $("short").disabled = $("long").disabled = false; }
+          sum.markdown = r.summary; sum.edited_by_user = false; curMode = mode; vers[mode] = r.summary; vers.active = mode; jset(vk, vers); offlineKeep("merge.sum." + id, sum); view();
+        } catch (e) { showErr($("msg"), e); setBtns(false); }
       };
-      $("short").onclick = () => regen("raccourcir"); $("long").onclick = () => regen("detailler");
+      app.querySelectorAll("[data-sm]").forEach(b => b.onclick = () => regen(b.dataset.sm));
     }
     function edit() {
       app.innerHTML = `<h1>Modifier le résumé</h1><div class="field"><label for="mdtxt">Texte (## pour un titre, - pour une liste)</label><textarea id="mdtxt" style="min-height:50vh">${esc(sum.markdown)}</textarea></div>
@@ -1760,7 +1778,7 @@
       $("save").onclick = async () => {
         const t = $("mdtxt").value.trim(); if (!t) return toast("Le résumé ne peut pas être vide.");
         const { error } = await sb.from("summaries").update({ markdown: t, edited_by_user: true, updated_at: new Date().toISOString() }).eq("chapter_id", id); if (error) return fail(error, "Résumé non enregistré");
-        sum.markdown = t; sum.edited_by_user = true; view(); toast("Résumé enregistré.");
+        sum.markdown = t; sum.edited_by_user = true; vers[curMode] = t; vers.active = curMode; jset(vk, vers); offlineKeep("merge.sum." + id, sum); view(); toast("Résumé enregistré.");
       };
     }
     view();
@@ -1866,7 +1884,7 @@
     if (j.status === "running" && !stale) { d.stage = STAGES.some(x => x[0] === j.stage) ? j.stage : "gen"; d.target = Math.max(d.target || 0, j.progress || 0); d.msg = j.message || d.msg; impEstimate(d); return impPaint(d); }
     clearTimeout(d.poll); d.pollTok = null; clearInterval(d.timer); d.busy = false; d.local = false;
     if (j.status === "done") {
-      d.shown = 100; d.ready = true; d.files = []; d.cache = {}; delete courseMemo[chId];
+      d.shown = 100; d.ready = true; d.files = []; d.cache = {}; delete courseMemo[chId]; safeSet("merge.sumv." + chId, "");
       try { await loadAll(); } catch (e) { /* les cartes arriveront au prochain chargement */ }
       d.doneHtml = jobDoneHtml(chId, j.result || {}); safeSet("merge.jobseen." + j.id, "1");
       const ch = state.chapters.find(c => c.id === chId);
@@ -1920,7 +1938,7 @@
   function impNotify(title, body) {
     try {
       if (!("Notification" in window) || Notification.permission !== "granted") return;
-      if (navigator.serviceWorker && navigator.serviceWorker.ready) navigator.serviceWorker.ready.then(r => r.showNotification(title, { body, icon: "icons/icon.svg", tag: "merge-import" })).catch(() => new Notification(title, { body }));
+      if (navigator.serviceWorker && navigator.serviceWorker.controller && navigator.serviceWorker.ready) navigator.serviceWorker.ready.then(r => r.showNotification(title, { body, icon: "icons/icon.svg", tag: "merge-import" })).catch(() => new Notification(title, { body }));
       else new Notification(title, { body });
     } catch (e) { /* notification non disponible */ }
   }
@@ -2761,24 +2779,57 @@
   }
 
   // ---------- vrais sujets de bac : l'IA cherche le sujet officiel sur le web (seulement quand l'élève clique) ----------
+  const BAC_JOBS = {};
   async function screenBac(id) {
     const s = state.subjects.find(x => x.id === id); if (!s) { location.hash = "#matieres"; return; }
     tabs.hidden = true; const key = "merge.bac." + id, head = `<div class="row"><a class="iconbtn" href="#matiere-${id}" aria-label="Retour">${I.back}</a><h1 class="grow">Sujets d'examen</h1></div>`;
     let list = jget(key, []), cur = null;
+    const progHtml = (pct) => {
+      const p = Math.max(6, Math.min(100, Math.round(pct || 6)));
+      const st = p < 38 ? "Recherche du sujet officiel sur le web…" : p < 72 ? "Lecture de l'énoncé et du barème…" : "Préparation des questions et des corrections…";
+      return `<div class="stack" style="margin-top:8px"><div class="bar big"><i id="bprog" style="width:${p}%"></i></div><div class="row between small muted"><span id="bstat" role="status">${st}</span><b id="bpct">${p} %</b></div><p class="small muted">Jusqu'à 2 minutes. Une notification te préviendra dès que le sujet est prêt.</p></div>`;
+    };
+    const paintProg = () => {
+      const j = BAC_JOBS[id]; if (!j || location.hash !== "#bac-" + id) return;
+      const p = Math.min(94, Math.round(6 + 88 * (1 - Math.exp(-(Date.now() - j.t0) / 22000))));
+      const b = $("bprog"), st = $("bstat"), pct = $("bpct");
+      if (b) b.style.width = p + "%";
+      if (pct) pct.textContent = p + " %";
+      if (st) st.textContent = p < 38 ? "Recherche du sujet officiel sur le web…" : p < 72 ? "Lecture de l'énoncé et du barème…" : "Préparation des questions et des corrections…";
+    };
     function home(msg) {
+      const busy = !!BAC_JOBS[id];
+      list = jget(key, []);
       app.innerHTML = head + `<p class="muted">${esc(s.name)} · ${esc((state.profile || {}).classe || "")}</p>
         <div class="card pad stack"><h2>Chercher un vrai sujet</h2><p class="small muted">L'IA cherche sur le web un sujet officiel des années précédentes (ta filière, ta matière), le transforme en épreuve interactive avec barème et correction, et cite la source. Si elle ne trouve pas de sujet officiel, elle le dit : rien n'est inventé.</p>
-          <div class="field"><label for="by">Année (facultatif)</label><input id="by" inputmode="numeric" maxlength="4" placeholder="Ex. 2024"></div><button class="btn" id="bgo">Chercher (1 appel IA)</button><div id="bmsg">${msg || ""}</div></div>
+          <div class="field"><label for="by">Année (facultatif)</label><input id="by" inputmode="numeric" maxlength="4" placeholder="Ex. 2024" value="${esc(busy ? BAC_JOBS[id].y : "")}"></div><button class="btn" id="bgo"${busy ? " disabled" : ""}>Chercher (1 appel IA)</button><div id="bmsg">${busy ? progHtml(6 + 88 * (1 - Math.exp(-(Date.now() - BAC_JOBS[id].t0) / 22000))) : (msg || "")}</div></div>
         ${list.length ? `<div class="stack"><h2>Tes sujets</h2>${list.map((x, k) => `<button class="card rowlink tilebtn" data-bs="${k}" style="text-align:left"><b>${esc(x.epreuve || s.name)} · ${esc(x.annee || "")}</b><span class="small muted">${esc(x.session || "")} · ${esc(x.source_nom || "")}</span></button>`).join("")}</div>` : ""}`;
       $("bgo").onclick = find; app.querySelectorAll("[data-bs]").forEach(b => b.onclick = () => { cur = list[+b.dataset.bs]; exam(); });
     }
     async function find() {
-      const y = $("by").value.trim(); $("bgo").disabled = true; $("bmsg").innerHTML = `<p class="muted" role="status">Recherche du sujet officiel… (jusqu'à 2 minutes)</p>`;
+      if (BAC_JOBS[id]) return;
+      const y = $("by").value.trim(), annee = /^\d{4}$/.test(y) ? y : "";
+      $("bgo").disabled = true; $("bmsg").innerHTML = progHtml(6);
+      ensurePush(true).catch(() => {});
+      const job = BAC_JOBS[id] = { t0: Date.now(), y, timer: setInterval(paintProg, 300) };
       try {
-        const r = await ai({ action: "bac", matiere: s.name, annee: /^\d{4}$/.test(y) ? y : "" }, "studio"); const c = (r && r.content) || {};
-        if (!c.trouve || !(c.exercices || []).length) { home(`<p class="note" role="status">${esc(c.message || "Je n'ai pas trouvé de sujet officiel pour ta filière et ta matière. Je préfère ne rien inventer.")}</p>`); return; }
-        list.unshift(c); list = list.slice(0, 10); jset(key, list); cur = c; exam();
-      } catch (e) { $("bgo").disabled = false; showErr($("bmsg"), e); }
+        const r = await ai({ action: "bac", matiere: s.name, subject_id: id, annee }, "studio"); const c = (r && r.content) || {};
+        clearInterval(job.timer); delete BAC_JOBS[id];
+        if ($("bprog")) { $("bprog").style.width = "100%"; if ($("bpct")) $("bpct").textContent = "100 %"; }
+        if (!c.trouve || !(c.exercices || []).length) {
+          const m = c.message || "Je n'ai pas trouvé de sujet officiel pour ta filière et ta matière. Je préfère ne rien inventer.";
+          if (!pushOn) impNotify("Recherche terminée", m);
+          if (location.hash === "#bac-" + id) home(`<p class="note" role="status">${esc(m)}</p>`); else toast(m);
+          return;
+        }
+        let l = jget(key, []); l.unshift(c); l = l.slice(0, 10); jset(key, l); list = l;
+        const doneMsg = "Le sujet officiel de " + s.name + (c.annee ? " (" + c.annee + ")" : "") + " est prêt.";
+        if (!pushOn) impNotify("Sujet prêt", doneMsg);
+        if (location.hash === "#bac-" + id) { cur = c; exam(); } else toast(doneMsg);
+      } catch (e) {
+        clearInterval(job.timer); delete BAC_JOBS[id];
+        if (location.hash === "#bac-" + id) { $("bgo").disabled = false; showErr($("bmsg"), e); } else toast(e.message || "Erreur pendant la recherche du sujet.");
+      }
     }
     function exam() {
       const c = cur, open = new Set();

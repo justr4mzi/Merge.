@@ -202,7 +202,13 @@ Deno.serve(async (req) => {
       const cards = (body.cards ?? []).slice(0, 100).map((c: any, i: number) => ({ i, front: c.front, back: c.back }));
       out = await runJson([{ text: cours(text) + `Cartes :\n${JSON.stringify(cards)}\n\n${REGLE}\nPour chaque carte, dis si la réponse est ENTIÈREMENT justifiée par le cours. Réponds en JSON strict : {"results":[{"i":0,"ok":true,"raison":""}]}` }], 0);
     } else if (body.action === "summary") {
-      const mode = body.mode === "detailler" ? "plus détaillé (600 à 1000 mots, avec les exemples du cours)" : "plus court (150 à 250 mots, seulement l'essentiel : le but du chapitre, les définitions principales et les notions clés)";
+      const mode = body.mode === "detailler"
+        ? "sous forme de cours complet et structuré (700 à 1200 mots : toutes les notions, explications, définitions, formules et exemples du cours, expliqués clairement partie par partie)"
+        : body.mode === "ultracourt"
+        ? "encore plus court, très condensé (70 à 130 mots : uniquement les 5 à 8 points vitaux, définitions et formules indispensables à retenir absolument)"
+        : body.mode === "normal"
+        ? "équilibré (250 à 500 mots : une ou deux phrases sur le but du chapitre, puis les définitions principales et les notions clés)"
+        : "plus court (150 à 250 mots, seulement l'essentiel : le but du chapitre, les définitions principales et les notions clés)";
       out.summary = await run([{ text: cours(text) + `${REGLE}\nÉcris un résumé ${mode} en Markdown (titres ## et listes -).` }], false, 0.2);
     } else if (body.action === "study") {
       const k = STUDY[String(body.kind)];

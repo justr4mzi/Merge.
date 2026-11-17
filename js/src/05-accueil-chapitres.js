@@ -349,6 +349,12 @@
   }
 
   // ---------- résumé ----------
+  const SUM_MODES = [
+    ["detailler", "Cours complet", "long", "Tout le cours développé avec explications et exemples"],
+    ["normal", "Résumé", "norm", "L'essentiel du chapitre, écrit uniquement à partir de ton cours"],
+    ["raccourcir", "Plus court", "short", "Résumé plus court : le but du chapitre, les définitions et les notions clés"],
+    ["ultracourt", "Encore plus court", "vshort", "Résumé très court : uniquement les points indispensables à retenir"],
+  ];
   async function screenSummary(id) {
     const ch = state.chapters.find(c => c.id === id); if (!ch) { location.hash = "#accueil"; return; }
     tabs.hidden = true; app.innerHTML = `<p class="muted">Chargement…</p>`;
@@ -356,14 +362,19 @@
     try { const r = state.offline ? { error: { message: "hors ligne" } } : await sb.from("summaries").select("*").eq("chapter_id", id).maybeSingle(); sum = r.data; error = r.error; } catch (e) { error = e; }
     if (sum) offlineKeep("merge.sum." + id, sum); else if (error) { try { sum = JSON.parse(safeGet("merge.sum." + id) || "null"); } catch (e) { sum = null; } if (sum) toast("Hors ligne : résumé enregistré sur cet appareil."); }
     if (!sum) { location.hash = "#chapitre-" + id; return; }
+    const vk = "merge.sumv." + id; let vers = jget(vk, null) || {};
+    if (!SUM_MODES.some(m => vers[m[0]])) { vers = { active: "normal", normal: sum.markdown }; jset(vk, vers); }
+    let curMode = SUM_MODES.some(m => m[0] === vers.active) ? vers.active : "normal";
+    if (!vers[curMode]) { vers[curMode] = sum.markdown; jset(vk, vers); }
     function view() {
+      const mInfo = SUM_MODES.find(m => m[0] === curMode) || SUM_MODES[1];
       app.innerHTML = `<div class="row between"><a class="iconbtn" href="#chapitre-${id}" aria-label="Retour au chapitre">${I.back}</a><button class="btn sm ghost" id="edit">Modifier</button></div>
-        <h1>${esc(ch.name)}</h1><p class="small muted">L'essentiel du chapitre, écrit uniquement à partir de ton cours${sum.edited_by_user ? ", modifié par toi" : ""}.</p>
+        <h1>${esc(ch.name)}</h1><p class="small muted">${esc(mInfo[3])}${sum.edited_by_user ? ", modifié par toi" : ""}.</p>
+        <div class="summodes" role="group" aria-label="Type de résumé">${SUM_MODES.map(m => `<button class="btn sm ${curMode === m[0] ? "" : "ghost"}" id="${m[2]}" data-sm="${m[0]}" aria-pressed="${curMode === m[0]}">${m[1]}</button>`).join("")}</div>
+        <div id="msg" class="note"></div>
         <div class="card pad md" id="sumbox">${md(sum.markdown)}</div>
         <div class="row" style="flex-wrap:wrap"><button class="btn sm" id="hlb">Surligner la sélection</button><span class="small muted">Sélectionne un passage du résumé, puis touche ce bouton.</span></div>
-        <div class="card pad stack" id="hlbox"></div>
-        <div class="row"><button class="btn ghost grow" id="short">Raccourcir</button><button class="btn ghost grow" id="long">Détailler</button></div>
-        <div id="msg" class="note"></div>`;
+        <div class="card pad stack" id="hlbox"></div>`;
       $("edit").onclick = edit;
       const hk = "merge.hl." + id; let hls = jget(hk, []), lastSel = "";
       const wrap = (t) => { const w = document.createTreeWalker($("sumbox"), NodeFilter.SHOW_TEXT), nodes = []; while (w.nextNode()) nodes.push(w.currentNode); for (const n of nodes) { if (n.parentElement.closest("mark")) continue; const i = n.nodeValue.indexOf(t); if (i < 0) continue; const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + t.length); const mk = document.createElement("mark"); mk.className = "hl user"; r.surroundContents(mk); return true; } return false; };
@@ -372,17 +383,24 @@
       document.onselectionchange = () => { const sel = document.getSelection(), box = $("sumbox"); if (box && sel && sel.rangeCount && !sel.isCollapsed && box.contains(sel.anchorNode)) lastSel = sel.toString(); };
       $("hlb").onmousedown = e => e.preventDefault();
       $("hlb").onclick = () => { const parts = lastSel.split(/\n+/).map(x => x.trim()).filter(x => x.length >= 3); if (!parts.length) return toast("Sélectionne d'abord un passage du résumé."); let n = 0; parts.forEach(t => { if (!hls.includes(t) && wrap(t)) { hls.push(t); n++; } }); lastSel = ""; try { document.getSelection().removeAllRanges(); } catch (e) { /* rien */ } if (!n) return toast("Sélectionne un passage sans mise en forme au milieu (pas de gras)."); jset(hk, hls.slice(-40)); view(); };
+      const setBtns = (dis) => app.querySelectorAll("[data-sm]").forEach(b => { b.disabled = dis; });
       const regen = async (mode) => {
+        if (vers[mode] && !sum.edited_by_user) {
+          if (curMode === mode) return;
+          curMode = mode; vers.active = mode; sum.markdown = vers[mode]; jset(vk, vers); offlineKeep("merge.sum." + id, sum);
+          if (!state.offline) sb.from("summaries").update({ markdown: sum.markdown, updated_at: new Date().toISOString() }).eq("chapter_id", id);
+          view(); return;
+        }
         if (sum.edited_by_user && $("msg").dataset.ok !== mode) { $("msg").dataset.ok = mode; $("msg").textContent = "Tu as modifié ce résumé. Appuie encore une fois pour le remplacer."; return; }
-        $("short").disabled = $("long").disabled = true; $("msg").className = "note"; $("msg").textContent = "L'IA réécrit le résumé (1 appel)…";
+        setBtns(true); $("msg").className = "note"; $("msg").textContent = "L'IA prépare cette version (1 appel)…";
         try {
           const text = await courseText(id); if (!text.trim()) throw new Error("Le texte du cours n'est plus disponible.");
           const r = await ai({ action: "summary", mode, text });
           const up = await sb.from("summaries").update({ markdown: r.summary, edited_by_user: false, updated_at: new Date().toISOString() }).eq("chapter_id", id); if (up.error) throw up.error;
-          sum.markdown = r.summary; sum.edited_by_user = false; view();
-        } catch (e) { showErr($("msg"), e); $("short").disabled = $("long").disabled = false; }
+          sum.markdown = r.summary; sum.edited_by_user = false; curMode = mode; vers[mode] = r.summary; vers.active = mode; jset(vk, vers); offlineKeep("merge.sum." + id, sum); view();
+        } catch (e) { showErr($("msg"), e); setBtns(false); }
       };
-      $("short").onclick = () => regen("raccourcir"); $("long").onclick = () => regen("detailler");
+      app.querySelectorAll("[data-sm]").forEach(b => b.onclick = () => regen(b.dataset.sm));
     }
     function edit() {
       app.innerHTML = `<h1>Modifier le résumé</h1><div class="field"><label for="mdtxt">Texte (## pour un titre, - pour une liste)</label><textarea id="mdtxt" style="min-height:50vh">${esc(sum.markdown)}</textarea></div>
@@ -391,7 +409,7 @@
       $("save").onclick = async () => {
         const t = $("mdtxt").value.trim(); if (!t) return toast("Le résumé ne peut pas être vide.");
         const { error } = await sb.from("summaries").update({ markdown: t, edited_by_user: true, updated_at: new Date().toISOString() }).eq("chapter_id", id); if (error) return fail(error, "Résumé non enregistré");
-        sum.markdown = t; sum.edited_by_user = true; view(); toast("Résumé enregistré.");
+        sum.markdown = t; sum.edited_by_user = true; vers[curMode] = t; vers.active = curMode; jset(vk, vers); offlineKeep("merge.sum." + id, sum); view(); toast("Résumé enregistré.");
       };
     }
     view();

@@ -98,7 +98,7 @@
     if (j.status === "running" && !stale) { d.stage = STAGES.some(x => x[0] === j.stage) ? j.stage : "gen"; d.target = Math.max(d.target || 0, j.progress || 0); d.msg = j.message || d.msg; impEstimate(d); return impPaint(d); }
     clearTimeout(d.poll); d.pollTok = null; clearInterval(d.timer); d.busy = false; d.local = false;
     if (j.status === "done") {
-      d.shown = 100; d.ready = true; d.files = []; d.cache = {}; delete courseMemo[chId];
+      d.shown = 100; d.ready = true; d.files = []; d.cache = {}; delete courseMemo[chId]; safeSet("merge.sumv." + chId, "");
       try { await loadAll(); } catch (e) { /* les cartes arriveront au prochain chargement */ }
       d.doneHtml = jobDoneHtml(chId, j.result || {}); safeSet("merge.jobseen." + j.id, "1");
       const ch = state.chapters.find(c => c.id === chId);
@@ -152,7 +152,7 @@
   function impNotify(title, body) {
     try {
       if (!("Notification" in window) || Notification.permission !== "granted") return;
-      if (navigator.serviceWorker && navigator.serviceWorker.ready) navigator.serviceWorker.ready.then(r => r.showNotification(title, { body, icon: "icons/icon.svg", tag: "merge-import" })).catch(() => new Notification(title, { body }));
+      if (navigator.serviceWorker && navigator.serviceWorker.controller && navigator.serviceWorker.ready) navigator.serviceWorker.ready.then(r => r.showNotification(title, { body, icon: "icons/icon.svg", tag: "merge-import" })).catch(() => new Notification(title, { body }));
       else new Notification(title, { body });
     } catch (e) { /* notification non disponible */ }
   }

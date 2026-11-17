@@ -547,6 +547,12 @@ Deno.serve(async (req) => {
       const { data: prof } = await admin.from("profiles").select("classe").eq("user_id", uid).maybeSingle();
       const r = await bacFind(serviceAccount(), prof?.classe || "", matiere, annee);
       await admin.rpc("ai_usage_bump", { p_user: uid, p_day: today(), p_in: r.tin, p_out: r.tout });
+      const sid = clip(body.subject_id, 60), url = sid ? `./#bac-${sid}` : "./#matieres", c = (r.content ?? {}) as Any;
+      if (c.trouve && Array.isArray(c.exercices) && c.exercices.length) {
+        await push(uid, `Le sujet officiel de ${matiere}${c.annee ? " (" + c.annee + ")" : ""} est prêt.`, url, "Sujet prêt");
+      } else {
+        await push(uid, String(c.message || `Aucun sujet officiel trouvé en ${matiere}.`), url, "Recherche terminée");
+      }
       return json({ content: r.content, usage: { calls: calls + 1, quota: QUOTA } });
     }
     if (body.action === "libre") {

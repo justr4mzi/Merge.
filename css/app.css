@@ -1846,3 +1846,9 @@ details.drop#tools[open],details.drop#cardsdrop[open]{padding-bottom:14px}
 .pqchips .chip{font-size:.8rem;padding:0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;justify-content:center;text-align:center}
 .pqchips .chip:last-child:nth-child(odd){grid-column:1 / -1}
 @media (max-width:359px){.pqchips{grid-template-columns:1fr}}
+
+/* Résumé du chapitre : 4 formats (Cours complet, Résumé, Plus court, Encore plus court), 2×2 sur téléphone et 4 en ligne sur PC. */
+.summodes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.summodes .btn.sm{padding:0 10px;font-size:.86rem;white-space:nowrap}
+.note:empty{display:none}
+@media (min-width:700px){.summodes{grid-template-columns:repeat(4,minmax(0,1fr))}}

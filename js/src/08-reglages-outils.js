@@ -337,24 +337,57 @@
   }
 
   // ---------- vrais sujets de bac : l'IA cherche le sujet officiel sur le web (seulement quand l'élève clique) ----------
+  const BAC_JOBS = {};
   async function screenBac(id) {
     const s = state.subjects.find(x => x.id === id); if (!s) { location.hash = "#matieres"; return; }
     tabs.hidden = true; const key = "merge.bac." + id, head = `<div class="row"><a class="iconbtn" href="#matiere-${id}" aria-label="Retour">${I.back}</a><h1 class="grow">Sujets d'examen</h1></div>`;
     let list = jget(key, []), cur = null;
+    const progHtml = (pct) => {
+      const p = Math.max(6, Math.min(100, Math.round(pct || 6)));
+      const st = p < 38 ? "Recherche du sujet officiel sur le web…" : p < 72 ? "Lecture de l'énoncé et du barème…" : "Préparation des questions et des corrections…";
+      return `<div class="stack" style="margin-top:8px"><div class="bar big"><i id="bprog" style="width:${p}%"></i></div><div class="row between small muted"><span id="bstat" role="status">${st}</span><b id="bpct">${p} %</b></div><p class="small muted">Jusqu'à 2 minutes. Une notification te préviendra dès que le sujet est prêt.</p></div>`;
+    };
+    const paintProg = () => {
+      const j = BAC_JOBS[id]; if (!j || location.hash !== "#bac-" + id) return;
+      const p = Math.min(94, Math.round(6 + 88 * (1 - Math.exp(-(Date.now() - j.t0) / 22000))));
+      const b = $("bprog"), st = $("bstat"), pct = $("bpct");
+      if (b) b.style.width = p + "%";
+      if (pct) pct.textContent = p + " %";
+      if (st) st.textContent = p < 38 ? "Recherche du sujet officiel sur le web…" : p < 72 ? "Lecture de l'énoncé et du barème…" : "Préparation des questions et des corrections…";
+    };
     function home(msg) {
+      const busy = !!BAC_JOBS[id];
+      list = jget(key, []);
       app.innerHTML = head + `<p class="muted">${esc(s.name)} · ${esc((state.profile || {}).classe || "")}</p>
         <div class="card pad stack"><h2>Chercher un vrai sujet</h2><p class="small muted">L'IA cherche sur le web un sujet officiel des années précédentes (ta filière, ta matière), le transforme en épreuve interactive avec barème et correction, et cite la source. Si elle ne trouve pas de sujet officiel, elle le dit : rien n'est inventé.</p>
-          <div class="field"><label for="by">Année (facultatif)</label><input id="by" inputmode="numeric" maxlength="4" placeholder="Ex. 2024"></div><button class="btn" id="bgo">Chercher (1 appel IA)</button><div id="bmsg">${msg || ""}</div></div>
+          <div class="field"><label for="by">Année (facultatif)</label><input id="by" inputmode="numeric" maxlength="4" placeholder="Ex. 2024" value="${esc(busy ? BAC_JOBS[id].y : "")}"></div><button class="btn" id="bgo"${busy ? " disabled" : ""}>Chercher (1 appel IA)</button><div id="bmsg">${busy ? progHtml(6 + 88 * (1 - Math.exp(-(Date.now() - BAC_JOBS[id].t0) / 22000))) : (msg || "")}</div></div>
         ${list.length ? `<div class="stack"><h2>Tes sujets</h2>${list.map((x, k) => `<button class="card rowlink tilebtn" data-bs="${k}" style="text-align:left"><b>${esc(x.epreuve || s.name)} · ${esc(x.annee || "")}</b><span class="small muted">${esc(x.session || "")} · ${esc(x.source_nom || "")}</span></button>`).join("")}</div>` : ""}`;
       $("bgo").onclick = find; app.querySelectorAll("[data-bs]").forEach(b => b.onclick = () => { cur = list[+b.dataset.bs]; exam(); });
     }
     async function find() {
-      const y = $("by").value.trim(); $("bgo").disabled = true; $("bmsg").innerHTML = `<p class="muted" role="status">Recherche du sujet officiel… (jusqu'à 2 minutes)</p>`;
+      if (BAC_JOBS[id]) return;
+      const y = $("by").value.trim(), annee = /^\d{4}$/.test(y) ? y : "";
+      $("bgo").disabled = true; $("bmsg").innerHTML = progHtml(6);
+      ensurePush(true).catch(() => {});
+      const job = BAC_JOBS[id] = { t0: Date.now(), y, timer: setInterval(paintProg, 300) };
       try {
-        const r = await ai({ action: "bac", matiere: s.name, annee: /^\d{4}$/.test(y) ? y : "" }, "studio"); const c = (r && r.content) || {};
-        if (!c.trouve || !(c.exercices || []).length) { home(`<p class="note" role="status">${esc(c.message || "Je n'ai pas trouvé de sujet officiel pour ta filière et ta matière. Je préfère ne rien inventer.")}</p>`); return; }
-        list.unshift(c); list = list.slice(0, 10); jset(key, list); cur = c; exam();
-      } catch (e) { $("bgo").disabled = false; showErr($("bmsg"), e); }
+        const r = await ai({ action: "bac", matiere: s.name, subject_id: id, annee }, "studio"); const c = (r && r.content) || {};
+        clearInterval(job.timer); delete BAC_JOBS[id];
+        if ($("bprog")) { $("bprog").style.width = "100%"; if ($("bpct")) $("bpct").textContent = "100 %"; }
+        if (!c.trouve || !(c.exercices || []).length) {
+          const m = c.message || "Je n'ai pas trouvé de sujet officiel pour ta filière et ta matière. Je préfère ne rien inventer.";
+          if (!pushOn) impNotify("Recherche terminée", m);
+          if (location.hash === "#bac-" + id) home(`<p class="note" role="status">${esc(m)}</p>`); else toast(m);
+          return;
+        }
+        let l = jget(key, []); l.unshift(c); l = l.slice(0, 10); jset(key, l); list = l;
+        const doneMsg = "Le sujet officiel de " + s.name + (c.annee ? " (" + c.annee + ")" : "") + " est prêt.";
+        if (!pushOn) impNotify("Sujet prêt", doneMsg);
+        if (location.hash === "#bac-" + id) { cur = c; exam(); } else toast(doneMsg);
+      } catch (e) {
+        clearInterval(job.timer); delete BAC_JOBS[id];
+        if (location.hash === "#bac-" + id) { $("bgo").disabled = false; showErr($("bmsg"), e); } else toast(e.message || "Erreur pendant la recherche du sujet.");
+      }
     }
     function exam() {
       const c = cur, open = new Set();

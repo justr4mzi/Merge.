@@ -104,6 +104,8 @@ Objectif : que Gemini juge **l'image découpée réelle**, pas des coordonnées.
 - Réglages sur PC : 2 colonnes. Pomodoro et minuteur dans un anneau. Plus de flou (lag).
 - Imports : cadre serré, règles strictes pour Gemini, étape de vérification `schcheck`, une seule carte par légende, page qui plante sautée.
 - Tous les schémas existants ont été repassés (`schema_recheck`). Quelques cadres ont été resserrés à la main.
+- Sujets d'examen (`#bac-<id>`) : barre de progression animée par étapes et notification (locale + Web Push serveur « Sujet prêt ») à la fin du chargement.
+- Résumé du chapitre (`#resume-<id>`) : 4 boutons de format (`Cours complet`, `Résumé`, `Plus court`, `Encore plus court`), mis en cache par chapitre (`merge.sumv.<id>`) et gérés par la fonction `ai`.
 
 ## 6. Phase actuelle
 
