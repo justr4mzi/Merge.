@@ -453,7 +453,7 @@ async function melange(browser) {
   const page = await open(browser, { w: 390, h: 844, theme: "light" });
   ok(await page.locator('a[href="#melange"]').count() === 1, "révision mélangée : bouton sur l'accueil");
   await go(page, "#melange", 500); ok(await page.locator("#flip").count() === 1, "révision mélangée : séance lancée");
-  await go(page, "#matiere-s1", 400); ok(await page.locator("a.revall").isVisible() && (await txt(page)).includes("Toute la matière"), "matière : réviser tous les chapitres bien visible");
+  await go(page, "#matiere-s1", 400); ok(await page.evaluate(() => { const l = document.querySelector("a.revall"); return l ? l.getAttribute("href") === "#revision-s1" && l.offsetParent !== null : document.querySelectorAll(".chline .mpill:not(.none)").length <= 1; }), "matière : réviser tous les chapitres bien visible (dès 2 chapitres avec des cartes)");
   let sm = await small(page); ok(!sm.length, "matière : boutons de 44 px minimum", sm.join(" | "));
   ok(!page.errors.length, "révision mélangée : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | ")); await page.context().close();
 }
@@ -1338,7 +1338,7 @@ async function journee(browser) {
     await page.click("#sheet [data-close]"); await page.waitForTimeout(150);
     ok(await page.locator(".jd").count() === 7 && await page.locator(".jd.on.now").count() === 1 && await page.locator("#jadd").count() === 1, tag + " : semaine, jour choisi, bouton +");
     // Ajouter « Maths/SVT 30 min » : chapitre choisi par Merge.
-    await page.click("#jadd"); await page.waitForTimeout(150);
+    await jm(page, "#jadd"); await page.waitForTimeout(150);
     ok(await page.locator('#sheet [data-bs][aria-pressed="true"]').count() === 0, tag + " : aucune matière imposée");
     await page.click('[data-bs="s1"]'); await page.waitForTimeout(50);
     ok(await page.locator("#sheet [data-bch]").count() >= 1 && await page.locator("#bauto").count() === 1, tag + " : les chapitres de la matière apparaissent, Merge peut choisir");
@@ -1444,7 +1444,7 @@ async function schemasServeur() {
   // Légendes : lues avec leur cadre, rattachées au schéma juste avant ; la légende réponse est cachée, sinon toutes.
   const lg = S.extractSchemas([{ text: "[[SCHEMA|100,100,600,900|Neurone]]\nUn neurone.\n[[LEGENDE|200,150,230,300|Dendrites]]\n[[LÉGENDE|400,700,430,860|Axone]]\n[[LEGENDE|950,950,990,990|Hors du schéma]]", path: "u/c/p1.jpg" }]);
   ok(lg.schemas[0].labels.length === 2 && lg.texts[0].includes("(légende : Axone)") && !/\[\[L/.test(lg.texts[0]), tag + " : légendes du schéma lues avec leur cadre (celle hors du schéma ignorée)", JSON.stringify(lg));
-  ok(JSON.stringify(S.labelMasks(lg.schemas[0], "l'axone")) === JSON.stringify([lg.schemas[0].labels[1].box]) && S.labelMasks(lg.schemas[0], "").length === 2 && S.labelMasks({ labels: [] }, "x").length === 0, tag + " : la légende réponse est cachée ; sans réponse précise, toutes");
+  ok(JSON.stringify(S.labelMasks(lg.schemas[0], "l'axone")) === JSON.stringify([lg.schemas[0].labels[1].box]) && S.labelMasks(lg.schemas[0], "").length === 2 && S.labelMasks({ labels: [] }, "x").length === 0 && S.labelMasks(lg.schemas[0], "Mitochondrie").length === 0, tag + " : la légende réponse est cachée ; sans réponse précise, toutes ; réponse introuvable : aucune (revérifiée ensuite)");
   const ex = S.extractSchemas([{ text: "Intro\n[[SCHEMA|100,100,600,900|Cycle cellulaire]]\nLe schéma montre…\n[[SCHEMA|1,1,2,2|Flèche]]", path: "u/c/p1.jpg" }, { text: "Texte collé [[SCHEMA|100,100,600,900|X]]", path: null }]);
   ok(ex.schemas.length === 1 && ex.schemas[0].id === "S1" && ex.schemas[0].path === "u/c/p1.jpg" && ex.texts[0].includes("[Schéma S1 : Cycle cellulaire]") && ex.texts[0].includes("[Schéma : Flèche]") && !/\[\[SCHEMA/.test(ex.texts.join("")), tag + " : repères remplacés, seuls les vrais schémas d'une photo gardés", JSON.stringify(ex));
   // Format vu au test réel avec Gemini (pages de cahier de tests/schemas) : séparateurs « | » au lieu de virgules.
@@ -1679,12 +1679,12 @@ async function planningPlus(browser) {
   await page.reload(); await page.waitForSelector("#app > *");
   await go(page, "#calendrier", 500); await page.evaluate(() => { const s = document.getElementById("sheet"); if (s) s.remove(); });
   // Bloc avec couleur choisie à la main.
-  await page.click("#jadd"); await page.waitForTimeout(150);
+  await jm(page, "#jadd"); await page.waitForTimeout(150);
   ok(await page.locator("#sheet [data-bc]").count() === 9, tag + " : choix de couleur (matière + 8)");
   await page.click('[data-bs="s1"]'); await page.click('#sheet [data-bc="#ec4899"]'); await page.fill("#bstart", "18:00"); await page.click("#bok"); await page.waitForTimeout(200);
   ok(await page.evaluate(() => { const r = document.querySelector(".jrow:not(.school)"); return r && r.style.getPropertyValue("--c") === "#ec4899" && JSON.parse(localStorage.getItem("merge.journee")).blocks[Object.keys(JSON.parse(localStorage.getItem("merge.journee")).blocks)[0]][0].color === "#ec4899"; }), tag + " : couleur gardée sur le bloc");
   // « Autre » : n'importe quelle activité, sans matière ni chapitre.
-  await page.click("#jadd"); await page.waitForTimeout(150); await page.click('[data-ba="libre"]'); await page.waitForTimeout(50);
+  await jm(page, "#jadd"); await page.waitForTimeout(150); await page.click('[data-ba="libre"]'); await page.waitForTimeout(50);
   ok(await page.locator('#sheet [data-bs][aria-pressed="true"]').count() === 0 && await page.locator("#sheet [data-bch]").count() === 0, tag + " : Autre, sans matière par défaut");
   await page.fill("#bstart", "21:00"); await page.click("#bok"); await page.waitForTimeout(150); ok(await page.locator("#sheet").count() === 1, tag + " : Autre sans nom ni matière refusé");
   await page.fill("#btitle", "Coloriage"); await page.click("#bok"); await page.waitForTimeout(200);
@@ -1701,7 +1701,7 @@ async function planningPlus(browser) {
   ok(await page.evaluate(() => { const m = document.getElementById("jmenubox"), r = m.getBoundingClientRect(); return !m.hidden && r.left >= 0 && r.right <= innerWidth && m.querySelectorAll("[role=menuitem]").length === 3; }), tag + " : menu + ouvert, 3 actions, dans l'écran");
   await page.mouse.click(10, 500); await page.waitForTimeout(100); ok(await page.locator("#jmenubox").isHidden(), tag + " : menu + refermé en touchant ailleurs");
   // Fenêtres : bouton Fermer.
-  await page.click("#jadd"); await page.waitForTimeout(150); ok(await page.locator("#sheet .sheetx").count() === 1 && await page.locator("#sheet .actbtn").count() === 7, tag + " : fenêtre d'ajout avec bouton Fermer et activités alignées");
+  await jm(page, "#jadd"); await page.waitForTimeout(150); ok(await page.locator("#sheet .sheetx").count() === 1 && await page.locator("#sheet .actbtn").count() === 7, tag + " : fenêtre d'ajout avec bouton Fermer et activités alignées");
   if (true) await page.screenshot({ path: path.join(SHOTS, "ajout-bloc-390.png") });
   await page.click("#sheet .sheetx"); await page.waitForTimeout(150); ok(await page.locator("#sheet").count() === 0, tag + " : le bouton Fermer ferme la fenêtre");
   // Dictée sans reconnaissance vocale du téléphone : enregistrement, transcrit par l'IA.
@@ -1738,7 +1738,7 @@ async function accueilV2(browser) {
   ok(await page.evaluate(() => !!localStorage.getItem("merge.bilanseen")), tag + " : bilan vu, plus proposé cette semaine");
   // Bloc : chapitre facultatif, durées longues et durée libre.
   await go(page, "#calendrier", 400); await page.evaluate(() => { const s = document.getElementById("sheet"); if (s) s.remove(); });
-  await page.click("#jadd"); await page.waitForTimeout(150); await page.click('[data-bs="s1"]'); await page.waitForTimeout(50);
+  await jm(page, "#jadd"); await page.waitForTimeout(150); await page.click('[data-bs="s1"]'); await page.waitForTimeout(50);
   ok(await page.locator('#sheet [data-bch][aria-pressed="true"]').count() === 0, tag + " : chapitre facultatif, aucun par défaut");
   // Plusieurs matières et plusieurs chapitres.
   await page.click('[data-bs="s2"]'); await page.waitForTimeout(50); await page.click('#sheet [data-bch] >> nth=0'); await page.click('#sheet [data-bch] >> nth=1'); await page.waitForTimeout(50);
@@ -1802,7 +1802,7 @@ async function audit(browser) {
     const sheets = [["#calendrier", "#jadd"], ["#calendrier", "#jai"], ["#calendrier", "#jctl"], ["#exos", "#pplus"], ["#exos", "#pctx"], ...(w < 1200 ? [["#exos", "#phist"]] : []), ["#edt", null], ["#reglages", null], ["#boutique", null], ["#recompenses", null]];
     for (const [hsh, sel] of sheets) {
       await go(page, hsh, 450); await page.evaluate(() => { const s = document.getElementById("sheet"); if (s) s.remove(); });
-      if (sel) { try { if (["#jai", "#jctl"].includes(sel)) await page.click("#jmenu", { timeout: 3000 }); await page.click(sel, { timeout: 3000 }); } catch (e) { probs.push(hsh + " " + sel + " → introuvable"); continue; } await page.waitForTimeout(350); }
+      if (sel) { try { if (["#jadd", "#jctl"].includes(sel)) await page.click("#jmenu", { timeout: 3000 }); await page.click(sel, { timeout: 3000 }); } catch (e) { probs.push(hsh + " " + sel + " → introuvable"); continue; } await page.waitForTimeout(350); }
       const res = await page.evaluate(() => {
         const out = [], root = document.getElementById("sheet") || document.getElementById("pdrawer") || document.getElementById("app"), R = root.querySelector(".sheet,.pdpanel") || root, rb = R.getBoundingClientRect();
         for (const el of R.querySelectorAll("*")) { const b = el.getBoundingClientRect(); if (!b.width) continue; if (b.right > rb.right + 1 && !el.closest(".chips,.pctx,.jweek,.seg")) out.push("dépasse : " + el.tagName + "." + String(el.className).split(" ")[0] + " « " + (el.innerText || "").slice(0, 25) + " »"); }

@@ -81,7 +81,10 @@ export function labelMasks(schema, masque) {
   if (m) {
     const mw = words(m).join(" ");
     const hit = labels.filter((l) => { const lw = words(l.text).join(" "); return lw && (lw === mw || lw.includes(mw) || mw.includes(lw) || similar(l.text, m) >= 0.5); });
+    // Toutes les légendes qui portent ce texte sont cachées (une légende écrite deux fois sur le schéma donnerait la réponse).
     if (hit.length) return hit.map((l) => l.box);
+    // Légende réponse introuvable : on ne cache rien plutôt que tout ; la revérification (étape « schcheck ») s'en occupe.
+    return [];
   }
   return labels.map((l) => l.box);
 }

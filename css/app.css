@@ -1682,15 +1682,7 @@ body[data-flame="bonbon"] .streak,[data-flameprev="bonbon"]{background:linear-gr
 @media (max-width:359px){.coinpill{padding:4px 7px;gap:3px}.homemusic{gap:0}.row.between > .logo{font-size:1.5rem}}
 .ctrlrow .ctdate,.ctrlrow .ctsub{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-/* 17 nov. (2) — Matière : 4 tuiles d'outils égales, contrôles en petit en bas. */
-.subtools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-@media (min-width:900px){.subtools{grid-template-columns:repeat(4,minmax(0,1fr))}}
-.stile{display:flex;align-items:center;gap:10px;min-height:64px;padding:10px 12px;border-radius:16px;background:var(--card);border:1px solid var(--line);color:var(--fg);text-decoration:none;font:inherit;text-align:left;cursor:pointer}
-.stile>svg{flex:none;width:22px;height:22px;color:var(--accent2,#9483ff)}
-.stile b{display:block;font-size:.95rem}
-.stile .small{display:block;font-size:.78rem;line-height:1.25}
-.stile[aria-expanded="true"]{border-color:var(--accent2,#9483ff)}
-@media (hover:hover) and (pointer:fine){.stile:hover{background:var(--card2)}}
+/* 17 nov. (2) — Matière : contrôles en petit en bas. */
 .ctrlbox.small2{gap:6px;padding-top:4px;border-top:1px solid var(--line)}
 .ctrlbox.small2 h3{margin:0;font-size:1rem;color:var(--muted)}
 .ctrlbox.small2 .linkbtn{display:inline-flex;align-items:center;gap:6px;min-height:44px;font-weight:800;font-size:.9rem}
@@ -1711,3 +1703,53 @@ body[data-flame="bonbon"] .streak,[data-flameprev="bonbon"]{background:linear-gr
 .today.mission .btn.ghost{background:rgba(255,255,255,.12);color:#fff;border-color:transparent}
 .today.mission h2{font-size:1.3rem}
 @media (min-width:900px){.today.mission{padding:26px 30px}.today.mission .btn.mgo{min-height:104px}.mgot b{font-size:1.9rem}.mgot span{font-size:1.05rem}.today.mission .mring{width:108px;height:108px}}
+
+/* Écran d'un chapitre (17 nov., 2e version) : « Plus d'outils » est grand et à part (on s'en sert souvent) ;
+   « Ajouter un cours », « Gérer le chapitre » et « Les cartes du chapitre » forment un petit groupe plus discret en dessous. */
+.moremodes{border:1.5px solid color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:22px;background:color-mix(in srgb,var(--accent) 10%,var(--card));padding:0 18px}
+.moremodes>summary{min-height:88px;gap:14px}
+.moremodes>summary .mico.big{width:56px;height:56px;border-radius:17px}
+.moremodes>summary .mtxt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.moremodes>summary .mtxt b{font-size:1.2rem;font-weight:900}
+.moremodes>summary .mtxt .small{color:var(--muted);line-height:1.3}
+.chsec{margin:18px 0 -4px;font-size:.95rem;color:var(--muted);font-weight:800}
+.addcourse,details.drop#tools,details.drop#cardsdrop{border:1px solid var(--line);border-radius:16px;background:var(--card);padding:0 14px}
+.addcourse,details.drop#tools>summary,details.drop#cardsdrop>summary{min-height:56px;gap:12px}
+.addcourse .mico,details.drop#tools>summary .mico,details.drop#cardsdrop>summary .mico{width:36px;height:36px;border-radius:11px}
+.addcourse .mico svg,details.drop#tools>summary .mico svg,details.drop#cardsdrop>summary .mico svg{width:19px;height:19px}
+.addcourse b,details.drop#tools>summary b,details.drop#cardsdrop>summary b{font-size:.98rem;font-weight:800}
+details.drop#tools[open],details.drop#cardsdrop[open]{padding-bottom:14px}
+
+/* Matière (17 nov., 3e version) : « toute la matière » sous le bouton Réviser, Dossiers à côté de Nouveau,
+   « Pour l'examen » en deux lignes. Grille Matières : le pourcentage toujours en bas, aligné d'une tuile à l'autre. */
+.todaycard .revall{display:inline-flex;align-items:center;gap:8px;min-height:44px;align-self:center;color:#fff;font-weight:800;text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(255,255,255,.4)}
+.todaycard .revall svg{width:18px;height:18px}
+.showsm{display:none}@media (max-width:420px){.showsm{display:inline}}
+#addG[aria-expanded="true"]{border-color:var(--accent)}
+.exlist{display:flex;flex-direction:column;gap:8px}
+.exline{display:flex;align-items:center;gap:12px;min-height:64px;padding:10px 12px;border-radius:16px;background:var(--card);border:1px solid var(--line);color:var(--fg);text-decoration:none}
+.exline b{display:block}.exline .small{display:block}
+@media (hover:hover) and (pointer:fine){.exline:hover{background:var(--card2)}}
+@media (min-width:900px){.exlist{display:grid;grid-template-columns:1fr 1fr}}
+.stiles .stile{justify-content:flex-start}
+.stiles .stile .srow{margin-top:auto}
+.stiles .stile .spill{margin-bottom:2px}
+/* Une puce dont le texte passe sur deux lignes (nom de chapitre long) : coins moins ronds, vraie marge autour du texte, aligné à gauche. */
+.chip{line-height:1.25;padding:9px 16px;text-align:left}
+#cchs .chip{display:inline-flex;align-items:center;gap:10px;border-radius:16px;padding:10px 16px;max-width:100%}
+/* Schéma sur les cartes (17 nov.) : beaucoup plus grand, surtout sur PC — le schéma est le cœur de la carte.
+   Sa hauteur suit celle de l'écran, en laissant la place aux boutons Faux / Juste sans défiler. */
+.face .txt .schema{width:min(100%,calc(clamp(220px,100vh - 430px,440px) * var(--ar,1.3)))}
+.face.b .txt:has(.schema) .schema{width:min(100%,calc(clamp(180px,100vh - 520px,360px) * var(--ar,1.3)))}
+@media (min-width:900px){
+  .flipwrap:has(.schema){min-height:calc(100vh - 250px)}
+  .face .txt:has(.schema){font-size:1.15em}
+  .face .txt .schema{width:min(100%,calc(clamp(300px,100vh - 400px,640px) * var(--ar,1.3)))}
+  .face.b .txt:has(.schema) .schema{width:min(100%,calc(clamp(260px,100vh - 460px,560px) * var(--ar,1.3)))}
+}
+.stiles .stile.sadd{justify-content:center;align-items:center}
+/* Liste des chapitres d'une matière : le nom tient sur deux lignes au lieu d'être coupé. */
+.chline b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.25}
+.chline .small{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+@media (max-width:379px){.hidexs{display:none}}
+#addG{min-width:44px;justify-content:center}

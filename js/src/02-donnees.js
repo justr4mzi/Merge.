@@ -286,7 +286,7 @@
     const c = ctrls().find(x => x.id === cid), s = c && state.subjects.find(x => x.id === c.s); if (!s) return;
     const chs = state.chapters.filter(x => x.subject_id === s.id), sel = new Set((c.ch || []).filter(x => chs.some(y => y.id === x)));
     const paint = el => {
-      el.querySelector("#cchs").innerHTML = chs.map(x => `<button type="button" class="chip" data-cc="${x.id}" aria-pressed="${sel.has(x.id)}" style="--c:${esc(s.color)}"><span class="dot"></span>&nbsp;${esc(x.name)}</button>`).join("");
+      el.querySelector("#cchs").innerHTML = chs.map(x => `<button type="button" class="chip" data-cc="${x.id}" aria-pressed="${sel.has(x.id)}" style="--c:${esc(s.color)}"><span class="dot" style="flex:none"></span><span>${esc(x.name)}</span></button>`).join("");
       el.querySelector("#ccall").setAttribute("aria-pressed", String(!sel.size));
       el.querySelector("#ccnote").textContent = sel.size ? "Ton plan de révision ne gardera que " + (sel.size > 1 ? "ces " + sel.size + " chapitres." : "ce chapitre.") : "Tous les chapitres de la matière sont au programme.";
       el.querySelectorAll("[data-cc]").forEach(b => b.onclick = () => { sel.has(b.dataset.cc) ? sel.delete(b.dataset.cc) : sel.add(b.dataset.cc); paint(el); });

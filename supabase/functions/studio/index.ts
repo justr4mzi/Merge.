@@ -4,7 +4,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 import { autoTitle } from "./titre.mjs";
-import { extractSchemas, dedupCards, labelMasks } from "./schemas.mjs";
+import { extractSchemas, dedupCards, labelMasks, cleanBox, cleanLabelBox } from "./schemas.mjs";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 const CORS = {
@@ -187,7 +187,7 @@ async function lirePages(sa: Any, sys: string, imgs: Part[], stall: number, firs
   // 1) Lecture. Les photos peuvent être des pages imprimées OU un cahier écrit à la main : on lit, on ne devine jamais.
   const LECTURE = "Transcris fidèlement et INTÉGRALEMENT le contenu de ces pages de cours, dans l'ordre, en texte : chaque titre, paragraphe, encadré, légende, note de bas de page et tableau, sans sauter aucune page ni aucune section. Décris en une ou deux phrases chaque schéma, graphique ou tableau à partir de ce qui est visible (légendes, axes, flèches). Écris les formules en LaTeX entre $…$ (voir FORMULES). N'ajoute rien, ne résume pas, ne corrige pas le contenu. " + REGLE +
     "\nCAHIER ÉCRIT À LA MAIN : lis lettre par lettre. Ne complète JAMAIS un mot, un nombre, une unité ou une formule à partir de ce que tu sais du sujet : écris seulement ce qui est réellement écrit sur la page. Fais très attention aux chiffres, virgules, puissances de 10, signes (+, −, =), indices, exposants et unités. Un mot ou un passage que tu ne lis pas avec certitude : écris [illisible] à sa place (jamais une supposition). Ignore les ratures barrées. Sépare les pages par une ligne [[PAGE]]." +
-    "\nSCHÉMAS : pour chaque vrai schéma, dessin légendé, graphique ou carte (pas un simple encadré de texte, pas un tableau), écris à sa place, seule sur une ligne, [[SCHEMA|ymin,xmin,ymax,xmax|titre court]] : les 4 nombres entiers sont le cadre qui entoure TOUT le schéma avec ses légendes, sur la page où il se trouve, de 0 à 1000 (0,0 = coin en haut à gauche). Juste après, décris-le en une ou deux phrases (ce qu'il représente), puis pour CHAQUE légende écrite sur le schéma (mot ou groupe de mots relié à une partie du dessin), une ligne [[LEGENDE|ymin,xmin,ymax,xmax|texte exact de la légende]] : les 4 nombres sont le cadre SERRÉ autour du texte de cette légende seulement (pas du trait ni du dessin), sur la même page, de 0 à 1000. 20 légendes au plus par schéma, 4 schémas au plus par page.";
+    "\nSCHÉMAS : pour chaque vrai schéma, dessin légendé, graphique ou carte (pas un simple encadré de texte, pas un tableau), écris à sa place, seule sur une ligne, [[SCHEMA|ymin,xmin,ymax,xmax|titre court]] : les 4 nombres entiers sont le cadre qui entoure TOUT le dessin avec ses légendes, et RIEN D'AUTRE : ni le titre du document (« Doc 2 : … »), ni la phrase d'explication en dessous, ni les paragraphes ou les autres schémas à côté. Ce cadre doit être SERRÉ : il s'arrête juste après la légende la plus éloignée. Coordonnées sur la page où il se trouve, de 0 à 1000 (0,0 = coin en haut à gauche). Juste après, décris-le en une ou deux phrases (ce qu'il représente), puis pour CHAQUE légende écrite sur le schéma (mot ou groupe de mots relié à une partie du dessin), une ligne [[LEGENDE|ymin,xmin,ymax,xmax|texte exact de la légende]] : les 4 nombres sont le cadre SERRÉ autour du texte de cette légende seulement (pas du trait ni du dessin), sur la même page, de 0 à 1000. Une légende écrite plusieurs fois sur le schéma : une ligne [[LEGENDE|…]] pour CHAQUE endroit où elle est écrite. N'oublie aucune légende, même petite ou en couleur. 20 légendes au plus par schéma, 4 schémas au plus par page.";
   let txt = await first([{ text: LECTURE }, ...imgs], stall >= 2 ? "minimal" : "low");
   // 2) Relecture : on compare la transcription aux photos, mot à mot, et on corrige ce qui ne correspond pas (surtout pour l'écriture à la main).
   if (stall < 2) try {
@@ -275,7 +275,7 @@ async function stepRun(id: string) {
       const avoid = (st.prevFronts as string[]).concat(P.avoid ?? [], st.cards.map((c: Any) => c.front)).slice(-300).map((x: Any) => clip(x, 160));
       const schList = schemas.filter((x) => part.includes(`[Schéma ${x.id} :`));
       const g = await askJson(uid, sa, sys, [{ text: cours(part) + `${REGLE}\nRéponds en JSON strict avec exactement ces clés :\n{"lang":"code langue du cours, ex. fr","title":"titre court du chapitre, repris du cours s'il en a un, 60 caractères au plus","summary":"résumé en Markdown de 250 à 500 mots","cards":[{"front":"question courte","back":"réponse courte et exacte","source_quote":"phrase EXACTE du cours qui justifie la réponse, 200 caractères max"}]}\nLe résumé doit faire comprendre le but et l'essence du chapitre : commence par une ou deux phrases « À quoi sert ce chapitre », puis les définitions principales et les notions clés incontournables (titres avec ## et listes avec -). Laisse de côté les détails superflus, les anecdotes et les exemples secondaires.\n${P.auto ? `NOMBRE DE CARTES : c'est toi qui choisis, assez pour que l'élève révise ABSOLUMENT TOUT ce cours sans rien laisser de côté : chaque définition, notion, propriété, formule (et chacune de ses grandeurs et unités), date, méthode, étape, exemple clé, cas particulier et schéma important = au moins une carte, et plusieurs cartes pour une notion riche (définition, exemple, piège). Pour ce passage, vise environ ${Math.min(want, Math.max(30, Math.round(part.length / 200)))} cartes (davantage si le cours est dense), ${want} au maximum, sans remplissage ni répétition. Couvre` : `Crée au maximum ${want} cartes, moins si le cours est court, en couvrant`} tout le cours (cours, diaporama, livret, vocabulaire : toutes les parties fournies). Une carte = une seule notion. Aucune carte sans source_quote tirée mot pour mot du cours. Ne crée AUCUNE carte sur un passage qui contient [illisible] ou dont le sens n'est pas sûr, et ne complète jamais un passage illisible avec tes connaissances.` +
-        (schList.length ? `\nSCHÉMAS : le cours contient des schémas, repérés par « [Schéma S1 : titre] » et suivis de leur description. Pour chaque schéma important (pas un dessin décoratif), crée 1 ou 2 cartes qui s'appuient sur l'image, avec la clé "schema":"S1" : la question se lit en regardant le schéma (ex. « Que représente ce schéma du cycle cellulaire ? », « Sur ce schéma du neurone, quel est le nom de la partie qui reçoit le message ? ») et nomme toujours son sujet (jamais « ce schéma » tout seul), sans jamais écrire l'identifiant S1, S2… dans la question ; la réponse vient de la description du schéma. Si la réponse est une légende du schéma (ex. « Comment s'appelle la partie qui reçoit le message ? » → « Dendrites »), ajoute "masque":"texte exact de cette légende" : elle sera cachée sur l'image côté question. Préfère ces cartes « quelle est la légende cachée » : elles font vraiment travailler le schéma. Les autres cartes n'ont pas de clé "schema". Schémas disponibles : ${schList.map((x) => x.id + " (" + x.titre + ")").join(", ")}.` : "") +
+        (schList.length ? `\nSCHÉMAS : le cours contient des schémas, repérés par « [Schéma S1 : titre] » et suivis de leur description. Pour chaque schéma important (pas un dessin décoratif), crée 1 ou 2 cartes qui s'appuient sur l'image, avec la clé "schema":"S1" : la question se lit en regardant le schéma (ex. « Que représente ce schéma du cycle cellulaire ? », « Sur ce schéma du neurone, quel est le nom de la partie qui reçoit le message ? ») et nomme toujours son sujet (jamais « ce schéma » tout seul), sans jamais écrire l'identifiant S1, S2… dans la question ; la réponse vient de la description du schéma. Si la réponse est une légende du schéma (ex. « Comment s'appelle la partie qui reçoit le message ? » → « Dendrites »), ajoute "masque":"texte exact de cette légende" : elle sera cachée sur l'image côté question. Préfère ces cartes « quelle est la légende cachée » : elles font vraiment travailler le schéma. RÈGLES STRICTES pour une carte de schéma : (1) la réponse ne doit JAMAIS être lisible sur l'image côté question : si elle est écrite sur le schéma, elle doit être dans "masque" (texte exact, tel qu'écrit sur le schéma) ; si elle est aussi écrite dans le titre ou dans une phrase autour du schéma, ne fais PAS cette carte ; (2) la question ne contient jamais la réponse ni un mot qui la donne ; (3) la question et la réponse parlent bien de la même légende ; (4) une même légende ne fait qu'une seule carte dans tout le cours, même si le schéma revient sur plusieurs pages. Les autres cartes n'ont pas de clé "schema". Schémas disponibles : ${schList.map((x) => x.id + " (" + x.titre + ")").join(", ")}.` : "") +
         (already ? `\nCE CHAPITRE A DÉJÀ UN COURS. Le nouvel envoi peut répéter une partie de ce qui existe (par exemple le même cours en cahier puis en PDF). Crée des cartes UNIQUEMENT pour les notions qui ne sont pas déjà couvertes par les questions existantes ci-dessous, même formulées autrement. Dans "summary", écris SEULEMENT les notions nouvelles par rapport au résumé existant (sans « À quoi sert ce chapitre », sans redire ce qu'il contient) ; s'il n'y a rien de nouveau, mets "summary":"" et "cards":[].\nRésumé existant :\n<<<\n${st.prevSummary || "(aucun)"}\n>>>` : "") +
         (avoid.length ? `\nCes questions existent déjà, ne les refais pas (même reformulées) : ${JSON.stringify(avoid)}` : "") }], 0.2);
       const pn = normQ(part);
@@ -292,7 +292,51 @@ async function stepRun(id: string) {
       if (ci === 0 && g.title) st.title = clip(g.title, 120);
       st.ci = ci + 1;
       const more = st.ci < chunks.length;
-      await setJob(id, { state: st, stage: more ? "gen" : "save", progress: Math.round(60 + 32 * st.ci / chunks.length), message: more ? `L'IA prépare le résumé et les cartes (partie ${st.ci + 1} sur ${chunks.length})…` : "Enregistrement…" });
+      const chk = !more && st.cards.some((c: Any) => c.sch);
+      await setJob(id, { state: st, stage: more ? "gen" : chk ? "schcheck" : "save", progress: Math.round(60 + 32 * st.ci / chunks.length), message: more ? `L'IA prépare le résumé et les cartes (partie ${st.ci + 1} sur ${chunks.length})…` : chk ? "Vérification des schémas…" : "Enregistrement…" });
+      return await kick(id);
+    }
+    // Revérification des cartes de schéma (17 nov.) : une page à la fois, l'IA regarde la photo avec les cases à cacher
+    // et contrôle chaque carte : la réponse est-elle vraiment cachée ? écrite ailleurs dans le cadre (titre, phrase, légende
+    // en double) ? le cadre déborde-t-il sur du texte inutile ? la question correspond-elle à la légende cachée ?
+    // Elle peut resserrer le cadre, ajouter des cases ; une carte impossible à rendre sûre est retirée.
+    if (job.stage === "schcheck") {
+      const paths = [...new Set(st.cards.filter((c: Any) => c.sch).map((c: Any) => (schemas.find((x) => x.id === c.sch) ?? {}).path).filter(Boolean))] as string[];
+      st.pi ??= 0;
+      const pth = paths[st.pi];
+      if (pth) {
+        try {
+          const list = st.cards.map((c: Any, k: number) => ({ c, k })).filter(({ c }: Any) => c.sch && (schemas.find((x) => x.id === c.sch) ?? {}).path === pth);
+          const lines = list.map(({ c }: Any, i: number) => {
+            const sc = schemas.find((x) => x.id === c.sch), box = c.frame ?? sc.box, hid = c.boxes ?? labelMasks(sc, c.masque);
+            const txts = (sc.labels ?? []).filter((l: Any) => hid.some((h: number[]) => h.join() === l.box.join())).map((l: Any) => l.text);
+            return `${i + 1}. cadre ${box.join(",")} | cases cachées : ${hid.length ? hid.map((h: number[]) => "[" + h.join(",") + "]").join(" ") + " (" + txts.join(" ; ") + ")" : "aucune"} | question : ${String(c.front).replace(/\s+/g, " ")} | réponse : ${String(c.back).replace(/\s+/g, " ")}`;
+          }).join("\n");
+          const dl = await admin.storage.from("cours").download(pth);
+          if (!dl.error && dl.data && list.length) {
+            const r = await gemini(sa, "Tu vérifies des cartes de révision faites à partir des schémas d'un cours. Tu es très exigeant : une carte dont la réponse se lit sur l'image est inutile.", [{ text: "Voici la photo d'une page de cours et des cartes de révision sur ses schémas. Pour chaque carte, l'élève voit seulement le CADRE (ymin,xmin,ymax,xmax de 0 à 1000 sur la page, 0,0 = coin en haut à gauche), avec les CASES CACHÉES recouvertes par un « ? ». Vérifie chaque carte avec soin :\n1) Avec ces cases cachées, la réponse (ou un mot qui la donne) se lit-elle encore QUELQUE PART dans le cadre : une autre légende, la même légende écrite deux fois, un titre, une phrase, une note ? Si oui, donne dans \"cacher\" le cadre SERRÉ de chaque endroit à cacher en plus (même repère).\n2) Chaque case cachée recouvre-t-elle bien toute la légende réponse ? Sinon, donne dans \"cacher\" le bon cadre serré.\n3) Le cadre contient-il du texte qui n'appartient pas au schéma (titre du document, paragraphe, autre schéma) ? Si oui, donne dans \"cadre\" un cadre plus serré qui garde tout le dessin et toutes ses légendes ; sinon \"cadre\" = null.\n4) La question correspond-elle à la légende cachée, et la réponse est-elle juste d'après la page ?\n\"garder\" = false si la carte ne peut pas être rendue sûre (réponse lisible ailleurs qu'on ne peut pas cacher sans détruire le schéma, question qui ne correspond pas, réponse fausse). Ne garde jamais une carte douteuse.\nRéponds en JSON : {\"cartes\":[{\"n\":1,\"garder\":true,\"cadre\":null,\"cacher\":[[0,0,0,0]],\"raison\":\"courte\"}]}\n\nCartes :\n" + lines }, { inlineData: { mimeType: "image/jpeg", data: b64(new Uint8Array(await dl.data.arrayBuffer())) } }], true, 0, "high");
+            const j: Any = parseJson(r.text) ?? {};
+            for (const x of (j.cartes ?? []) as Any[]) {
+              const it = list[(+x.n || 0) - 1]; if (!it) continue;
+              const c = it.c, sc = schemas.find((y) => y.id === c.sch);
+              if (x.garder === false) { c.drop = true; continue; }
+              let frame = c.frame ?? sc.box;
+              const nf = x.cadre ? cleanBox(Array.isArray(x.cadre) ? x.cadre.join(",") : x.cadre) : null;
+              const hid0 = c.boxes ?? labelMasks(sc, c.masque);
+              const extra = ((x.cacher ?? []) as Any[]).map((b) => cleanLabelBox(Array.isArray(b) ? b.join(",") : b)).filter(Boolean) as number[][];
+              const all = [...hid0, ...extra.filter((b) => !hid0.some((h: number[]) => h.join() === b.join()))];
+              // Le cadre resserré doit garder toutes les cases cachées.
+              if (nf && all.every((b) => b[0] >= nf[0] - 5 && b[1] >= nf[1] - 5 && b[2] <= nf[2] + 5 && b[3] <= nf[3] + 5)) frame = nf;
+              c.frame = frame; c.boxes = all.filter((b) => b[0] >= frame[0] - 30 && b[1] >= frame[1] - 30 && b[2] <= frame[2] + 30 && b[3] <= frame[3] + 30);
+              c.checked = true;
+            }
+          }
+        } catch (_e) { /* une page qu'on n'arrive pas à revérifier garde ses cartes telles qu'elles sont */ }
+      }
+      st.pi += 1;
+      const more = st.pi < paths.length;
+      if (!more) st.cards = st.cards.filter((c: Any) => !c.drop);
+      await setJob(id, { state: st, stage: more ? "schcheck" : "save", message: more ? `Vérification des schémas (page ${st.pi + 1} sur ${paths.length})…` : "Enregistrement…" });
       return await kick(id);
     }
     if (job.stage === "save") {
@@ -310,7 +354,7 @@ async function stepRun(id: string) {
       else if (old.data.edited_by_user) notes.push("Ton résumé modifié à la main a été gardé.");
       if (already && !cards.length) notes.push("Rien de nouveau : tout ce que tu as envoyé était déjà dans ce chapitre.");
       // Carte de schéma : la photo de la page + le cadre du schéma (image_box) ; l'appli n'affiche que le schéma recadré.
-      const rows = cards.map((c) => { const sc = c.sch ? schemas.find((x) => x.id === c.sch) : null; return { user_id: uid, chapter_id: job.chapter_id, front: c.front, back: c.back, source_quote: c.q, needs_check: c.bad || !c.q, image_path: sc ? sc.path : pageOf(c.q), image_box: sc ? [...sc.box, ...labelMasks(sc, c.masque)] : null }; });
+      const rows = cards.map((c) => { const sc = c.sch ? schemas.find((x) => x.id === c.sch) : null; return { user_id: uid, chapter_id: job.chapter_id, front: c.front, back: c.back, source_quote: c.q, needs_check: c.bad || !c.q, image_path: sc ? sc.path : pageOf(c.q), image_box: sc ? [...(c.frame ?? sc.box), ...(c.boxes ?? labelMasks(sc, c.masque))] : null }; });
       let ins: Any = rows.length ? await admin.from("cards").insert(rows).select("id") : { data: [], error: null };
       // Base sans la colonne image_box (migration pas encore faite) : on enregistre quand même, sans le recadrage.
       if (ins.error && /image_box/i.test(ins.error.message)) ins = await admin.from("cards").insert(rows.map(({ image_box: _b, ...r }) => r)).select("id");
