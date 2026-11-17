@@ -227,14 +227,15 @@ export async function checkCroppedSchema({ frame, masks, front, back, renderCrop
   const origFrame = frame.slice(0, 4).map((x) => Math.round(Number(x) || 0));
   let curFrame = origFrame.slice();
   let curMasks = groups(masks);
-  let tries = 0, lastRes = null;
+  let tries = 0, lastRes = null, lastErr = "";
   for (let attempt = 0; attempt < 3; attempt++) {
     tries = attempt + 1;
     let res = null;
     try {
       const imgB64 = await renderCrop(curFrame, curMasks);
       res = await askGemini(cropCheckPrompt(front, back), imgB64);
-    } catch (_e) {
+    } catch (e) {
+      lastErr = String(e?.message || e).slice(0, 200);
       break;
     }
     if (!res || typeof res !== "object") break;
@@ -273,5 +274,6 @@ export async function checkCroppedSchema({ frame, masks, front, back, renderCrop
     tightened: curFrame.join(",") !== origFrame.join(","),
     tries,
     lastRes,
+    err: lastErr,
   };
 }

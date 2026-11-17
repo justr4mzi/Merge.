@@ -65,13 +65,14 @@ async function accessToken(sa: Any) {
 }
 async function geminiJson(sa: Any, token: string, parts: Any[]) {
   const host = LOCATION === "global" ? "aiplatform.googleapis.com" : `${LOCATION}-aiplatform.googleapis.com`;
-  const res = await fetch(`https://${host}/v1/projects/${sa.project_id}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`, {
-    method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ systemInstruction: { parts: [{ text: "Tu aides un élève français à réviser avec des schémas de son cours. Tu ne réponds qu'à partir de ce qui est visible sur la photo." }] }, contents: [{ role: "user", parts }], generationConfig: { temperature: 0, responseMimeType: "application/json", thinkingConfig: { thinkingLevel: "high" } } }),
-  });
-  const data = await res.json();
+  const url = `https://${host}/v1/projects/${sa.project_id}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
+  const body: Any = { systemInstruction: { parts: [{ text: "Tu aides un élève français à réviser avec des schémas de son cours. Tu ne réponds qu'à partir de ce qui est visible sur la photo." }] }, contents: [{ role: "user", parts }], generationConfig: { temperature: 0, responseMimeType: "application/json", thinkingConfig: { thinkingLevel: "high" } } };
+  const send = () => fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  let res = await send();
+  let data = await res.json();
+  if (res.status === 400 && /thinking/i.test(JSON.stringify(data))) { delete body.generationConfig.thinkingConfig; res = await send(); data = await res.json(); }
   if (!res.ok) throw new Error("vertex: " + JSON.stringify(data).slice(0, 300));
-  const t = (data.candidates?.[0]?.content?.parts ?? []).map((p: Any) => p.text ?? "").join("").trim().replace(/^```(?:json)?/i, "").replace(/```$/, "");
+  const t = (data.candidates?.[0]?.content?.parts ?? []).map((p: Any) => p.text ?? "").join("").trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
   return JSON.parse(t);
 }
 // Mêmes règles que studio/schemas.mjs (cadre d'une légende, mots comparés).
@@ -208,6 +209,7 @@ async function schemaRecheck(only: number, dry: boolean) {
       cases: res.masks.length,
       dos: res.masks.length === 0,
       ou: res.lastRes?.ou || "",
+      err: res.err || "",
     });
   }
   return { only, pages: pages.length, path, dry, resserres: out.filter((x) => x.resserre).length, out };
