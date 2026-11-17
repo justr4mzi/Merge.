@@ -236,7 +236,21 @@ Deno.serve(async (req) => {
   const body = await req.json();
   // { action: "sign", paths: [...] } : liens temporaires (10 min) vers des pages de cours, pour relire un schéma à l'œil.
   if (body.action === "sign") { for (const p of (body.paths ?? []).slice(0, 20)) { const { data: u } = await admin.storage.from("cours").createSignedUrl(String(p), 600); console.log("sign " + p + " " + (u?.signedUrl ?? "")); } return J({ ok: true }); }
-  if (body.action === "schema_recheck") { const r = await schemaRecheck(Number.isInteger(body.only) ? body.only : -1, !!body.dry); console.log("schema_recheck " + JSON.stringify(r)); return J(r); }
+  if (body.action === "schema_recheck") {
+    const r = await schemaRecheck(Number.isInteger(body.only) ? body.only : -1, !!body.dry);
+    console.log("schema_recheck " + JSON.stringify(r));
+    const next = Array.isArray(body.next) ? body.next.map(Number).filter(Number.isInteger) : [];
+    if (next.length) {
+      const p = fetch(`${URL_}/functions/v1/diag`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-cron-secret": data.value },
+        body: JSON.stringify({ action: "schema_recheck", only: next[0], next: next.slice(1), dry: !!body.dry }),
+      }).catch(console.error);
+      const er = (globalThis as Any).EdgeRuntime;
+      if (er?.waitUntil) er.waitUntil(p);
+    }
+    return J(r);
+  }
   if (body.action === "schema_add") { const r = await schemaAdd((body.chapters ?? []).map(String), Number.isInteger(body.only) ? body.only : -1, !!body.dry); console.log("schema_add " + JSON.stringify(r)); return J(r); }
   if (body.action === "schema_fix") { const r = await schemaFix(!!body.dry, Number.isInteger(body.only) ? body.only : -1); console.log("schema_fix " + JSON.stringify(r)); return J(r); }
   // Recherche d'un vrai sujet d'examen : { action: "bac_test", classe, matiere, annee }.
