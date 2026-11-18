@@ -1861,3 +1861,8 @@ details.drop#tools[open],details.drop#cardsdrop[open]{padding-bottom:14px}
 .profschcap{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
 .profschcap>.small{flex:1 1 160px;min-width:0;line-height:1.35}
 .profschcap .schbtn{margin:0}
+/* Prof : un chapitre au nom très long en haut de la discussion ne sort plus de l'écran : nom coupé par « … », la croix
+   pour le retirer et le bouton « Modifier » restent visibles. */
+.pctx .pchip:not(.add){max-width:min(72vw,420px);min-width:0}
+.pctx .pchip .pcn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pctx .pchip .dot,.pctx .pchip .pchipx{flex:none}
