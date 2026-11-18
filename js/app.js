@@ -3707,7 +3707,7 @@
     const chIds = new Set(ctxChapters(ctx)), kept = [], out = [];
     for (const c of (state.cards || [])) {
       if (!chIds.has(c.chapter_id) || !schBox(c)) continue;
-      if (kept.some(x => sameSch(x, c) || x.image_path === c.image_path)) continue;
+      if (kept.some(x => sameSch(x, c))) continue;
       kept.push(c);
       const ch = state.chapters.find(x => x.id === c.chapter_id);
       out.push({ id: String(c.id), chap: ch ? ch.name : "", label: schCaption(c) });
@@ -3721,7 +3721,7 @@
     for (let i = 0; i < parts.length; i++) {
       if (i % 2 === 0) { if (parts[i].trim()) html += md(parts[i]); continue; }
       const sid = parts[i].trim(), c = (state.cards || []).find(x => String(x.id) === sid);
-      if (!c || !schBox(c) || shown.some(x => sameSch(x, c) || x.image_path === c.image_path)) continue;
+      if (!c || !schBox(c) || shown.some(x => sameSch(x, c))) continue;
       shown.push(c);
       html += `<figure class="profsch" data-psch="${esc(c.id)}">${schemaHtml(c, false, "")}<figcaption class="profschcap"><span class="small muted">${mx(schCaption(c))}</span><button type="button" class="chip sm schbtn" data-schzoom="${esc(c.id)}">${I.search}Agrandir le schéma</button></figcaption></figure>`;
     }
