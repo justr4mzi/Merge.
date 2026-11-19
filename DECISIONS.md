@@ -672,3 +672,4 @@ Ramzi a choisi les propositions A pour les trois écrans.
 - **Prof : chapitre au nom long** en haut de la discussion : nom coupé par « … », la croix et « Modifier » restent visibles.
 - **Accueil sur téléphone** : avec beaucoup de pièces et une longue série, la barre du haut passe à la ligne au lieu de déborder (l'écran était décalé à droite).
 - **Réglages > Apparence : « Couleur de l'appli »** : on choisit parmi ses couleurs, ou « Violet de base ». Avant, une couleur équipée (rouge pour Déborah) ne se changeait que depuis l'écran des récompenses, introuvable.
+- **Accueil sur téléphone** : la série (« N jours ») passe à droite de « Salut … » ; la barre du haut (logo, recherche, minuteur, musique, pièces) tient sur une ligne même avec beaucoup de pièces.

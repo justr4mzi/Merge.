@@ -1876,3 +1876,9 @@ details.drop#tools[open],details.drop#cardsdrop[open]{padding-bottom:14px}
 .app{overflow-x:clip}
 .colchips{flex-wrap:wrap;gap:8px}
 .colchips .dot{width:14px;height:14px;flex:none}
+/* Sur téléphone, la série (« N jours ») va à droite de « Salut … » : la barre du haut garde tout sur une seule ligne. */
+.hello .hstreak{display:none;flex:none;align-self:center}
+@media (max-width:520px){
+  .app > .row.between:first-child > .streak{display:none}
+  .hello .hstreak{display:inline-flex}
+}

@@ -592,6 +592,7 @@ async function apercu(browser) {
         if (r === "exos" && await page.locator('[data-rch="c1"]').count()) { await page.click('[data-rch="c1"]'); await page.waitForTimeout(150); }
         await page.fill("#exq", "Montre-moi les schémas à connaître"); await page.click("#exsend"); await page.waitForTimeout(600);
       }
+      if (process.env.PRE) await page.evaluate(process.env.PRE);
       await page.screenshot({ path: path.join(SHOTS, w + "-" + r + ".png"), fullPage: r !== "journee" });
       if (r === "exos" && await page.locator("#pplus").count()) { await page.click("#pplus"); await page.waitForTimeout(250); await page.screenshot({ path: path.join(SHOTS, w + "-exos-plus.png") }); await page.keyboard.press("Escape"); await page.waitForTimeout(150); }
       if (process.env.DBG) console.log(w, r, JSON.stringify(await page.evaluate(process.env.DBG)));
