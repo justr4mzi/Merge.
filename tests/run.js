@@ -714,6 +714,12 @@ async function ongletRetour(browser) {
     ok(await page.evaluate(() => document.getElementById("app").dataset.sec === "apparence"), tag + " : catégorie Apparence ouverte");
     await page.click('#tabs a[href="#reglages"]'); await page.waitForTimeout(300);
     ok(await page.evaluate(() => !document.getElementById("app").dataset.sec) && await page.locator('[data-open="apparence"]').isVisible(), tag + " : l'onglet Réglages revient à la liste");
+    // Réglages > Apparence : la couleur de l'appli se change ici (et « Violet de base » remet la couleur d'origine).
+    await page.evaluate(() => localStorage.setItem("merge.rewards", JSON.stringify(Object.assign(JSON.parse(localStorage.getItem("merge.rewards") || "{}"), { equip: { couleur: "c-ocean" } }))));
+    await go(page, "#reglages", 300); await page.click('[data-open="apparence"]'); await page.waitForTimeout(200);
+    ok(await page.locator('[data-col="c-violet"]').isVisible(), tag + " : Apparence propose « Violet de base »");
+    await page.click('[data-col="c-violet"]'); await page.waitForTimeout(300);
+    ok(await page.evaluate(() => JSON.parse(localStorage.getItem("merge.rewards")).equip.couleur === "c-violet" && !document.documentElement.style.getPropertyValue("--accent")), tag + " : « Violet de base » remet la couleur d'origine");
     // Retoucher l'onglet Prof : nouvelle discussion (l'ancienne reste dans l'historique).
     await go(page, "#exos", 300);
     await page.evaluate(k => localStorage.setItem(k, JSON.stringify({ cur: "pold", convs: [{ id: "pold", t: "Ancienne question", ctx: { ch: [], s: [] }, m: [{ r: "u", t: "Ancienne question" }, { r: "a", t: "Réponse du prof" }], at: Date.now() }] })), "merge.prof");

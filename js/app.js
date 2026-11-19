@@ -2462,6 +2462,11 @@
     const fd = d => new Date(d + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
     return { zone, label: (v[0] === "Été" ? "été, à partir du " + fd(v[1]) : v[0] + ", du " + fd(v[1]) + " au " + fd(v[2])) };
   }
+  function colorField() {
+    const st = rwState(), xp = xpInfo().xp, cur = (rwEquipped("couleur") || {}).id || "c-violet";
+    const own = REWARDS.filter(r => r.type === "couleur" && !r.perso && (r.id === "c-violet" || rwOwned(r, xp, st)));
+    return `<div class="field"><span class="label">Couleur de l'appli</span><div class="chips colchips">${own.map(r => `<button class="chip${r.id === cur ? " on" : ""}" data-col="${r.id}" aria-pressed="${r.id === cur}"><span class="dot" style="background:${esc(r.v || "#4b39c8")}"></span>${esc(r.id === "c-violet" ? "Violet de base" : r.n)}</button>`).join("")}</div><span class="small muted">D'autres couleurs se gagnent ou s'achètent dans la boutique.</span></div>`;
+  }
   function screenSettings() {
     drawTabs("reglages");
     const p = state.profile;
@@ -2486,7 +2491,8 @@
         <button class="btn" id="saveP">Enregistrer</button></div>
       <div class="card pad stack" data-sec-card="apparence"><h2>Apparence</h2>
         <div class="field"><span class="label">Thème</span>${chips("t", [["light", "Clair"], ["dark", "Sombre"], ["system", "Comme mon téléphone"]], p.theme)}</div>
-        <div class="field"><span class="label">Taille du texte</span>${chips("s", [["small", "Petit"], ["normal", "Normal"], ["large", "Grand"]], p.text_size)}</div></div>
+        <div class="field"><span class="label">Taille du texte</span>${chips("s", [["small", "Petit"], ["normal", "Normal"], ["large", "Grand"]], p.text_size)}</div>
+        ${colorField()}</div>
       <div class="card pad stack" data-sec-card="revision"><h2>Révision</h2>
         <div class="field"><span class="label">Avant un contrôle, revoir les cartes de ses chapitres tous les jours</span>${chips("boost", [["0", "Jamais"], ["3", "3 jours avant"], ["7", "7 jours avant"], ["14", "14 jours avant"]], String(boostDays()))}<p class="small muted">Ces cartes reviennent chaque jour, même réussies, jusqu'au contrôle. Les autres suivent la répétition espacée normale.</p></div>
         <div class="field"><span class="label">Sons et vibrations</span>${chips("snd", [["1", "Activés"], ["0", "Coupés"]], p.sounds === false ? "0" : "1")}</div>
@@ -2512,6 +2518,9 @@
     // Grand écran (17 nov.) : la liste à gauche, la section à droite (Profil par défaut), comme les réglages d'un ordinateur.
     const wide = () => matchMedia("(min-width:1100px)").matches;
     const mark = k => { app.querySelectorAll("[data-sec-card]").forEach(c => c.classList.toggle("on", c.dataset.secCard === k)); app.querySelectorAll(".setmenu [data-open]").forEach(b => b.classList.toggle("cur", b.dataset.open === k)); };
+    // Couleur de l'appli (19 nov.) : choisir parmi les couleurs que l'on possède, ou revenir au violet de base. Avant, seul
+    // l'écran des récompenses (difficile à trouver) permettait de changer une couleur équipée.
+    app.querySelectorAll("[data-col]").forEach(b => b.onclick = () => { const s2 = rwState(); s2.equip.couleur = b.dataset.col; rwSave(s2); applyRewards(); screenSettings(); toast("Couleur changée."); });
     const openSec = (k, keep) => { if (k) app.dataset.sec = k; else app.removeAttribute("data-sec"); mark(k || (wide() ? "profil" : null)); if (!keep && !wide()) window.scrollTo(0, 0); };
     // Un réglage changé redessine l'écran : la section ouverte reste ouverte, à la même hauteur.
     if (app.dataset.sec) openSec(app.dataset.sec, true); else mark(wide() ? "profil" : null);
