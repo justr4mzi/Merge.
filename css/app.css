@@ -1882,3 +1882,29 @@ details.drop#tools[open],details.drop#cardsdrop[open]{padding-bottom:14px}
   .app > .row.between:first-child > .streak{display:none}
   .hello .hstreak{display:inline-flex}
 }
+/* Accueil sur téléphone, version 2 (19 nov.) : tout tient sur la ligne du haut. Pièces et série forment une seule pastille
+   en deux parties (pièces | flamme + nombre de jours), le mot « jours » est caché ; la série n'est plus sous « Salut ». */
+.streak .stf{width:15px;height:15px;flex:none;margin-right:4px}
+.streak{display:inline-flex;align-items:center}
+@media (max-width:520px){
+  .app > .row.between:first-child{flex-wrap:nowrap;column-gap:6px}
+  .app > .row.between:first-child > .streak{display:inline-flex;margin-left:-6px;border-radius:0 999px 999px 0;padding-left:8px;border-left:1px solid color-mix(in srgb,var(--fg) 14%,transparent)}
+  .app > .row.between:first-child > .coinpill:has(+ .streak){border-radius:999px 0 0 999px;padding-right:8px}
+  .app > .row.between:first-child .stw{display:none}
+  .hello .hstreak{display:none!important}
+  .logo{font-size:min(1.6rem,7vw)}
+}
+@media (max-width:520px){
+  .app > .row.between:first-child > .coinpill{padding:0 7px 0 9px;gap:4px;font-size:.88rem;min-height:36px}
+  .app > .row.between:first-child > .streak{padding:0 10px 0 7px;font-size:.88rem;min-height:36px}
+  .app > .row.between:first-child .homemusic{gap:0}
+  .logo{font-size:min(1.45rem,6.4vw)}
+}
+@media (max-width:520px){
+  .app > .row.between:first-child > .grow{display:none}
+  .app > .row.between:first-child > .homemusic{margin-left:auto}
+  .app > .row.between:first-child > .coinpill,.app > .row.between:first-child > .streak{font-size:.82rem}
+  .app > .row.between:first-child > .coinpill svg{width:14px;height:14px}
+}
+/* Petits téléphones (moins de 386 px, iPhone SE…) : le logo laisse sa place pour que pièces et série restent visibles. */
+@media (max-width:385px){.app > .row.between:first-child > .logo{display:none}}
