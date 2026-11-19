@@ -674,3 +674,4 @@ Ramzi a choisi les propositions A pour les trois écrans.
 - **Réglages > Apparence : « Couleur de l'appli »** : on choisit parmi ses couleurs, ou « Violet de base ». Avant, une couleur équipée (rouge pour Déborah) ne se changeait que depuis l'écran des récompenses, introuvable.
 - **Accueil sur téléphone** : la série (« N jours ») passe à droite de « Salut … » ; la barre du haut (logo, recherche, minuteur, musique, pièces) tient sur une ligne même avec beaucoup de pièces.
 - **Accueil sur téléphone (v2)** : tout reste sur la ligne du haut ; pièces et série forment une seule pastille en deux parties (pièces | flamme + jours). Sous 386 px de large, le logo est caché pour garder la place.
+- **Accueil sur téléphone (v3)** : pièces et série en deux pastilles séparées, sur la ligne du haut.

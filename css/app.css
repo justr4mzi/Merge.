@@ -1908,3 +1908,11 @@ details.drop#tools[open],details.drop#cardsdrop[open]{padding-bottom:14px}
 }
 /* Petits téléphones (moins de 386 px, iPhone SE…) : le logo laisse sa place pour que pièces et série restent visibles. */
 @media (max-width:385px){.app > .row.between:first-child > .logo{display:none}}
+/* v3 : pièces et série en deux pastilles séparées (la pastille en deux parties ne plaisait pas). */
+@media (max-width:520px){
+  .app > .row.between:first-child > .streak{margin-left:0;border-radius:999px;border-left:0;padding:0 9px 0 7px}
+  .app > .row.between:first-child > .coinpill:has(+ .streak){border-radius:999px;padding:0 9px 0 8px}
+  .app > .row.between:first-child > .coinpill,.app > .row.between:first-child > .streak{gap:3px}
+  .app > .row.between:first-child .streak .stf{margin-right:2px}
+  .logo{font-size:min(1.3rem,6vw)}
+}
