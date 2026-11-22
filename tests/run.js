@@ -708,6 +708,23 @@ async function adminPage(browser) {
 }
 
 // Toucher l'onglet où l'on est déjà ramène à son écran d'arrivée (Réglages : referme la catégorie ouverte).
+// Chapitre dont le contrôle est passé : il sort tout seul de la révision du jour, et se remet d'un geste.
+async function chapRepos(browser) {
+  const page = await open(browser, { w: 390, h: 844, theme: "dark" }), tag = "repos";
+  const n = async () => { await go(page, "#reglages", 150); await go(page, "#accueil", 400); const t = await page.locator(".today").innerText().catch(() => ""); const m = t.match(/(\d+) cartes?/); return m ? +m[1] : 0; };
+  const before = await n();
+  const y = await page.evaluate(() => { const d = new Date(); d.setDate(d.getDate() - 2); return d.toISOString().slice(0, 10); });
+  await page.evaluate(d => localStorage.setItem("merge.controles", JSON.stringify([{ id: "x1", s: "s1", d, ch: ["c1"] }])), y);
+  const after = await n();
+  ok(before > 0 && after < before, tag + " : contrôle passé, les cartes du chapitre quittent la révision du jour", before + " → " + after);
+  await go(page, "#chapitre-c1", 500);
+  ok((await txt(page)).includes("Pas dans la révision du jour"), tag + " : le chapitre le dit");
+  await page.click("#restoff"); await page.waitForTimeout(300);
+  ok(await n() === before, tag + " : « Le remettre » le remet dans la révision du jour");
+  await go(page, "#chapitre-c1", 500); await page.click("#reston"); await page.waitForTimeout(300);
+  ok(await n() === after && (await page.evaluate(() => JSON.parse(localStorage.getItem("merge.chrest")).c1)) === "off", tag + " : on peut aussi le retirer à la main");
+  await page.close();
+}
 async function ongletRetour(browser) {
   for (const [w, h] of [[390, 844], [1440, 900]]) {
     const page = await open(browser, { w, h, theme: "dark" }), tag = "onglet " + w;
@@ -1988,7 +2005,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => only ? only.includes(n) : n !== "chasse" && n !== "apercu";
     if (want("sweep")) await Promise.all([[390, 844, "light"], [390, 844, "dark"], [1280, 800, "light"], [1280, 800, "dark"]].map(([w, h, theme]) => sweep(browser, w, h, theme)));
-    const SUITES = { apercu, profFichier, profSchemas, schemaPlat, ongletRetour, paris, adminPage, schemasAnciens, cartesFormules, chronoBlanc, plusOptions, refonte, multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
+    const SUITES = { apercu, chapRepos, profFichier, profSchemas, schemaPlat, ongletRetour, paris, adminPage, schemasAnciens, cartesFormules, chronoBlanc, plusOptions, refonte, multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
     const todo = Object.entries(SUITES).filter(([n]) => want(n)), jobs = Math.max(1, +(process.env.JOBS || 4));
     let idx = 0;
     await Promise.all(Array.from({ length: Math.min(jobs, todo.length) }, async () => { while (idx < todo.length) { const [, f] = todo[idx++]; await f(browser); } }));

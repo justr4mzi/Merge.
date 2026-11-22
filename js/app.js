@@ -348,7 +348,21 @@
     jset("merge.boostnext", m);
   }
   const fsrsDue = c => new Date(c.due_at).getTime() <= Date.now();
-  function dueCards(list) { const b = boostChapters(), m = b ? boostNext() : null, today = localDay(); return list.filter(c => fsrsDue(c) || (b && b.has(c.chapter_id) && (!m[c.id] || m[c.id] <= today))); }
+  // keep = true : on garde aussi les chapitres « au repos » (révision lancée exprès depuis le chapitre ou la matière).
+  function dueCards(list, keep) { const b = boostChapters(), m = b ? boostNext() : null, today = localDay(), r = keep ? null : restedChapters(); return list.filter(c => (!r || !r.has(c.chapter_id)) && (fsrsDue(c) || (b && b.has(c.chapter_id) && (!m[c.id] || m[c.id] <= today)))); }
+  // Chapitres « au repos » (22 nov.) : leur contrôle est passé, ils ne reviennent plus dans la révision du jour.
+  // Automatique : chapitre coché dans un contrôle dont la date est passée, et dans aucun contrôle à venir (ni contrôle à venir
+  // de toute la matière). À la main : merge.chrest = { idChapitre: "off" (retiré) | "on" (remis) }, qui l'emporte toujours.
+  function restedChapters() {
+    const today = localDay(), man = (() => { try { return JSON.parse(localStorage.getItem("merge.chrest") || "{}") || {}; } catch (_) { return {}; } })(), out = new Set();
+    let l = []; try { l = typeof ctrls === "function" ? ctrls() : []; } catch (_) { l = []; }
+    const future = l.filter(c => c.d >= today), subjOf = id => (state.chapters.find(c => c.id === id) || {}).subject_id;
+    for (const c of l) if (c.d < today && Array.isArray(c.ch)) for (const id of c.ch) if (!future.some(f => (Array.isArray(f.ch) ? f.ch.includes(id) : f.s === subjOf(id)))) out.add(id);
+    for (const [id, v] of Object.entries(man)) { if (v === "off") out.add(id); else if (v === "on") out.delete(id); }
+    return out;
+  }
+  function restWhy(id) { const v = (() => { try { return (JSON.parse(localStorage.getItem("merge.chrest") || "{}") || {})[id]; } catch (_) { return null; } })(); return v === "off" ? "main" : restedChapters().has(id) ? "auto" : null; }
+  function setRest(id, v) { let m = {}; try { m = JSON.parse(localStorage.getItem("merge.chrest") || "{}") || {}; } catch (_) {} m[id] = v; try { localStorage.setItem("merge.chrest", JSON.stringify(m)); } catch (_) {} }
   const VACANCES_ZONES = {
     A: [["Toussaint", "2026-10-17", "2026-11-01"], ["Noël", "2026-12-19", "2027-01-03"], ["Hiver", "2027-02-13", "2027-02-28"], ["Printemps", "2027-04-10", "2027-04-25"], ["Été", "2027-07-03", "2027-08-31"]],
     B: [["Toussaint", "2026-10-17", "2026-11-01"], ["Noël", "2026-12-19", "2027-01-03"], ["Hiver", "2027-02-20", "2027-03-07"], ["Printemps", "2027-04-17", "2027-05-02"], ["Été", "2027-07-03", "2027-08-31"]],
@@ -1396,7 +1410,7 @@
   // le prochain contrôle avec « Prêt à N % », puis les matières en tuiles. Le reste (semaine, plan du jour…) en dessous.
   function missionHtml(due, doneVal, unit, st) {
     const p = state.profile, goal = Math.max(1, +p.daily_goal_value || 1), pct = Math.min(100, Math.round(doneVal / goal * 100));
-    const extra = due - state.cards.filter(fsrsDue).length, mins = Math.max(1, Math.round(due * 0.5));
+    const rst = restedChapters(), extra = due - state.cards.filter(c => fsrsDue(c) && !rst.has(c.chapter_id)).length, mins = Math.max(1, Math.round(due * 0.5));
     return `<div class="card today mission"><div class="mtop"><div class="ring mring" style="--p:${pct}"><b>${doneVal}/${goal}</b></div><div class="grow"><h2>${pct >= 100 ? "Objectif du jour atteint" : "À réviser aujourd'hui"}</h2><p class="small muted">${pct >= 100 ? "Objectif atteint, bravo." : `${doneVal} ${unit} sur ${goal}`}</p><p class="mstreak${st ? " on" : ""}">${I.bolt}${st ? plural(st, "jour", "jours") + " d'affilée" : "Révise aujourd'hui pour lancer ta série"}</p></div></div>
       ${due ? `<a class="btn mgo" href="#cartes-jour">${I.play}<span class="mgot"><b>Réviser</b><span>${plural(due, "carte", "cartes")} · environ ${mins} min</span></span></a>${extra > 0 ? `<p class="small muted">dont ${extra} pour ton prochain contrôle</p>` : ""}`
         : `<p class="small muted"><span class="big">0 carte</span> à revoir : ${state.cards.length ? "tu es à jour." : "importe un cours pour avoir tes cartes."}</p>`}
@@ -1476,7 +1490,7 @@
     // du moins au plus maîtrisé juste après ; puis 4 tuiles égales (toute la matière, dossiers, méthode, vrais sujets) ; les contrôles
     // en petit tout en bas (on les ajoute surtout depuis le calendrier ou le planning). Revu le 17 nov. à la demande de Ramzi.
     const ups = isFree(s) ? [] : ctrlsOf(id).filter(c => c.d >= localDay()), ic = subjIcon(s.name);
-    const info = chs.map(c => { const cs = cardsOf(c.id); return { c, n: cs.length, m: cs.length ? mastery(cs) : -1, due: cs.filter(fsrsDue).length }; });
+    const rst2 = restedChapters(), info = chs.map(c => { const cs = cardsOf(c.id); return { c, n: cs.length, m: cs.length ? mastery(cs) : -1, due: rst2.has(c.id) ? 0 : cs.filter(fsrsDue).length }; });
     const todo = info.filter(x => x.n && x.due).sort((x, y) => x.m - y.m || y.due - x.due)[0] || info.filter(x => x.n && x.m < 100).sort((x, y) => x.m - y.m)[0];
     const sorted = info.slice().sort((x, y) => (x.n ? x.m : 1000) - (y.n ? y.m : 1000));
     const tone = m => m < 0 ? "none" : m < 30 ? "low" : m < 70 ? "mid" : "high";
@@ -1633,7 +1647,7 @@
     else (cr.data || []).forEach(c => { const m = state.cards.find(x => x.id === c.id); if (m && m.image_box) c.image_box = m.image_box; }); // cadre des schémas
     if (sr.error) sr = { data: safeGet("merge.sum." + id) ? { chapter_id: id } : null };
     if (location.hash !== here) return;
-    const cards = cr.data || [], meta = cardsOf(id), m = mastery(meta), due = dueCards(meta).length, hasSum = !!(sr.data);
+    const cards = cr.data || [], meta = cardsOf(id), m = mastery(meta), due = dueCards(meta, true).length, hasSum = !!(sr.data), rest = restWhy(id);
     // Cartes difficiles : celles déjà ratées au moins une fois (comme la séance « difficiles »).
     const hard = meta.filter(c => (c.wrong_count || 0) > 0).length;
     // Schémas à légender : en avant seulement si le chapitre a un schéma (carte recadrée ou schéma déjà préparé).
@@ -1683,10 +1697,13 @@
       ${chHead()}
       ${cards.length ? `<div id="modesbox" class="stack modesbox">${modesHtml()}</div>` : ""}
       ${cards.length ? `<h3 class="chsec">Le chapitre</h3>` : ""}
+      ${cards.length ? (rest ? `<div class="card pad restbox"><span class="mico">${I.check}</span><span class="grow"><b>Pas dans la révision du jour</b><span class="small muted">${rest === "auto" ? "Le contrôle de ce chapitre est passé : ses cartes ne reviennent plus chaque jour." : "Tu l'as retiré de la révision du jour."} Tu peux toujours le réviser ici.</span></span><button class="btn sm ghost" id="restoff">Le remettre</button></div>` : `<button class="card pad restbox restask" id="reston"><span class="mico">${I.check}</span><span class="grow"><b>Contrôle passé ?</b><span class="small muted">Retirer ce chapitre de la révision du jour</span></span></button>`) : ""}
       ${cards.length ? `<a class="card pad addcourse" href="#import-${id}"><span class="mico">${I.up}</span><b class="grow">Ajouter un cours</b><span class="small muted">PDF, photos…</span></a>` : `<div class="banner"><div><h2>Importe ton cours</h2><p class="small">PDF, photos, PowerPoint ou texte, autant de fichiers que tu veux. Merge prépare le résumé et les cartes à partir de ton cours, sans rien inventer.</p></div><a class="btn sm" href="#import-${id}">Importer</a></div>`}
       ${chapterToolsHtml(id)}
       <details class="card pad drop" id="cardsdrop"><summary><span class="mico">${I.cards}</span><b class="grow">${cards.length ? "Les " + plural(cards.length, "carte", "cartes") + " du chapitre" : "Cartes du chapitre"}</b></summary><div class="stack"><div class="row" style="flex-wrap:wrap"><button class="btn sm" id="tMore">Créer d'autres cartes avec l'IA</button><button class="btn sm ghost" id="tAdd">Ajouter une carte</button></div><div id="addbox"></div><div class="stack" id="list"></div></div></details>`;
     wireChapterTools(id, ch, cards); wireModes();
+    if ($("reston")) $("reston").onclick = () => { setRest(id, "off"); toast("Ce chapitre ne revient plus dans la révision du jour."); screenChapter(id); };
+    if ($("restoff")) $("restoff").onclick = () => { setRest(id, "on"); toast("Ce chapitre revient dans la révision du jour."); screenChapter(id); };
     if (!cards.length) return;
     const list = $("list");
     const drawCard = (c) => `<div class="card term" data-id="${c.id}">${picHtml(c)}<div class="row between"><b>${cfront(c, true)}</b>${c.needs_check ? '<span class="pill warn">À vérifier</span>' : ""}${c.flagged ? '<span class="pill warn">Signalée</span>' : ""}</div><p>${mx(c.back)}</p>${c.source_quote ? `<p class="quote">${esc(c.source_quote)}</p>` : ""}<div class="pagebox"></div><div class="tools">${c.image_path ? `<button class="mini" data-img="${c.id}">Voir la page</button>` : ""}<button class="mini" data-edit="${c.id}">Modifier</button><button class="mini" data-flag="${c.id}">${c.flagged ? "Retirer le signalement" : "Signaler"}</button><button class="mini" data-del="${c.id}">Supprimer</button></div></div>`;
@@ -2212,7 +2229,7 @@
     const backHref = backX || (scope === "jour" || scope === "melange" ? "#accueil" : subj ? "#matiere-" + scope : "#chapitre-" + scope);
     const pool = chIds ? state.cards.filter(c => chIds.includes(c.chapter_id)) : subj ? state.cards.filter(c => state.chapters.some(ch => ch.id === c.chapter_id && ch.subject_id === scope)) : cardsOf(scope);
     const single = scope !== "jour" && scope !== "melange" && !subj && !hard && !chIds;
-    let meta = scope === "jour" ? dueCards(state.cards) : dueCards(pool);
+    let meta = scope === "jour" ? dueCards(state.cards) : dueCards(pool, true);
     // Mélange choisi : les cartes à revoir d'abord, puis toutes les autres cartes de la sélection, mélangées.
     if (chIds && !hard) { const rest = shuffle(pool.filter(c => !meta.includes(c))); if (!meta.length) training = true; meta = meta.concat(rest); }
     // Révision mélangée : toutes les matières, les cartes à revoir et non maîtrisées d'abord, avec plus de poids pour les matières dont le contrôle approche.

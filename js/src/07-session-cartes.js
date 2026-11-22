@@ -9,7 +9,7 @@
     const backHref = backX || (scope === "jour" || scope === "melange" ? "#accueil" : subj ? "#matiere-" + scope : "#chapitre-" + scope);
     const pool = chIds ? state.cards.filter(c => chIds.includes(c.chapter_id)) : subj ? state.cards.filter(c => state.chapters.some(ch => ch.id === c.chapter_id && ch.subject_id === scope)) : cardsOf(scope);
     const single = scope !== "jour" && scope !== "melange" && !subj && !hard && !chIds;
-    let meta = scope === "jour" ? dueCards(state.cards) : dueCards(pool);
+    let meta = scope === "jour" ? dueCards(state.cards) : dueCards(pool, true);
     // Mélange choisi : les cartes à revoir d'abord, puis toutes les autres cartes de la sélection, mélangées.
     if (chIds && !hard) { const rest = shuffle(pool.filter(c => !meta.includes(c))); if (!meta.length) training = true; meta = meta.concat(rest); }
     // Révision mélangée : toutes les matières, les cartes à revoir et non maîtrisées d'abord, avec plus de poids pour les matières dont le contrôle approche.

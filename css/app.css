@@ -1916,3 +1916,8 @@ details.drop#tools[open],details.drop#cardsdrop[open]{padding-bottom:14px}
   .app > .row.between:first-child .streak .stf{margin-right:2px}
   .logo{font-size:min(1.3rem,6vw)}
 }
+/* Chapitre « au repos » (contrôle passé) : une ligne claire, et un bouton discret pour le retirer à la main. */
+.restbox{display:flex;align-items:center;gap:12px;min-height:56px;text-align:left;width:100%;font:inherit;color:var(--fg)}
+.restbox .grow{display:flex;flex-direction:column;min-width:0}
+.restask{cursor:pointer;background:transparent;border:1px dashed var(--line)}
+.restbox .btn{flex:none}

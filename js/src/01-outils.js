@@ -150,7 +150,21 @@
     jset("merge.boostnext", m);
   }
   const fsrsDue = c => new Date(c.due_at).getTime() <= Date.now();
-  function dueCards(list) { const b = boostChapters(), m = b ? boostNext() : null, today = localDay(); return list.filter(c => fsrsDue(c) || (b && b.has(c.chapter_id) && (!m[c.id] || m[c.id] <= today))); }
+  // keep = true : on garde aussi les chapitres « au repos » (révision lancée exprès depuis le chapitre ou la matière).
+  function dueCards(list, keep) { const b = boostChapters(), m = b ? boostNext() : null, today = localDay(), r = keep ? null : restedChapters(); return list.filter(c => (!r || !r.has(c.chapter_id)) && (fsrsDue(c) || (b && b.has(c.chapter_id) && (!m[c.id] || m[c.id] <= today)))); }
+  // Chapitres « au repos » (22 nov.) : leur contrôle est passé, ils ne reviennent plus dans la révision du jour.
+  // Automatique : chapitre coché dans un contrôle dont la date est passée, et dans aucun contrôle à venir (ni contrôle à venir
+  // de toute la matière). À la main : merge.chrest = { idChapitre: "off" (retiré) | "on" (remis) }, qui l'emporte toujours.
+  function restedChapters() {
+    const today = localDay(), man = (() => { try { return JSON.parse(localStorage.getItem("merge.chrest") || "{}") || {}; } catch (_) { return {}; } })(), out = new Set();
+    let l = []; try { l = typeof ctrls === "function" ? ctrls() : []; } catch (_) { l = []; }
+    const future = l.filter(c => c.d >= today), subjOf = id => (state.chapters.find(c => c.id === id) || {}).subject_id;
+    for (const c of l) if (c.d < today && Array.isArray(c.ch)) for (const id of c.ch) if (!future.some(f => (Array.isArray(f.ch) ? f.ch.includes(id) : f.s === subjOf(id)))) out.add(id);
+    for (const [id, v] of Object.entries(man)) { if (v === "off") out.add(id); else if (v === "on") out.delete(id); }
+    return out;
+  }
+  function restWhy(id) { const v = (() => { try { return (JSON.parse(localStorage.getItem("merge.chrest") || "{}") || {})[id]; } catch (_) { return null; } })(); return v === "off" ? "main" : restedChapters().has(id) ? "auto" : null; }
+  function setRest(id, v) { let m = {}; try { m = JSON.parse(localStorage.getItem("merge.chrest") || "{}") || {}; } catch (_) {} m[id] = v; try { localStorage.setItem("merge.chrest", JSON.stringify(m)); } catch (_) {} }
   const VACANCES_ZONES = {
     A: [["Toussaint", "2026-10-17", "2026-11-01"], ["Noël", "2026-12-19", "2027-01-03"], ["Hiver", "2027-02-13", "2027-02-28"], ["Printemps", "2027-04-10", "2027-04-25"], ["Été", "2027-07-03", "2027-08-31"]],
     B: [["Toussaint", "2026-10-17", "2026-11-01"], ["Noël", "2026-12-19", "2027-01-03"], ["Hiver", "2027-02-20", "2027-03-07"], ["Printemps", "2027-04-17", "2027-05-02"], ["Été", "2027-07-03", "2027-08-31"]],
