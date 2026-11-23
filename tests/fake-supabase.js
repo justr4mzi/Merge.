@@ -136,6 +136,7 @@
       save({ status: "running" }); setTimeout(() => save(opt("edtfail") ? { status: "error", error: "Je n'ai pas réussi à lire cette image." } : Object.assign({ status: "done" }, { slots: [{ day: 0, start: "08:00", end: "10:00", subject: "SVT", room: "B12", week: "" }, { day: 1, start: "10:00", end: "11:00", subject: "Physique-chimie", week: "A" }, { day: 2, start: "14:00", end: "16:00", subject: "SVT", week: "" }, { day: 3, start: "08:00", end: "09:00", subject: "SVT", week: "" }, { day: 4, start: "09:00", end: "10:00", subject: "Physique-chimie", week: "B" }] })), +(opt("edtdelay") || 600)); return { data: { job_id: b.job_id }, error: null }; }
     if (b.action === "transcrire") { window.__fake.transcrire = b; return { data: { text: "Maths de 18 h à 19 h" }, error: null }; }
     if (b.action === "planjour") { window.__fake.plan = b; const d = b.contexte.jour_choisi; return { data: { message: "Voilà ta soirée.", blocks: [{ date: d, start: "20:00", dur: 30, s: "s1", ch: "c1", act: "cartes", title: "", ic: "book" }, { date: d, start: "20:30", dur: 5, s: null, ch: null, act: "pause", title: "Pause" }, { date: d, start: "20:35", dur: 20, s: "s1", ch: null, act: "quiz", title: "" }, { date: d, start: "99:99", dur: 20, s: "zzz", act: "rien" }] }, error: null }; }
+    if (b.action === "import_cancel") { const j = DB.import_jobs.find(x => x.id === b.job_id); if (!j) return fail(404, { error: "requete" }); Object.assign(j, { status: "error", error_code: "annule", error: "Import annulé.", message: "Import annulé" }); window.__fake.cancelled = (window.__fake.cancelled || 0) + 1; return { data: { ok: true }, error: null }; }
     if (b.action !== "import_start" && b.action !== "import_resume") return fail(400, { error: "requete", detail: "Action inconnue." });
     if (b.action === "import_start") window.__fake.lastSegs = b.segs;
     const delay = +(opt("delay") || 30), now = () => new Date().toISOString();
@@ -144,6 +145,7 @@
     else { job = defaults("import_jobs", { chapter_id: b.chapter_id, status: "running", stage: b.segs.some(x => x.path) ? "img" : "gen", progress: 10, message: "L'IA lit les photos et les schémas…", result: null, error: null, error_code: null, updated_at: now(), n: b.n, label: b.label, full: b.segs.map(x => x.path ? COURS : x.text).join("\n\n[[PAGE]]\n\n") }); DB.import_jobs.push(job); }
     // fake.stall = 1 : l'étape serveur est « coupée » (le job ne bouge plus, mis à jour il y a 5 min) jusqu'à une reprise.
     if (b.action === "import_resume") window.__fake.resumed = (window.__fake.resumed || 0) + 1;
+    if (opt("hang") === "1" && b.action === "import_start") { Object.assign(job, { progress: 40, stage: "gen", message: "Vérification des schémas (page 8 sur 9)…", updated_at: now() }); return { data: { job_id: job.id }, error: null }; }
     if (opt("stall") === "1" && b.action === "import_start") { Object.assign(job, { updated_at: new Date(Date.now() - 300000).toISOString(), progress: 45, message: "Photos et schémas lus : 9 sur 13…" }); return { data: { job_id: job.id }, error: null }; }
     (async () => {
       const wait = () => new Promise(r => setTimeout(r, delay));

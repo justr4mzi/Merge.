@@ -708,6 +708,20 @@ async function adminPage(browser) {
 }
 
 // Toucher l'onglet où l'on est déjà ramène à son écran d'arrivée (Réglages : referme la catégorie ouverte).
+// Annuler un import en cours (bloqué, mauvais fichier…) : le serveur l'arrête, l'écran d'import revient, rien n'est ajouté.
+async function impAnnule(browser) {
+  const page = await open(browser, { w: 390, h: 844, theme: "dark" }), tag = "annuler import";
+  await page.evaluate(() => localStorage.setItem("fake.hang", "1"));
+  const n0 = await page.evaluate(() => window.__fake.DB.cards.length);
+  await go(page, "#import-c1"); await page.click('[data-tab="text"]'); await page.fill("#txt", "La mitose est une division cellulaire qui donne deux cellules identiques. ".repeat(4));
+  await page.click("#go"); await page.waitForSelector("#impcancel", { timeout: 8000 }).catch(() => {});
+  ok(await page.locator("#impcancel").isVisible(), tag + " : bouton « Annuler l'import » pendant l'import");
+  await page.click("#impcancel"); await page.click("#impcancelok"); await page.waitForTimeout(500);
+  ok(await page.evaluate(() => window.__fake.cancelled === 1 && window.__fake.DB.import_jobs[0].status === "error"), tag + " : le serveur arrête l'import");
+  ok(await page.locator("#go").isVisible() && !(await page.locator("#impcancel").count()), tag + " : l'écran d'import revient, on peut renvoyer le cours");
+  ok(await page.evaluate(() => window.__fake.DB.cards.length) === n0, tag + " : aucune carte ajoutée");
+  await page.close();
+}
 // Chapitre dont le contrôle est passé : il sort tout seul de la révision du jour, et se remet d'un geste.
 async function chapRepos(browser) {
   const page = await open(browser, { w: 390, h: 844, theme: "dark" }), tag = "repos";
@@ -2005,7 +2019,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => only ? only.includes(n) : n !== "chasse" && n !== "apercu";
     if (want("sweep")) await Promise.all([[390, 844, "light"], [390, 844, "dark"], [1280, 800, "light"], [1280, 800, "dark"]].map(([w, h, theme]) => sweep(browser, w, h, theme)));
-    const SUITES = { apercu, chapRepos, profFichier, profSchemas, schemaPlat, ongletRetour, paris, adminPage, schemasAnciens, cartesFormules, chronoBlanc, plusOptions, refonte, multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
+    const SUITES = { apercu, chapRepos, impAnnule, profFichier, profSchemas, schemaPlat, ongletRetour, paris, adminPage, schemasAnciens, cartesFormules, chronoBlanc, plusOptions, refonte, multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
     const todo = Object.entries(SUITES).filter(([n]) => want(n)), jobs = Math.max(1, +(process.env.JOBS || 4));
     let idx = 0;
     await Promise.all(Array.from({ length: Math.min(jobs, todo.length) }, async () => { while (idx < todo.length) { const [, f] = todo[idx++]; await f(browser); } }));

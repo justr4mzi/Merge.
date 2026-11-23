@@ -1862,7 +1862,7 @@
       <ol class="steps">${STAGES.map((x, i) => `<li class="${i < idx ? "done" : i === idx ? "now" : ""}">${x[1]}</li>`).join("")}</ol>
       <p id="status" class="note" role="status">${esc(d.msg || "")}</p>
       <div class="card pad backsoon">${d.local ? `<b>Lecture de tes fichiers sur cet appareil</b><p class="small muted">Garde cet onglet ouvert encore quelques secondes, le temps d'envoyer ton cours. Ensuite tu pourras fermer Merge.</p>` : `<b>Tu peux fermer Merge.</b><p class="small muted">L'import continue sur nos serveurs, même si tu quittes la page ou verrouilles ton téléphone. ${pushOn ? "Nous t'envoyons une notification automatiquement dès que ton cours est prêt." : "Active les notifications pour être prévenu automatiquement dès que ton cours est prêt."}</p>`}${!pushOn && "Notification" in window && Notification.permission !== "denied" ? '<button class="btn sm ghost" id="askn">Me prévenir par notification</button>' : ""}</div>
-      <a class="btn ghost" href="#accueil">Continuer à naviguer</a></div>`;
+      <a class="btn ghost" href="#accueil">Continuer à naviguer</a>${d.jobId && !d.local ? `<button class="linkbtn impcancel" id="impcancel">Annuler l'import</button>` : ""}</div>`;
   }
   function impPaint(d) {
     const b = $("progbar"); if (b) {
@@ -2115,7 +2115,15 @@
     tabs.hidden = true;
     const d = IMPORTS[id] || (IMPORTS[id] = newImp(ch));
     function draw() {
-      if (d.busy) { app.innerHTML = impBusyHtml(d, ch.name); chipUpdate(); if ($("askn")) $("askn").onclick = async () => { const ok = await ensurePush(true); if (!ok) toast("Notifications impossibles sur cet appareil ou refusées."); if (d.busy && onImport(id)) draw(); }; return; }
+      if (d.busy) { app.innerHTML = impBusyHtml(d, ch.name); chipUpdate();
+        // Annuler un import (bloqué, mauvais fichier…) : rien n'est ajouté au chapitre, on peut relancer tout de suite.
+        if ($("impcancel")) $("impcancel").onclick = () => sheet(`<h1>Annuler l'import ?</h1><p class="muted">Rien ne sera ajouté à « ${esc(ch.name)} ». Tu pourras renvoyer ton cours juste après.</p><div class="row"><button class="btn ghost grow" data-close>Continuer l'import</button><button class="btn danger grow" id="impcancelok">Annuler l'import</button></div>`, el => {
+          el.querySelector("#impcancelok").onclick = async () => { el.querySelector("#impcancelok").disabled = true;
+            try { await ai({ action: "import_cancel", job_id: d.jobId }, "studio"); } catch (e) { toast("Impossible d'annuler pour l'instant. Réessaie."); el.querySelector("#impcancelok").disabled = false; return; }
+            safeSet("merge.jobseen." + d.jobId, "1"); clearTimeout(d.poll); d.pollTok = null; clearInterval(d.timer);
+            d.busy = false; d.local = false; d.failed = null; d.canResume = false; d.jobId = null; d.shown = 0; d.files = []; d.shots = [];
+            el.querySelector("[data-close]").click(); toast("Import annulé. Tu peux renvoyer ton cours."); if (onImport(id)) draw(); else chipUpdate(); };
+        }); if ($("askn")) $("askn").onclick = async () => { const ok = await ensurePush(true); if (!ok) toast("Notifications impossibles sur cet appareil ou refusées."); if (d.busy && onImport(id)) draw(); }; return; }
       if (d.doneHtml) { const h = d.doneHtml; d.doneHtml = null; d.ready = false; d.files = []; d.shots = []; app.innerHTML = h; chipUpdate(); confetti(); return; }
       app.innerHTML = `<div class="row"><a class="iconbtn" href="#chapitre-${id}" aria-label="Retour au chapitre">${I.back}</a><span class="small muted">${esc(ch.name)}</span></div>
         <h1>Importer un cours</h1>

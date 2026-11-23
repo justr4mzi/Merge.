@@ -343,7 +343,8 @@ async function stepRun(id: string) {
       // Une page qui fait planter l'étape (photo trop lourde pour la fonction) : au 3e essai on la passe, sinon l'import resterait bloqué.
       st.pitry = st.pitry && st.pitry.pi === st.pi ? { pi: st.pi, n: st.pitry.n + 1 } : { pi: st.pi, n: 1 };
       await setJob(id, { state: st });
-      const pth = st.pitry.n < 3 ? paths[st.pi] : null;
+      const pth = st.pitry.n < 3 ? paths[st.pi] : null, t0 = Date.now();
+      let partial = false;
       if (pth) {
         try {
           const list = st.cards.map((c: Any, k: number) => ({ c, k })).filter(({ c }: Any) => c.sch && (schemas.find((x) => x.id === c.sch) ?? {}).path === pth);
@@ -352,6 +353,10 @@ async function stepRun(id: string) {
             const pageImg = await decodePage(new Uint8Array(await dl.data.arrayBuffer()));
             const frameMemo = new Map<string, number[]>();
             for (const { c } of list) {
+              if (c.checked) continue;
+              // Limite de temps (23 nov.) : une page avec beaucoup de légendes enchaînait trop d'appels et la fonction était
+              // coupée en plein travail (import bloqué à 92 %). Au bout de 70 s, on enregistre et on reprend la même page.
+              if (Date.now() - t0 > 70000) { partial = true; break; }
               const sc = schemas.find((x) => x.id === c.sch); if (!sc) continue;
               const rawFrame = c.frame ?? sc.box, key0 = rawFrame.join(","), masks0 = c.boxes ?? labelMasks(sc, c.masque);
               const memo = frameMemo.get(key0);
@@ -363,7 +368,7 @@ async function stepRun(id: string) {
                 back: c.back,
                 renderCrop: (f: number[], m: number[][]) => renderCropB64(pageImg, f, m),
                 askGemini: async (prompt: string, imgB64: string) => {
-                  const r = await gemini(sa, "Tu vérifies des cartes de révision faites à partir des schémas d'un cours. Tu juges uniquement l'image découpée qu'on te montre.", [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: imgB64 } }], true, 0, "high");
+                  const r = await gemini(sa, "Tu vérifies des cartes de révision faites à partir des schémas d'un cours. Tu juges uniquement l'image découpée qu'on te montre.", [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: imgB64 } }], true, 0, "medium");
                   return parseJson(r.text);
                 },
               });
@@ -375,6 +380,7 @@ async function stepRun(id: string) {
           }
         } catch (_e) { /* une page qu'on n'arrive pas à revérifier garde ses cartes telles qu'elles sont */ }
       }
+      if (partial) { st.pitry = null; await setJob(id, { state: st }); return await kick(id); }
       st.pi += 1;
       const more = st.pi < paths.length;
       if (!more) {
@@ -386,6 +392,7 @@ async function stepRun(id: string) {
       return await kick(id);
     }
     if (job.stage === "save") {
+      { const { data: j2 } = await admin.from("import_jobs").select("status").eq("id", id).maybeSingle(); if (j2?.status !== "running") return; }
       const nSch = st.cards.filter((c: Any) => c.sch).length;
       const cards: Any[] = st.cards.slice(0, Math.max(P.auto ? 100 : n, 5 * chunks.length) + nSch);
       const already = (st.prevFronts ?? []).length > 0 || String(st.prevSummary || "").trim().length > 0;
@@ -545,6 +552,15 @@ Deno.serve(async (req) => {
       if (ins.error) return json({ error: "erreur", detail: ins.error.message }, 500);
       background(step(ins.data.id));
       return json({ job_id: ins.data.id });
+    }
+    // Annuler un import (23 nov.) : l'élève l'arrête (bloqué, mauvais fichier…). Les étapes suivantes s'arrêtent d'elles-mêmes
+    // (elles ne travaillent que sur un import « running »). Rien n'est enregistré dans le chapitre.
+    if (body.action === "import_cancel") {
+      const { data: job } = await admin.from("import_jobs").select("id,status,stage").eq("id", String(body.job_id)).eq("user_id", uid).maybeSingle();
+      if (!job) return json({ error: "requete", detail: "Import introuvable." }, 404);
+      if (job.status === "done") return json({ ok: true, deja: true });
+      await setJob(job.id, { status: "error", error_code: "annule", error: "Import annulé.", message: "Import annulé" });
+      return json({ ok: true });
     }
     if (body.action === "import_resume") {
       const { data: job } = await admin.from("import_jobs").select("id,status,payload").eq("id", String(body.job_id)).eq("user_id", uid).maybeSingle();

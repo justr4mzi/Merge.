@@ -1921,3 +1921,6 @@ details.drop#tools[open],details.drop#cardsdrop[open]{padding-bottom:14px}
 .restbox .grow{display:flex;flex-direction:column;min-width:0}
 .restask{cursor:pointer;background:transparent;border:1px dashed var(--line)}
 .restbox .btn{flex:none}
+/* Écran d'import : « Annuler l'import », discret, sous « Continuer à naviguer ». */
+.prog .impcancel{display:block;margin:14px auto 0;min-height:44px;color:var(--muted);font-weight:700}
+.prog .impcancel:hover{color:#f87171}
