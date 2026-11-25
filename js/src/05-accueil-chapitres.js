@@ -352,6 +352,9 @@
   }
 
   // ---------- résumé ----------
+  let hlRe = null; // replace la petite barre de surlignage quand on fait défiler la page
+  addEventListener("scroll", () => { if (hlRe) hlRe(); }, { passive: true }); addEventListener("resize", () => { if (hlRe) hlRe(); });
+  addEventListener("hashchange", () => { const t = document.getElementById("hltool"); if (t) t.hidden = true; hlRe = null; });
   const SUM_MODES = [
     ["detailler", "Cours complet", "long", "Tout le cours développé avec explications et exemples"],
     ["normal", "Résumé", "norm", "L'essentiel du chapitre, écrit uniquement à partir de ton cours"],
@@ -376,16 +379,91 @@
         <div class="summodes" role="group" aria-label="Type de résumé">${SUM_MODES.map(m => `<button class="btn sm ${curMode === m[0] ? "" : "ghost"}" id="${m[2]}" data-sm="${m[0]}" aria-pressed="${curMode === m[0]}">${m[1]}</button>`).join("")}</div>
         <div id="msg" class="note"></div>
         <div class="card pad md" id="sumbox">${md(sum.markdown)}</div>
-        <div class="row" style="flex-wrap:wrap"><button class="btn sm" id="hlb">Surligner la sélection</button><span class="small muted">Sélectionne un passage du résumé, puis touche ce bouton.</span></div>
-        <div class="card pad stack" id="hlbox"></div>`;
+        <p class="small muted">Sélectionne un mot ou un passage : une petite barre apparaît à côté pour choisir la couleur, mettre en gras ou retirer. Touche un passage surligné pour le modifier.</p>
+        <div class="card pad stack" id="hlbox"></div>
+        <div class="card pad stack" id="audbox"><h2>Résumé audio du cours</h2><p class="small muted">Un prof t'explique tout ton cours à voix haute, notion par notion, avec des exemples : ce n'est pas une simple lecture.</p><button class="btn" id="audsum">Écouter le cours expliqué</button></div>`;
       $("edit").onclick = edit;
-      const hk = "merge.hl." + id; let hls = jget(hk, []), lastSel = "";
-      const wrap = (t) => { const w = document.createTreeWalker($("sumbox"), NodeFilter.SHOW_TEXT), nodes = []; while (w.nextNode()) nodes.push(w.currentNode); for (const n of nodes) { if (n.parentElement.closest("mark")) continue; const i = n.nodeValue.indexOf(t); if (i < 0) continue; const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + t.length); const mk = document.createElement("mark"); mk.className = "hl user"; r.surroundContents(mk); return true; } return false; };
-      const paintHl = () => { hls = hls.filter(t => wrap(t)); $("hlbox").innerHTML = `<h2>Mes passages importants</h2>` + (hls.length ? hls.map((t, k) => `<div class="row between"><span class="grow">${esc(t)}</span><button class="mini" data-hd="${k}">Retirer</button></div>`).join("") : '<p class="muted small">Aucun passage surligné pour l\'instant.</p>'); $("hlbox").querySelectorAll("[data-hd]").forEach(b => b.onclick = () => { hls.splice(+b.dataset.hd, 1); jset(hk, hls); view(); }); };
-      paintHl();
-      document.onselectionchange = () => { const sel = document.getSelection(), box = $("sumbox"); if (box && sel && sel.rangeCount && !sel.isCollapsed && box.contains(sel.anchorNode)) lastSel = sel.toString(); };
-      $("hlb").onmousedown = e => e.preventDefault();
-      $("hlb").onclick = () => { const parts = lastSel.split(/\n+/).map(x => x.trim()).filter(x => x.length >= 3); if (!parts.length) return toast("Sélectionne d'abord un passage du résumé."); let n = 0; parts.forEach(t => { if (!hls.includes(t) && wrap(t)) { hls.push(t); n++; } }); lastSel = ""; try { document.getSelection().removeAllRanges(); } catch (e) { /* rien */ } if (!n) return toast("Sélectionne un passage sans mise en forme au milieu (pas de gras)."); jset(hk, hls.slice(-40)); view(); };
+      const hk = "merge.hl." + id;
+      // Surlignages : { t: texte, s, e: position dans le texte du résumé, c: couleur (y g b p o) ou "", b: gras, m: format du résumé }.
+      // Les anciens surlignages (simple texte) restent lisibles : jaune, retrouvés par leur texte.
+      const HLC = [["y", "jaune", "#f5b400"], ["g", "vert", "#22c55e"], ["b", "bleu", "#3b82f6"], ["p", "rose", "#ec4899"], ["o", "orange", "#f97316"]];
+      let hls = jget(hk, []).map(x => typeof x === "string" ? { t: x, c: "y" } : x).filter(x => x && typeof x.t === "string" && x.t);
+      const hlSave = () => { hls = hls.slice(-80); jset(hk, hls); };
+      const sbox = () => $("sumbox");
+      // Texte du résumé sans les formules (elles s'affichent après coup) : les positions restent stables.
+      const plainOf = () => { const out = []; let pos = 0; const w = document.createTreeWalker(sbox(), NodeFilter.SHOW_TEXT); while (w.nextNode()) { const n = w.currentNode; if (n.parentElement && n.parentElement.closest(".m,.katex")) continue; out.push({ n, a: pos, b: pos + n.nodeValue.length }); pos += n.nodeValue.length; } return { nodes: out, text: out.map(x => x.n.nodeValue).join("") }; };
+      const bound = (nodes, container, off) => { const r0 = document.createRange(); r0.setStart(sbox(), 0); r0.setEnd(container, off); let pos = 0; for (const x of nodes) { if (x.n === container) return x.a + Math.min(off, x.n.nodeValue.length); if (r0.comparePoint(x.n, x.n.nodeValue.length) <= 0) pos = x.b; else break; } return pos; };
+      const locate = (h, text) => { if (Number.isInteger(h.s) && Number.isInteger(h.e) && text.slice(h.s, h.e) === h.t) return [h.s, h.e]; const i = text.indexOf(h.t); return i < 0 ? null : [i, i + h.t.length]; };
+      const wrapSpan = (a, b, cls, k) => { const { nodes } = plainOf(); for (const x of nodes) { const lo = Math.max(a, x.a), hi = Math.min(b, x.b); if (hi <= lo || !x.n.nodeValue.slice(lo - x.a, hi - x.a).trim()) continue; const r = document.createRange(); r.setStart(x.n, lo - x.a); r.setEnd(x.n, hi - x.a); const mk = document.createElement("mark"); mk.className = cls; mk.dataset.hi = k; r.surroundContents(mk); } };
+      const shown = h => !h.m || h.m === curMode;
+      const overlapIdx = (s, e) => { const { text } = plainOf(); return hls.map((h, k) => ({ k, loc: shown(h) ? locate(h, text) : null })).filter(x => x.loc && x.loc[0] < e && x.loc[1] > s).map(x => x.k); };
+      const listHl = () => {
+        const rows = hls.map((h, k) => ({ h, k })).filter(x => shown(x.h));
+        $("hlbox").innerHTML = `<h2>Mes passages importants</h2>` + (rows.length ? rows.map(({ h, k }) => `<div class="row between hlrow"><span class="hldot${h.c ? "" : " none"}" style="--c:${esc((HLC.find(x => x[0] === h.c) || [])[2] || "transparent")}"></span><span class="grow hltxt${h.b ? " ub" : ""}">${esc(h.t.length > 110 ? h.t.slice(0, 107) + "…" : h.t)}</span><button class="mini" data-hd="${k}">Retirer</button></div>`).join("") + (rows.length > 1 ? '<button class="linkbtn" id="hlclear" style="align-self:flex-start">Tout retirer</button>' : "") : '<p class="muted small">Aucun passage surligné pour l\'instant.</p>');
+        $("hlbox").querySelectorAll("[data-hd]").forEach(b => b.onclick = () => { hls.splice(+b.dataset.hd, 1); hlSave(); repaintHl(); });
+        if ($("hlclear")) $("hlclear").onclick = async () => { if (!(await askConfirm("Retirer tous les surlignages ?", "Tes surlignages et tes mots en gras de ce résumé seront retirés. Le texte du résumé ne change pas.", "Tout retirer"))) return; hls = hls.filter(h => !shown(h)); hlSave(); repaintHl(); };
+      };
+      const repaintHl = () => {
+        sbox().querySelectorAll("mark.user").forEach(m => m.replaceWith(...m.childNodes)); sbox().normalize();
+        const { text } = plainOf();
+        hls.forEach((h, k) => { if (!shown(h)) return; const loc = locate(h, text); if (loc) wrapSpan(loc[0], loc[1], "hl user" + (h.c ? " hc-" + h.c : "") + (h.b ? " ub" : ""), k); });
+        listHl();
+      };
+      // Petite barre à côté du mot ou du passage choisi : 5 couleurs, gras, retirer.
+      let tool = $("hltool");
+      if (!tool) {
+        tool = document.createElement("div"); tool.id = "hltool"; tool.className = "hltool"; tool.hidden = true; tool.setAttribute("role", "toolbar"); tool.setAttribute("aria-label", "Surligner");
+        tool.innerHTML = HLC.map(c => `<button type="button" class="hlc" data-hc="${c[0]}" aria-label="Surligner en ${c[1]}" style="--c:${c[2]}"></button>`).join("") + `<button type="button" class="hlg" data-hb aria-label="Mettre en gras"><b>G</b></button><button type="button" class="hlx" data-hx aria-label="Retirer le surlignage">${I.x}</button>`;
+        document.body.appendChild(tool); ["pointerdown", "mousedown"].forEach(ev => tool.addEventListener(ev, e => e.preventDefault()));
+      }
+      let cur = null; // { s, e, hi } : le passage choisi (hi = numéro du surlignage touché, sinon null)
+      const hideTool = () => { tool.hidden = true; cur = null; hlRe = null; };
+      const refreshTool = () => {
+        const hit = cur ? (cur.hi != null ? [cur.hi] : overlapIdx(cur.s, cur.e)) : [], one = cur && cur.hi != null ? hls[cur.hi] : null;
+        tool.querySelectorAll("[data-hc]").forEach(b => b.setAttribute("aria-pressed", String(!!one && one.c === b.dataset.hc)));
+        tool.querySelector("[data-hb]").setAttribute("aria-pressed", String(!!one && !!one.b));
+        tool.querySelector("[data-hx]").disabled = !hit.length;
+      };
+      const placeTool = rect => { tool.hidden = false; const w = tool.offsetWidth, h = tool.offsetHeight; let top = rect.bottom + 10; if (top + h > innerHeight - 8) top = Math.max(8, rect.top - h - 10); tool.style.top = top + "px"; tool.style.left = Math.max(8, Math.min(innerWidth - w - 8, rect.left + rect.width / 2 - w / 2)) + "px"; };
+      const selTarget = () => {
+        const sel = document.getSelection(); if (!sel || !sel.rangeCount || sel.isCollapsed || !sbox()) return null;
+        const rg = sel.getRangeAt(0); if (!sbox().contains(rg.commonAncestorContainer)) return null;
+        const { nodes, text } = plainOf(); let s = bound(nodes, rg.startContainer, rg.startOffset), e = bound(nodes, rg.endContainer, rg.endOffset);
+        while (s < e && /\s/.test(text[s])) s++; while (e > s && /\s/.test(text[e - 1])) e--;
+        return e - s >= 1 ? { s, e, rect: rg.getBoundingClientRect() } : null;
+      };
+      const showSel = () => { const t = selTarget(); if (!t) return false; cur = { s: t.s, e: t.e, hi: null }; hlRe = () => { const u = selTarget(); if (u) placeTool(u.rect); else hideTool(); }; placeTool(t.rect); refreshTool(); return true; };
+      let selT = null;
+      document.onselectionchange = () => { clearTimeout(selT); selT = setTimeout(() => { if (!sbox()) return hideTool(); if (!showSel() && (!cur || cur.hi == null)) hideTool(); }, 160); };
+      sbox().onclick = e => {
+        const m = e.target.closest && e.target.closest("mark.user"), sel = document.getSelection();
+        if (m && (!sel || sel.isCollapsed)) { const k = +m.dataset.hi; cur = { s: 0, e: 0, hi: k }; hlRe = () => { const mm = sbox() && sbox().querySelector(`mark.user[data-hi="${k}"]`); if (mm) placeTool(mm.getBoundingClientRect()); else hideTool(); }; placeTool(m.getBoundingClientRect()); refreshTool(); }
+        else if (!m && cur && cur.hi != null) hideTool();
+      };
+      app.onclick = e => { if (cur && cur.hi != null && !(e.target.closest && e.target.closest("mark.user, #hltool"))) hideTool(); };
+      const actHl = (kind, c) => {
+        if (!cur) return; const { text } = plainOf();
+        if (cur.hi != null) {
+          const h = hls[cur.hi]; if (!h) return hideTool();
+          if (kind === "x") hls.splice(cur.hi, 1);
+          else { if (kind === "c") h.c = c; else h.b = !h.b; if (!h.c && !h.b) hls.splice(cur.hi, 1); }
+        } else if (kind === "x") {
+          const ids = overlapIdx(cur.s, cur.e); if (!ids.length) return;
+          hls = hls.filter((_, k) => !ids.includes(k));
+        } else {
+          const inside = overlapIdx(cur.s, cur.e).filter(k => { const loc = locate(hls[k], text); return loc && loc[0] >= cur.s && loc[1] <= cur.e; });
+          const keepBold = kind === "c" && inside.some(k => hls[k].b);
+          if (kind === "c") hls = hls.filter((_, k) => !inside.includes(k));
+          hls.push({ s: cur.s, e: cur.e, t: text.slice(cur.s, cur.e), c: kind === "c" ? c : "", b: kind === "b" || keepBold, m: curMode });
+        }
+        hlSave(); try { document.getSelection().removeAllRanges(); } catch (er) { /* rien */ }
+        hideTool(); repaintHl();
+      };
+      tool.querySelectorAll("[data-hc]").forEach(b => b.onclick = () => actHl("c", b.dataset.hc));
+      tool.querySelector("[data-hb]").onclick = () => actHl("b");
+      tool.querySelector("[data-hx]").onclick = () => actHl("x");
+      hideTool(); repaintHl();
+      $("audsum").onclick = () => { listenWant = "expl"; location.hash = "#ecouter-" + id; };
       const setBtns = (dis) => app.querySelectorAll("[data-sm]").forEach(b => { b.disabled = dis; });
       const regen = async (mode) => {
         if (vers[mode] && !sum.edited_by_user) {

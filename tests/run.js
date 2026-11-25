@@ -324,8 +324,8 @@ async function v10(browser) {
   await go(page, "#bilan", 300); ok((await txt(page)).includes("Objectif de la semaine prochaine"), "v10 bilan de la semaine"); o = await overflow(page); ok(o.sw <= o.iw, "v10 bilan : pas de débordement", JSON.stringify(o));
   await go(page, "#resume-c1", 400);
   await page.evaluate(() => { const n = [...document.querySelectorAll("#sumbox li, #sumbox p")].pop(), r = document.createRange(); r.selectNodeContents(n.lastChild.nodeType === 3 ? n.lastChild : n); const s = getSelection(); s.removeAllRanges(); s.addRange(r); });
-  await page.waitForTimeout(150); await page.click("#hlb"); await page.waitForTimeout(250);
-  ok(await page.locator("#sumbox mark.user").count() === 1 && await page.locator("#hlbox [data-hd]").count() === 1, "v10 résumé : passage surligné et listé");
+  await page.waitForSelector("#hltool:not([hidden])", { timeout: 3000 }); await page.click('#hltool [data-hc="y"]'); await page.waitForTimeout(250);
+  ok(await page.locator("#sumbox mark.user").count() >= 1 && await page.locator("#hlbox [data-hd]").count() === 1, "v10 résumé : passage surligné et listé");
   await go(page, "#schema-c1", 400); ok((await txt(page)).includes("Aucune page avec schéma"), "v10 schémas : état vide");
   await page.setInputFiles("#oadd", path.join(SHOTS, "390-dark-accueil.png")); await page.waitForSelector("#occl", { timeout: 8000 }).catch(() => {});
   const bx = await page.locator("#occl").count() ? await page.locator("#occl").boundingBox() : null;
@@ -813,6 +813,78 @@ async function profSchemas(browser) {
     ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | "));
     await page.context().close();
   }
+}
+
+// Résumé : barre de surlignage à côté du texte (5 couleurs, gras, suppression, mots en gras) + résumé audio « Cours expliqué ».
+async function resumeAudio(browser) {
+  for (const [w, h] of [[393, 852], [1440, 900]]) {
+    const page = await open(browser, { w, h, theme: "dark" }), tag = "résumé+audio " + w;
+    await go(page, "#resume-c1", 400);
+    // 1. Sélection qui traverse un mot en gras (<b>Mitose</b> : deux cellules).
+    await page.evaluate(() => {
+      const li = document.querySelector("#sumbox li"), r = document.createRange();
+      r.setStart(li.firstChild.firstChild, 0);
+      r.setEnd(li.lastChild, Math.min(16, li.lastChild.nodeValue.length));
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    });
+    await page.waitForSelector("#hltool:not([hidden])", { timeout: 3000 });
+    await page.click('#hltool [data-hc="g"]'); await page.waitForTimeout(200);
+    ok(await page.locator("#sumbox mark.user.hc-g").count() >= 1 && (await page.locator("#sumbox b mark.user.hc-g").count()) === 1 && (await page.locator("#hlbox").innerText()).includes("Mitose"), tag + " : surlignage vert même sur un mot en gras");
+    // 2. Mettre un mot en gras.
+    await page.evaluate(() => {
+      const p = document.querySelector("#sumbox p"), i = p.firstChild.nodeValue.indexOf("cellule"), r = document.createRange();
+      r.setStart(p.firstChild, i); r.setEnd(p.firstChild, i + 7);
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    });
+    await page.waitForSelector("#hltool:not([hidden])", { timeout: 3000 });
+    await page.click('#hltool [data-hb]'); await page.waitForTimeout(200);
+    ok(await page.locator("#sumbox mark.user.ub").count() === 1 && (await page.locator("#hlbox .ub").innerText()).includes("cellule"), tag + " : option gras sur le passage");
+    // 3. Toucher le passage vert -> réouvre la barre, capture, changement en rose puis suppression.
+    await page.click("#sumbox mark.user.hc-g >> nth=0");
+    await page.waitForSelector("#hltool:not([hidden])", { timeout: 3000 });
+    ok(await page.locator('#hltool [data-hc="g"][aria-pressed="true"]').count() === 1 && !(await page.locator("#hltool [data-hx]").isDisabled()), tag + " : toucher un surlignage rouvre la barre");
+    await page.screenshot({ path: path.join(SHOTS, w + "-resume-hl.png") });
+    await page.click('#hltool [data-hc="p"]'); await page.waitForTimeout(150);
+    ok(await page.locator("#sumbox mark.user.hc-p").count() >= 1 && await page.locator("#sumbox mark.user.hc-g").count() === 0, tag + " : changement de couleur");
+    await page.click("#sumbox mark.user.hc-p >> nth=0");
+    await page.waitForSelector("#hltool:not([hidden])", { timeout: 3000 });
+    await page.click("#hltool [data-hx]"); await page.waitForTimeout(150);
+    ok(await page.locator("#sumbox mark.user.hc-p").count() === 0, tag + " : suppression du surlignage depuis la barre");
+    // 4. Compatibilité avec l'ancien format texte seul.
+    await page.evaluate(() => { localStorage.setItem("merge.hl.c1", JSON.stringify(["quatre cellules haploïdes"])); });
+    await page.reload(); await page.waitForSelector("#app > *"); await go(page, "#resume-c1", 400);
+    ok(await page.locator("#sumbox mark.user.hc-y").count() === 1, tag + " : ancien surlignage relu en jaune");
+    // 5. Bouton « Écouter le cours expliqué » -> onglet Cours expliqué.
+    await page.click("#audsum"); await page.waitForTimeout(350);
+    ok(await page.evaluate(() => location.hash === "#ecouter-c1") && await page.locator('[data-w="expl"][aria-pressed="true"]').count() === 1 && await page.locator("#mkexpl").count() === 1, tag + " : ouvre Cours expliqué");
+    // 6. Préparation avec barre de progression, puis navigation par parties.
+    await page.evaluate(() => { window.__fake.audDelay = 200; });
+    await page.click("#mkexpl"); await page.waitForTimeout(40);
+    ok(await page.locator("#xprog").count() === 1, tag + " : barre de progression pendant la préparation");
+    await page.waitForSelector(".secchips [data-sec]", { timeout: 5000 });
+    await page.evaluate(() => { window.__fake.audDelay = 0; });
+    ok(await page.locator(".secchips [data-sec]").count() === 2 && (await page.locator(".explsec").innerText()).includes("Comprendre la mitose"), tag + " : cours expliqué découpé par parties");
+    await page.click('.secchips [data-sec="1"]'); await page.waitForTimeout(120);
+    ok((await page.locator(".explsec").innerText()).includes("Et la méiose alors"), tag + " : navigation vers la 2e partie");
+    await page.screenshot({ path: path.join(SHOTS, w + "-ecouter-expl.png") });
+    // 7. Mise en cache (0 appel IA en plus au retour).
+    const callsBefore = await page.evaluate(() => window.__fake.calls);
+    await go(page, "#chapitre-c1", 250); await go(page, "#ecouter-c1", 350);
+    await page.click('[data-w="expl"]'); await page.waitForTimeout(150);
+    ok(await page.evaluate(() => window.__fake.calls) === callsBefore && await page.locator(".secchips [data-sec]").count() === 2, tag + " : cours expliqué gardé en cache (0 appel)");
+    const sm = await small(page); ok(!sm.length, tag + " : boutons de 44 px minimum", sm.join(" | "));
+    const o = await overflow(page); ok(o.sw <= o.iw, tag + " : pas de débordement", JSON.stringify(o));
+    ok(!page.errors.length, tag + " : aucune erreur JavaScript", page.errors.slice(0, 3).join(" | "));
+    await page.context().close();
+  }
+  // Petit écran 320 px : la barre de surlignage tient dans l'écran sans déborder.
+  const p320 = await open(browser, { w: 320, h: 568, theme: "dark" });
+  await go(p320, "#resume-c1", 400);
+  await p320.evaluate(() => { const p = document.querySelector("#sumbox p"), r = document.createRange(); r.setStart(p.firstChild, 0); r.setEnd(p.firstChild, 10); const s = getSelection(); s.removeAllRanges(); s.addRange(r); });
+  await p320.waitForSelector("#hltool:not([hidden])", { timeout: 3000 });
+  const fit = await p320.evaluate(() => { const b = document.getElementById("hltool").getBoundingClientRect(); return { l: b.left, r: b.right, sw: document.documentElement.scrollWidth }; });
+  ok(fit.l >= 0 && fit.r <= 320 && fit.sw <= 320, "résumé 320 px : barre de surlignage tient dans l'écran", JSON.stringify(fit));
+  await p320.context().close();
 }
 
 async function voixMerge(browser) {
@@ -2019,7 +2091,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => only ? only.includes(n) : n !== "chasse" && n !== "apercu";
     if (want("sweep")) await Promise.all([[390, 844, "light"], [390, 844, "dark"], [1280, 800, "light"], [1280, 800, "dark"]].map(([w, h, theme]) => sweep(browser, w, h, theme)));
-    const SUITES = { apercu, chapRepos, impAnnule, profFichier, profSchemas, schemaPlat, ongletRetour, paris, adminPage, schemasAnciens, cartesFormules, chronoBlanc, plusOptions, refonte, multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
+    const SUITES = { apercu, resumeAudio, chapRepos, impAnnule, profFichier, profSchemas, schemaPlat, ongletRetour, paris, adminPage, schemasAnciens, cartesFormules, chronoBlanc, plusOptions, refonte, multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
     const todo = Object.entries(SUITES).filter(([n]) => want(n)), jobs = Math.max(1, +(process.env.JOBS || 4));
     let idx = 0;
     await Promise.all(Array.from({ length: Math.min(jobs, todo.length) }, async () => { while (idx < todo.length) { const [, f] = todo[idx++]; await f(browser); } }));

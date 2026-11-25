@@ -1864,7 +1864,7 @@ details.drop#tools[open],details.drop#cardsdrop[open]{padding-bottom:14px}
 /* Prof : un chapitre au nom très long en haut de la discussion ne sort plus de l'écran : nom coupé par « … », la croix
    pour le retirer et le bouton « Modifier » restent visibles. */
 .pctx .pchip:not(.add){max-width:min(72vw,420px);min-width:0}
-.pctx .pchip .pcn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pctx .pchip .pcn{position:static;top:auto;left:auto;font-size:inherit;color:inherit;font-weight:inherit;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pctx .pchip .dot,.pctx .pchip .pchipx{flex:none}
 /* Accueil sur téléphone (19 nov.) : avec beaucoup de pièces et une longue série, la barre du haut dépassait à droite et
    décalait tout l'écran. Elle passe maintenant à la ligne au lieu de déborder, et le texte « d'affilée » est caché. */
@@ -1923,4 +1923,29 @@ details.drop#tools[open],details.drop#cardsdrop[open]{padding-bottom:14px}
 .restbox .btn{flex:none}
 /* Écran d'import : « Annuler l'import », discret, sous « Continuer à naviguer ». */
 .prog .impcancel{display:block;margin:14px auto 0;min-height:44px;color:var(--muted);font-weight:700}
-.prog .impcancel:hover{color:#f87171}
+@media (hover:hover){.prog .impcancel:hover{color:#f87171}}
+
+/* Résumé : petite barre de surlignage à côté du mot (5 couleurs, gras, retirer) + cours expliqué à l'oral. */
+mark.hl.user{cursor:pointer}
+mark.hl.user.hc-y{background:color-mix(in srgb,#f5b400 45%,transparent)}
+mark.hl.user.hc-g{background:color-mix(in srgb,#22c55e 40%,transparent)}
+mark.hl.user.hc-b{background:color-mix(in srgb,#3b82f6 40%,transparent)}
+mark.hl.user.hc-p{background:color-mix(in srgb,#ec4899 38%,transparent)}
+mark.hl.user.hc-o{background:color-mix(in srgb,#f97316 42%,transparent)}
+mark.hl.user:not([class*="hc-"]){background:transparent;padding:0}
+mark.hl.user.ub,.ub{font-weight:900}
+.hltool{position:fixed;z-index:80;display:flex;align-items:center;gap:2px;padding:4px;max-width:calc(100vw - 16px);box-sizing:border-box;border-radius:20px;background:var(--card);border:1px solid var(--line);box-shadow:0 12px 34px rgba(0,0,0,.4)}
+.hltool[hidden]{display:none}
+.hltool button{width:44px;height:44px;min-height:44px;padding:0;border:0;border-radius:14px;background:transparent;color:var(--fg);display:grid;place-items:center;font-size:1.05rem;flex:none}
+.hltool .hlc::before{content:"";width:26px;height:26px;border-radius:50%;background:var(--c);box-shadow:inset 0 0 0 2px rgba(255,255,255,.4)}
+.hltool .hlc[aria-pressed="true"]{background:color-mix(in srgb,var(--c) 22%,transparent);box-shadow:inset 0 0 0 2px var(--c)}
+.hltool .hlg[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent-ink)}
+.hltool .hlx svg{width:20px;height:20px}
+.hltool .hlx:disabled{opacity:.35}
+@media (max-width:360px){.hltool{gap:0;padding:2px}.hltool button{width:42px}}
+.hlrow{align-items:center;gap:10px}
+.hldot{flex:none;width:14px;height:14px;border-radius:50%;background:var(--c)}
+.hldot.none{background:transparent;box-shadow:inset 0 0 0 2px var(--line)}
+.hltxt{min-width:0;overflow-wrap:anywhere}
+.secchips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}.secchips::-webkit-scrollbar{display:none}.secchips .chip{flex:none;max-width:70vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.explsec{font-weight:800;color:var(--accent-ink);margin:0}

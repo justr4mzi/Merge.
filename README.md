@@ -13,7 +13,7 @@ The bottom bar (left sidebar on desktop) has six tabs: **Accueil, Matières, Pro
 - **Chapter screen**: mastery ring, a big "Réviser maintenant" button (flashcards), shortcuts (Résumé, Quiz, Interro écrite, Contrôle, Schémas when the chapter has a real diagram, favourite tools, Demander au prof), and every other tool inside "Plus d'outils":
   - Comprendre: Feuille blanche (blurting), Feynman, Texte à trous, Face à face (confused notions), Pièges, Exercices guidés, Carte mentale.
   - Fiches: one-page A4 revision sheet, my mistakes.
-  - Oral et audio: Khôlle (oral questioning with speech recognition), Écouter (tabs "Lecture" and "Mains libres").
+  - Oral et audio: Khôlle (oral questioning with speech recognition), Écouter (tabs "Lecture" and "Mains libres", including "Cours expliqué": an AI-written audio explanation covering the whole lesson section by section, cached in `ai_cache`). Summaries also have a floating highlight toolbar beside the selected text (5 colours, bold, remove).
   - Jouer: Boss, Flash 60 secondes (faster and faster), Associer (series of 6 pairs, replay or new series).
   - Variants: "Seulement les difficiles" (flashcards), "Interro chronométrée" (written test against the clock).
   - Old routes (`#apprendre-`, `#blanc-`, `#difficiles-`, `#bus-`, `#libre-`, `#questions-`, `#planche-`, `#vraifaux-`, `#stats-`) still work so old links and notifications never break.

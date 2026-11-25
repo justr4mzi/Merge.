@@ -210,6 +210,24 @@ Deno.serve(async (req) => {
         ? "équilibré (250 à 500 mots : une ou deux phrases sur le but du chapitre, puis les définitions principales et les notions clés)"
         : "plus court (150 à 250 mots, seulement l'essentiel : le but du chapitre, les définitions principales et les notions clés)";
       out.summary = await run([{ text: cours(text) + `${REGLE}\nÉcris un résumé ${mode} en Markdown (titres ## et listes -).` }], false, 0.2);
+    } else if (body.action === "audio") {
+      if (!needText()) return short();
+      const idx = Math.max(1, Math.min(20, Number(body.i) || 1));
+      const tot = Math.max(idx, Math.min(20, Number(body.n) || 1));
+      const titre = clip(body.titre, 160);
+      const pos = tot > 1
+        ? `Ceci est la partie ${idx} sur ${tot} du cours « ${titre} ». ${idx === 1 ? "Commence par une courte accroche qui annonce le sujet du chapitre et pourquoi il est utile." : "Enchaîne naturellement avec la suite du cours, sans redire bonjour ni réintroduire tout le chapitre."} ${idx === tot ? "Termine par une courte conclusion qui relie les grandes idées à retenir." : "Ne fais pas de conclusion finale : la suite arrive dans la partie suivante."}`
+        : `Voici l'intégralité du cours « ${titre} ». Commence par une courte accroche qui annonce le but du chapitre, puis termine par une courte conclusion récapitulative.`;
+      out.script = await run([{
+        text: cours(text) + `${REGLE}\n${pos}\n\n` +
+          "Rédige le texte d'un COURS AUDIO EXPLIQUÉ destiné à être lu à voix haute par un professeur bienveillant et pédagogue à un lycéen (façon podcast de révision).\n" +
+          "RÈGLES STRICTES :\n" +
+          "- COUVRE TOUT LE COURS FOURNI dans l'ordre, du début à la fin, sans sauter aucune notion, définition, propriété, formule, date, méthode ni schéma décrit.\n" +
+          "- EXPLIQUE ET DÉCORTIQUE chaque notion au lieu de réciter : dis avec des mots simples ce que ça veut dire concrètement, pourquoi c'est vrai ou comment ça marche étape par étape, fais le lien avec ce qui précède, illustre avec les exemples du cours et signale les confusions ou pièges classiques évoqués dans le cours.\n" +
+          "- STYLE ORAL NATUREL : tutoie l'élève, phrases fluides et rythmées agréables à écouter, transitions claires (« Maintenant voyons… », « Autrement dit… », « Attention ici… »). Zéro puce, zéro liste à tirets, zéro tableau, zéro astérisque ni gras, zéro parenthèse lourde.\n" +
+          "- FORMULES À L'ORAL : n'écris JAMAIS de LaTeX ($...$, \\frac, ^{}, _{}) ni de symboles bruts difficiles à lire à voix haute : écris les formules et unités en toutes lettres comme on les prononce à l'oral (ex. « U égale R fois I », « delta E égale h fois nu », « mètre par seconde »).\n" +
+          "- STRUCTURE : découpe en sections claires avec un titre court précédé de ## sur sa propre ligne (ex. ## Comprendre la mitose), suivi de paragraphes parlés de 3 à 5 phrases chacun (environ 50 à 90 mots par paragraphe, séparés par une ligne vide) pour une écoute fluide."
+      }], false, 0.35);
     } else if (body.action === "study") {
       const k = STUDY[String(body.kind)];
       if (!k) return json({ error: "requete", detail: "Type inconnu." }, 400);
