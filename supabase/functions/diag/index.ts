@@ -63,7 +63,7 @@ async function accessToken(sa: Any) {
   if (!res.ok || !data.access_token) throw new Error("google_auth: " + JSON.stringify(data).slice(0, 300));
   return data.access_token as string;
 }
-async function geminiJson(sa: Any, token: string, parts: Any[], thinking = "low") {
+async function geminiJson(sa: Any, token: string, parts: Any[], thinking = "medium") {
   const host = LOCATION === "global" ? "aiplatform.googleapis.com" : `${LOCATION}-aiplatform.googleapis.com`;
   const url = `https://${host}/v1/projects/${sa.project_id}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
   const body: Any = { systemInstruction: { parts: [{ text: "Tu aides un élève français à réviser avec des schémas de son cours. Tu ne réponds qu'à partir de ce qui est visible sur la photo." }] }, contents: [{ role: "user", parts }], generationConfig: { temperature: 0, responseMimeType: "application/json", thinkingConfig: { thinkingLevel: thinking } } };
@@ -198,7 +198,7 @@ async function schemaRecheck(only: number, dry: boolean, to?: number) {
         front: c.front,
         back: c.back,
         renderCrop: (f: number[], m: number[][]) => renderCropB64(pageImg, f, m),
-        askGemini: (prompt: string, imgB64: string) => geminiJson(sa, token, [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: imgB64 } }], "low"),
+        askGemini: (prompt: string, imgB64: string) => geminiJson(sa, token, [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: imgB64 } }], "medium"),
       });
       if (res.tightened) frameMemo.set(key0, res.frame);
       const tightened = res.frame.join(",") !== frame0.join(",");

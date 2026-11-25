@@ -48,7 +48,7 @@ async function accessToken(sa: { client_email: string; private_key: string; toke
 
 type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
 // deno-lint-ignore no-explicit-any
-async function gemini(sa: any, system: string, parts: Part[], wantJson: boolean, temperature: number, thinking = "low", search = false) {
+async function gemini(sa: any, system: string, parts: Part[], wantJson: boolean, temperature: number, thinking = "medium", search = false) {
   const token = await accessToken(sa);
   const host = LOCATION === "global" ? "aiplatform.googleapis.com" : `${LOCATION}-aiplatform.googleapis.com`;
   const url = `https://${host}/v1/projects/${sa.project_id}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
@@ -167,9 +167,8 @@ Deno.serve(async (req) => {
     // deno-lint-ignore no-explicit-any
     let out: any = {};
     let tin = 0, tout = 0;
-    // Réflexion minimale pour les tâches courtes (lecture, vérification, correction d'une réponse, astuce) : réponses plus rapides.
-    // Niveau de réflexion « low » partout : « minimal » est refusé par Gemini (Hydrogen comme 3.8 Flash), ce qui faisait un appel raté puis une réflexion par défaut, plus lente.
-    const thin = "low";
+    // Réflexion « medium » au minimum partout (choix de Ramzi, 25 nov.) : moins d'erreurs, même pour le Prof et les corrections.
+    const thin = "medium";
     const run = async (parts: Part[], wantJson: boolean, temp = 0.2) => {
       const r = await gemini(sa, sys, parts, wantJson, temp, thin);
       tin += r.tin; tout += r.tout;
@@ -281,7 +280,7 @@ Deno.serve(async (req) => {
       // Vrai sujet officiel cherché sur le web. Sans source trouvée par la recherche, on répond « introuvable » : rien n'est inventé.
       const matiere = clip(body.matiere, 60), annee = /^\d{4}$/.test(String(body.annee ?? "")) ? String(body.annee) : "";
       const prompt = `EXCEPTION À LA RÈGLE ABSOLUE pour cette demande seulement : cherche sur le web, ne te base pas sur un cours.\nTrouve un VRAI sujet officiel d'examen français des années précédentes pour un élève de « ${prof?.classe ?? "Terminale"} », matière « ${matiere} »${annee ? `, année ${annee}` : " (le plus récent possible)"} : épreuve du baccalauréat (ou l'examen officiel qui correspond à cette formation : BTS, concours…). Sources acceptées : sites officiels (education.gouv.fr, eduscol, académies), ou sites d'annales sérieux qui reproduisent le sujet officiel (APMEP, sujetdebac.fr, annabac…). Recopie l'énoncé fidèlement (tu peux résumer les documents trop longs en le signalant), puis rédige la correction de chaque question et un barème cohérent avec le sujet.\nRéponds UNIQUEMENT avec un objet JSON, sans texte autour :\n{"trouve":true,"epreuve":"nom de l'épreuve","annee":"2024","session":"ex. Métropole, juin","filiere":"...","source_nom":"nom du site","source_url":"adresse exacte de la page du sujet","avertissement":"précision éventuelle (documents résumés, partie seulement…) ou chaîne vide","exercices":[{"titre":"Exercice 1","enonce":"énoncé","questions":[{"q":"question","points":2,"correction":"correction rédigée"}]}]}\nSi tu ne trouves PAS de sujet officiel vérifiable correspondant à cette filière et cette matière, réponds exactement {"trouve":false,"message":"phrase qui explique ce qui n'a pas été trouvé"}. N'invente jamais un sujet.`;
-      const r = await gemini(sa, sys, [{ text: prompt }], false, 0.2, "low", true);
+      const r = await gemini(sa, sys, [{ text: prompt }], false, 0.2, "medium", true);
       tin += r.tin; tout += r.tout;
       // deno-lint-ignore no-explicit-any
       let c: any = null;
