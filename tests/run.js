@@ -891,10 +891,18 @@ async function voixMerge(browser) {
   const page = await open(browser, { w: 390, h: 844, theme: "dark" });
   await go(page, "#reglages", 300); await page.click('[data-open="revision"]'); await page.waitForTimeout(150);
   ok(await page.locator('[data-ve="merge"][aria-pressed="true"]').count() === 1, "voix : voix Merge choisie par défaut");
-  await page.click("#vtry"); await page.waitForTimeout(300);
-  ok(await page.evaluate(() => window.__fake.voix === 1), "voix : la voix Merge est demandée au serveur");
-  await page.click("#vtry"); await page.waitForTimeout(300);
-  ok(await page.evaluate(() => window.__fake.voix === 1), "voix : si elle est indisponible, l'appareil prend le relais sans redemander");
+  await page.click("#vtry"); await page.waitForTimeout(1200);
+  ok(await page.evaluate(() => window.__fake.voix === 2), "voix : la voix Merge est demandée au serveur (un 2e essai si elle ne répond pas)");
+  ok(await page.evaluate(() => document.body.innerText.includes("Voix Merge indisponible")), "voix : l'élève est prévenu quand c'est la voix de l'appareil");
+  await page.click("#vtry"); await page.waitForTimeout(1200);
+  await page.click("#vtry"); await page.waitForTimeout(600);
+  ok(await page.evaluate(() => window.__fake.voix === 4), "voix : après 2 ratés de suite, l'appareil prend le relais sans redemander");
+  // Un raté passager (réseau) ne fait plus basculer sur la voix de l'appareil.
+  const p2 = await open(browser, { w: 390, h: 844, theme: "dark", extra: { voix: "flaky" } });
+  await go(p2, "#reglages", 300); await p2.click('[data-open="revision"]'); await p2.waitForTimeout(150);
+  await p2.click("#vtry"); await p2.waitForTimeout(1300);
+  ok(await p2.evaluate(() => window.__fake.voix === 2) && !(await p2.evaluate(() => document.body.innerText.includes("Voix Merge indisponible"))), "voix : un raté passager est réessayé, la voix Merge est gardée");
+  await p2.context().close();
   await page.click('[data-ve="appareil"]'); await page.waitForTimeout(100);
   ok(await page.evaluate(() => localStorage.getItem("merge.vengine") === "appareil" && window.__mergeSync.synced("merge.vengine")), "voix : choix gardé et synchronisé");
   await go(page, "#ecouter-c1", 400); ok(await page.locator("#play").count() === 1, "voix : écran Écouter");

@@ -353,15 +353,26 @@
   // Les longues phrases sont lues par morceaux : certaines voix en ligne se coupent après une quinzaine de secondes.
   // Lecture à voix haute. Voix Merge (fonction `voix`, chaque phrase gardée sur le serveur) si elle est disponible,
   // sinon voix de l'appareil : hors ligne, API pas encore activée, ou quota gratuit du mois atteint.
-  const spk = { el: null, token: 0, down: 0 };
+  // Voix Merge plus robuste (25 nov.) : avant, UN seul raté (réseau lent, préchargement raté, lien expiré) basculait sur la voix
+  // de l'appareil pendant 10 minutes, et un lien gardé plus d'une heure (il expire au bout d'1 h) la cassait aussi.
+  // Maintenant : liens gardés 50 min, un 2e essai automatique, et la voix de l'appareil seulement après 2 ratés de suite (pour 2 min).
+  const spk = { el: null, token: 0, down: 0, fails: 0, told: false };
   const neuralWanted = () => safeGet("merge.vengine") !== "appareil";
   const spkUrls = new Map();
-  async function neuralUrl(text, lang) {
-    const k = (lang || "fr") + "|" + text; if (spkUrls.has(k)) return spkUrls.get(k);
-    const { data, error } = await sb.functions.invoke("voix", { body: { text, lang: (lang || "fr").slice(0, 2) } });
-    if (error || !data || !(data.url || data.audio)) { spk.down = Date.now(); throw new Error("voix"); }
-    const url = data.url || ("data:audio/mpeg;base64," + data.audio); spkUrls.set(k, url); return url;
+  async function neuralUrl(text, lang, quiet) {
+    const k = (lang || "fr") + "|" + text, c = spkUrls.get(k); if (c && Date.now() - c.t < 3000000) return c.url;
+    for (let i = 0; i < 2; i++) {
+      try {
+        const { data, error } = await sb.functions.invoke("voix", { body: { text, lang: (lang || "fr").slice(0, 2) } });
+        if (!error && data && (data.url || data.audio)) { const url = data.url || ("data:audio/mpeg;base64," + data.audio); spkUrls.set(k, { url, t: Date.now() }); spk.fails = 0; return url; }
+        if (data && data.error === "quota_voix") break;
+      } catch (e) { /* 2e essai */ }
+      if (i === 0) await new Promise(r => setTimeout(r, 700));
+    }
+    if (!quiet && ++spk.fails >= 2) spk.down = Date.now();
+    throw new Error("voix");
   }
+  const forgetUrl = (text, lang) => spkUrls.delete((lang || "fr") + "|" + text);
   function stopSpeak() { spk.token++; try { if ("speechSynthesis" in window) speechSynthesis.cancel(); } catch (e) { /* rien */ } if (spk.el) { spk.el.pause(); spk.el.onended = null; } }
   function speakTextDevice(t, lang, onend, rate) {
     if (!("speechSynthesis" in window)) { if (onend) onend(); return; }
@@ -389,29 +400,32 @@
   function speakText(t, lang, onend, rate) {
     stopSpeak(); const my = spk.token;
     t = /[$\\]/.test(String(t)) ? texPlain(t).replace(/\(([^()]*)\)\/\(([^()]*)\)/g, "$1 sur $2") : String(t);
-    const useNeural = neuralWanted() && state.user && !state.offline && navigator.onLine !== false && Date.now() - spk.down > 600000;
+    const useNeural = neuralWanted() && state.user && !state.offline && navigator.onLine !== false && Date.now() - spk.down > 120000;
     if (!useNeural) return speakTextDevice(t, lang, onend, rate);
     unlockAudio();
     const bits = t.match(/[^.!?;:\n]+[.!?;:]*\s*/g) || [t], chunks = []; let cur = "";
     bits.forEach(b => { if ((cur + b).length > 900 && cur.trim()) { chunks.push(cur.trim()); cur = ""; } cur += b; }); if (cur.trim()) chunks.push(cur.trim());
     let k = 0, over = false; const end = () => { if (!over && my === spk.token) { over = true; if (onend) onend(); } };
-    const fallback = () => { if (my !== spk.token) return; speakTextDevice(chunks.slice(k).join(" "), lang, end, rate); };
+    const fallback = () => { if (my !== spk.token) return; if (!spk.told) { spk.told = true; toast("Voix Merge indisponible pour l'instant : voix de l'appareil."); } speakTextDevice(chunks.slice(k).join(" "), lang, end, rate); };
+    let retried = -1;
+    // Lecture ratée (lien expiré, coupure) : on redemande l'audio une fois avant de passer à la voix de l'appareil.
+    const retry = () => { if (my !== spk.token) return; k--; if (retried === k) return fallback(); retried = k; forgetUrl(chunks[k], lang); next(); };
     const next = async () => {
       if (my !== spk.token) return; if (k >= chunks.length) return end();
       let url; try { url = await neuralUrl(chunks[k], lang); } catch (e) { return fallback(); }
       if (my !== spk.token) return; k++;
-      if (k < chunks.length) neuralUrl(chunks[k], lang).catch(() => {});
-      const a = spk.el || (spk.el = new Audio()); a.preservesPitch = true; a.defaultPlaybackRate = rate || voiceRate(); a.src = url; a.playbackRate = rate || voiceRate(); a.onended = next; a.onerror = () => { k--; fallback(); };
-      const pr = a.play(); if (pr && pr.catch) pr.catch(() => { k--; fallback(); });
+      if (k < chunks.length) neuralUrl(chunks[k], lang, true).catch(() => {});
+      const a = spk.el || (spk.el = new Audio()); a.preservesPitch = true; a.defaultPlaybackRate = rate || voiceRate(); a.src = url; a.playbackRate = rate || voiceRate(); a.onended = next; a.onerror = retry;
+      const pr = a.play(); if (pr && pr.catch) pr.catch(e => { if (my !== spk.token || (e && e.name === "AbortError")) return; retry(); });
     };
     next();
   }
   function prefetchSpeech(t, lang) {
-    if (!t || !neuralWanted() || !state.user || state.offline || navigator.onLine === false || Date.now() - spk.down <= 600000) return;
+    if (!t || !neuralWanted() || !state.user || state.offline || navigator.onLine === false || Date.now() - spk.down <= 120000) return;
     t = /[$\\]/.test(String(t)) ? texPlain(t).replace(/\(([^()]*)\)\/\(([^()]*)\)/g, "$1 sur $2") : String(t);
     const bits = t.match(/[^.!?;:\n]+[.!?;:]*\s*/g) || [t]; let first = "";
     for (const b of bits) { if ((first + b).length > 900 && first.trim()) break; first += b; }
-    if (first.trim()) neuralUrl(first.trim(), lang).catch(() => {});
+    if (first.trim()) neuralUrl(first.trim(), lang, true).catch(() => {});
   }
   const chLang = ch => (!ch.lang || ch.lang.startsWith("fr")) ? "fr-FR" : ch.lang;
   const getMnemo = c => c.mnemonic || safeGet("merge.mnemo." + c.id) || "";
