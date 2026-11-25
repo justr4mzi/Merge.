@@ -168,7 +168,8 @@ Deno.serve(async (req) => {
     let out: any = {};
     let tin = 0, tout = 0;
     // Réflexion minimale pour les tâches courtes (lecture, vérification, correction d'une réponse, astuce) : réponses plus rapides.
-    const thin = ["transcribe", "verify", "interro", "khole", "pourquoi", "mnemo", "concret", "edt"].includes(String(body.action)) ? "minimal" : "low";
+    // Niveau de réflexion « low » partout : « minimal » est refusé par Gemini (Hydrogen comme 3.8 Flash), ce qui faisait un appel raté puis une réflexion par défaut, plus lente.
+    const thin = "low";
     const run = async (parts: Part[], wantJson: boolean, temp = 0.2) => {
       const r = await gemini(sa, sys, parts, wantJson, temp, thin);
       tin += r.tin; tout += r.tout;
