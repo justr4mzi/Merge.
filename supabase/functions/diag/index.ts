@@ -13,7 +13,7 @@ import { groups, cropRect, maskPixels, checkCroppedSchema } from "../studio/sche
 
 const URL_ = Deno.env.get("SUPABASE_URL")!;
 const admin = createClient(URL_, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.8-flash";
+const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-4-hydrogen";
 const LOCATION = Deno.env.get("GEMINI_LOCATION") ?? "global";
 // deno-lint-ignore no-explicit-any
 type Any = any;

@@ -15,7 +15,7 @@ const CORS = {
 };
 const URL_ = Deno.env.get("SUPABASE_URL")!;
 const QUOTA = Number(Deno.env.get("AI_DAILY_QUOTA") ?? "40");
-const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.8-flash";
+const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-4-hydrogen";
 const LOCATION = Deno.env.get("GEMINI_LOCATION") ?? "global";
 const LIM = 380000;
 const REGLE = "Base-toi UNIQUEMENT sur le cours fourni. N'invente rien et n'ajoute aucune connaissance extérieure : si une information n'est pas dans le cours, ne l'écris pas.";
