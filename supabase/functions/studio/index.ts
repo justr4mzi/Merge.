@@ -227,6 +227,10 @@ async function lirePages(sa: Any, sys: string, imgs: Part[], stall: number, firs
     "\nCAHIER ÉCRIT À LA MAIN : lis lettre par lettre. Ne complète JAMAIS un mot, un nombre, une unité ou une formule à partir de ce que tu sais du sujet : écris seulement ce qui est réellement écrit sur la page. Fais très attention aux chiffres, virgules, puissances de 10, signes (+, −, =), indices, exposants et unités. Un mot ou un passage que tu ne lis pas avec certitude : écris [illisible] à sa place (jamais une supposition). Ignore les ratures barrées. Sépare les pages par une ligne [[PAGE]]." +
     "\nSCHÉMAS : pour chaque vrai schéma, dessin légendé, graphique ou carte (pas un simple encadré de texte, pas un tableau), écris à sa place, seule sur une ligne, [[SCHEMA|ymin,xmin,ymax,xmax|titre court]] : les 4 nombres entiers sont le cadre qui entoure TOUT le dessin avec ses légendes, et RIEN D'AUTRE : ni le titre du document (« Doc 2 : … »), ni la phrase d'explication en dessous, ni les paragraphes ou les autres schémas à côté. Ce cadre doit être SERRÉ : il s'arrête juste après la légende la plus éloignée. Coordonnées sur la page où il se trouve, de 0 à 1000 (0,0 = coin en haut à gauche). Juste après, décris-le en une ou deux phrases (ce qu'il représente), puis pour CHAQUE légende écrite sur le schéma (mot ou groupe de mots relié à une partie du dessin), une ligne [[LEGENDE|ymin,xmin,ymax,xmax|texte exact de la légende]] : les 4 nombres sont le cadre SERRÉ autour du texte de cette légende seulement (pas du trait ni du dessin), sur la même page, de 0 à 1000. Une légende écrite plusieurs fois sur le schéma : une ligne [[LEGENDE|…]] pour CHAQUE endroit où elle est écrite. N'oublie aucune légende, même petite ou en couleur. 20 légendes au plus par schéma, 4 schémas au plus par page.";
   let txt = await first([{ text: LECTURE }, ...imgs], "medium");
+  // Plus assez de temps avant la limite de l'étape (26 nov.) : on garde la lecture telle quelle plutôt que de tout perdre
+  // en relisant (avant, la relecture faisait dépasser la limite et le lot entier était à refaire, encore et encore).
+  const dl = LIMIT.getStore()?.dl ?? 0, late = (ms: number) => dl > 0 && Date.now() > dl - ms;
+  if (late(50000)) stall = Math.max(stall, 2); else if (late(75000)) stall = Math.max(stall, 1);
   // 2) Relecture : on compare la transcription aux photos, mot à mot, et on corrige ce qui ne correspond pas (surtout pour l'écriture à la main).
   if (stall < 2) try {
     // Ne compte pas dans la limite du jour : c'est une vérification de la même lecture, pas une nouvelle demande.
@@ -264,8 +268,10 @@ async function stepRun(id: string) {
       const stall = Number(st.stall ?? 0), before = Object.keys(st.texts).length;
       const pending = segs.map((s, i) => (s.path && st.texts[i] == null ? i : -1)).filter((i) => i >= 0);
       const total = segs.filter((s) => s.path).length, batches: number[][] = [];
-      // Lots de 4 pages : assez petits pour que la lecture reste précise (cahiers manuscrits).
-      for (let i = 0; i < pending.length; i += 4) batches.push(pending.slice(i, i + 4));
+      // Lots de 2 pages (1 seule si un lot a déjà été coupé faute de temps) : avec Gemini 4 Hydrogen en réflexion « medium »,
+      // 4 diapositives chargées d'un coup dépassaient la limite de temps de l'étape (import bloqué, 26 nov., Déborah).
+      const per = stall ? 1 : 2;
+      for (let i = 0; i < pending.length; i += per) batches.push(pending.slice(i, i + per));
       let next = 0;
       const worker = async () => {
         while (next < batches.length && Date.now() - t0 < 30000) {
