@@ -708,6 +708,26 @@ async function adminPage(browser) {
 }
 
 // Toucher l'onglet où l'on est déjà ramène à son écran d'arrivée (Réglages : referme la catégorie ouverte).
+// Écouter > « Sur mesure » : l'élève écrit ce qu'il veut, le prof en fait un audio ; les parties ne dépassent plus à droite.
+async function ecouterPerso(browser) {
+  for (const [w, h] of [[390, 844], [1440, 900]]) {
+    const page = await open(browser, { w, h, theme: "dark" }), tag = "sur mesure " + w;
+    await go(page, "#ecouter-c1", 600);
+    await page.click('[data-w="perso"]'); await page.waitForTimeout(200);
+    ok(await page.locator("#pdem").isVisible(), tag + " : zone pour écrire sa demande");
+    await page.fill("#pdem", "la différence entre mitose et méiose"); await page.click("#mkperso");
+    await page.waitForSelector("#play", { timeout: 8000 }).catch(() => {});
+    ok(await page.evaluate(() => window.__fake.demande === "la différence entre mitose et méiose"), tag + " : la demande est envoyée au prof");
+    ok((await txt(page)).includes("Ta demande") && (await txt(page)).includes("Tu veux comprendre"), tag + " : l'audio sur mesure s'affiche, prêt à écouter");
+    ok(await page.evaluate(() => !!localStorage.getItem("merge.audioperso.c1")), tag + " : gardé pour le réécouter");
+    const fit = await page.evaluate(() => { const app = document.getElementById("app").getBoundingClientRect(); return [...document.querySelectorAll(".secchips .chip, .lwhat .chip")].every(c => c.getBoundingClientRect().right <= app.right + 1) && document.documentElement.scrollWidth <= innerWidth; });
+    ok(fit, tag + " : aucune pastille ne dépasse à droite");
+    if (process.env.PSHOT) await page.screenshot({ path: process.env.PSHOT + "/perso-" + w + ".png" });
+    await page.click("#newperso"); await page.waitForTimeout(200);
+    ok(await page.locator("#pdem").isVisible() && await page.locator("#backperso").isVisible(), tag + " : nouvelle demande, et on peut réécouter la dernière");
+    await page.context().close();
+  }
+}
 // Annuler un import en cours (bloqué, mauvais fichier…) : le serveur l'arrête, l'écran d'import revient, rien n'est ajouté.
 async function impAnnule(browser) {
   const page = await open(browser, { w: 390, h: 844, theme: "dark" }), tag = "annuler import";
@@ -2099,7 +2119,7 @@ let BASE;
   try {
     const only = process.env.ONLY ? process.env.ONLY.split(",") : null, want = n => only ? only.includes(n) : n !== "chasse" && n !== "apercu";
     if (want("sweep")) await Promise.all([[390, 844, "light"], [390, 844, "dark"], [1280, 800, "light"], [1280, 800, "dark"]].map(([w, h, theme]) => sweep(browser, w, h, theme)));
-    const SUITES = { apercu, resumeAudio, chapRepos, impAnnule, profFichier, profSchemas, schemaPlat, ongletRetour, paris, adminPage, schemasAnciens, cartesFormules, chronoBlanc, plusOptions, refonte, multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
+    const SUITES = { apercu, resumeAudio, chapRepos, impAnnule, ecouterPerso, profFichier, profSchemas, schemaPlat, ongletRetour, paris, adminPage, schemasAnciens, cartesFormules, chronoBlanc, plusOptions, refonte, multiImport, majSw, profPc, importRelance, importEta, schemasServeur, schemasCartes, flows, v7, v8, v10, sync, formules, interro, sup, musique, chapitre, tempsEcran, melange, recherche, horsligne, recompenses, edt, methodeBac, partage, petitEcran, voixMerge, retourFlottant, corbeille, vitesse, redressement, imageCarte, animations, fenetres, rappels, matieresTactile, nomAuto, annulerCarte, leurres, iphoneAppli, semaine, duoLien, pomodoroReglable, boutique, controleChapitres, boutiqueV2, genially, corbeillePartout, saison, revisionControle, journee, exos, progresClean, planningPlus, accueilV2, icones, edtReprise, audit, chasse };
     const todo = Object.entries(SUITES).filter(([n]) => want(n)), jobs = Math.max(1, +(process.env.JOBS || 4));
     let idx = 0;
     await Promise.all(Array.from({ length: Math.min(jobs, todo.length) }, async () => { while (idx < todo.length) { const [, f] = todo[idx++]; await f(browser); } }));

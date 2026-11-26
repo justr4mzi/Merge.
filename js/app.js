@@ -4266,20 +4266,26 @@
     if (!("speechSynthesis" in window) && !neuralWanted()) { app.innerHTML = head + `<div class="card done"><p class="muted">Ton navigateur ne sait pas lire à voix haute.</p><a class="btn" href="${back}">Retour</a></div>`; return; }
     const [cards, sum, src, aud] = await Promise.all([chapterCards(id), sb.from("summaries").select("markdown").eq("chapter_id", id).maybeSingle(), sb.from("sources").select("extracted_text").eq("chapter_id", id), getCached(id, "audio").catch(() => null)]);
     const clean = s => String(s || "").replace(/[#*_>`]/g, "").replace(/\s+/g, " ").trim();
-    const parts = { resume: sum.data ? String(sum.data.markdown).split(/\n+/).map(clean).filter(Boolean) : [], cartes: cards.flatMap(c => [clean(c.front), clean(c.back)]), cours: (src.data || []).map(x => x.extracted_text || "").join("\n").replace(/\[\[PAGE\]\]/g, "\n").split(/(?<=[.!?])\s+|\n+/).map(clean).filter(x => x.length > 2), expl: [] };
-    let secs = [];
+    const parts = { resume: sum.data ? String(sum.data.markdown).split(/\n+/).map(clean).filter(Boolean) : [], cartes: cards.flatMap(c => [clean(c.front), clean(c.back)]), cours: (src.data || []).map(x => x.extracted_text || "").join("\n").replace(/\[\[PAGE\]\]/g, "\n").split(/(?<=[.!?])\s+|\n+/).map(clean).filter(x => x.length > 2), expl: [], perso: [] };
+    let secs = [], psecs = [], pq = "";
     const setExpl = a => { secs = ((a && a.parts) || []).filter(x => x && Array.isArray(x.p) && x.p.length); parts.expl = secs.flatMap(x => x.p); };
     setExpl(aud);
+    // « Sur mesure » (26 nov.) : l'élève écrit ce qu'il veut qu'on lui explique, le prof en fait un audio (gardé sur l'appareil).
+    const PKEY = "merge.audioperso." + id;
+    const setPerso = a => { psecs = ((a && a.parts) || []).filter(x => x && Array.isArray(x.p) && x.p.length); pq = (a && a.q) || ""; parts.perso = psecs.flatMap(x => x.p); };
+    try { setPerso(JSON.parse(safeGet(PKEY) || "null")); } catch (e) { setPerso(null); }
+    let persoForm = !parts.perso.length, persoDraft = "";
     const wantExpl = listenWant === "expl"; listenWant = null;
     const L = { what: wantExpl ? "expl" : parts.resume.length ? "resume" : "cartes", i: 0, rate: voiceRate(), playing: false, sleep: 0, sleepAt: 0 };
     const saved = (safeGet("merge.ecoute." + id) || "").split(":"); if (parts[saved[0]] && +saved[1] < parts[saved[0]].length && (!wantExpl || saved[0] === "expl")) { L.what = saved[0]; L.i = +saved[1] || 0; }
     const lang = (ch.lang || "fr").startsWith("fr") ? "fr-FR" : ch.lang;
-    const secOf = i => { let n = 0; for (let k = 0; k < secs.length; k++) { n += secs[k].p.length; if (i < n) return k; } return Math.max(0, secs.length - 1); };
-    const secFirst = k => secs.slice(0, k).reduce((a, x) => a + x.p.length, 0);
+    const curSecs = () => L.what === "perso" ? psecs : secs;
+    const secOf = i => { const S = curSecs(); let n = 0; for (let k = 0; k < S.length; k++) { n += S[k].p.length; if (i < n) return k; } return Math.max(0, S.length - 1); };
+    const secFirst = k => curSecs().slice(0, k).reduce((a, x) => a + x.p.length, 0);
     // Préparation du cours expliqué : une tranche de cours = un appel IA, avec barre de progression.
-    const G = { busy: false, k: 0, n: 1, t0: 0, err: null };
+    const G = { busy: false, k: 0, n: 1, t0: 0, err: null, perso: false };
     const genPct = () => Math.min(96, Math.max(4, Math.round(((G.k + 0.92 * (1 - Math.exp(-(Date.now() - G.t0) / 30000))) / Math.max(1, G.n)) * 100)));
-    const genStat = () => G.n > 1 ? "Partie " + (G.k + 1) + " sur " + G.n + " : le prof explique ton cours…" : "Le prof explique ton cours…";
+    const genStat = () => G.perso ? "Le prof prépare ton explication…" : G.n > 1 ? "Partie " + (G.k + 1) + " sur " + G.n + " : le prof explique ton cours…" : "Le prof explique ton cours…";
     const genHtml = () => { const p = genPct(); return `<div class="card pad stack"><h2>Je prépare le cours expliqué…</h2><div class="bar big"><i id="xprog" style="width:${p}%"></i></div><div class="row between small muted"><span id="xstat" role="status">${esc(genStat())}</span><b id="xpct">${p} %</b></div><p class="small muted">Environ ${Math.max(1, Math.round(G.n * 0.8))} min. Garde l'appli ouverte : une notification te prévient à la fin si tu changes d'application.</p></div>`; };
     const paintGen = () => { const b = $("xprog"); if (!b) return; const p = genPct(); b.style.width = p + "%"; $("xpct").textContent = p + " %"; $("xstat").textContent = genStat(); };
     async function makeExpl() {
@@ -4307,6 +4313,21 @@
         if (location.hash === "#ecouter-" + id) draw(); else toast((e && e.message) || "Le cours expliqué n'a pas pu être préparé.");
       }
     }
+    async function makePerso(q) {
+      if (G.busy) return; if (state.offline) return toast("Il faut être connecté à Internet pour préparer ton audio.");
+      G.busy = true; G.perso = true; G.err = null; G.k = 0; G.n = 1; G.t0 = Date.now(); persoDraft = q; draw();
+      const tick = setInterval(paintGen, 300);
+      try {
+        const text = await courseText(id); if (text.trim().length < 80) throw new Error("Importe d'abord ton cours dans ce chapitre.");
+        const r = await ai({ action: "audio", text, demande: q, titre: ch.name });
+        const sc = parseScript(r && r.script); if (!sc.length) throw new Error("L'IA n'a rien renvoyé. Réessaie.");
+        const content = { q, parts: sc, at: Date.now() }; safeSet(PKEY, JSON.stringify(content)); setPerso(content);
+        persoForm = false; persoDraft = ""; L.what = "perso"; L.i = 0;
+        if (document.hidden) impNotify("Audio prêt", "« " + ch.name + " » : ton explication sur mesure est prête à écouter.");
+      } catch (e) { G.err = e; }
+      clearInterval(tick); G.busy = false; G.perso = false;
+      if (location.hash === "#ecouter-" + id) draw(); else if (!G.err) toast("Ton audio sur mesure de « " + ch.name + " » est prêt.");
+    }
     function speak() {
       const list = parts[L.what]; if (L.i >= list.length) { L.playing = false; L.i = 0; return draw(); }
       if (L.sleepAt && Date.now() > L.sleepAt) { L.playing = false; L.sleepAt = 0; L.sleep = 0; return draw(); }
@@ -4315,21 +4336,33 @@
       if (list[L.i + 1]) prefetchSpeech(list[L.i + 1], lang);
     }
     function draw() {
-      const list = parts[L.what], chips = `<div class="chips">${[["resume", "Le résumé"], ["cartes", "Les cartes"], ["cours", "Le cours complet"], ["expl", "Cours expliqué"]].map(t => `<button class="chip" data-w="${t[0]}" aria-pressed="${L.what === t[0]}" ${parts[t[0]].length || t[0] === "expl" ? "" : "disabled"}>${t[1]}</button>`).join("")}</div>`;
+      const list = parts[L.what], chips = `<div class="chips lwhat">${[["resume", "Le résumé"], ["cartes", "Les cartes"], ["cours", "Le cours complet"], ["expl", "Cours expliqué"], ["perso", "Sur mesure"]].map(t => `<button class="chip" data-w="${t[0]}" aria-pressed="${L.what === t[0]}" ${parts[t[0]].length || t[0] === "expl" || t[0] === "perso" ? "" : "disabled"}>${t[1]}</button>`).join("")}</div>`;
       const wire = () => app.querySelectorAll("[data-w]").forEach(b => b.onclick = () => { L.what = b.dataset.w; L.i = 0; L.playing = false; stopSpeak(); draw(); });
+      if (L.what === "perso" && (persoForm || !parts.perso.length || G.perso)) {
+        app.innerHTML = head + `<h1>${esc(ch.name)}</h1>${chips}` + (G.busy && G.perso ? genHtml() : `<div class="card pad stack"><h2>Explique-moi ce que je veux</h2><p class="muted">Écris ce que tu veux que le prof t'explique dans ce chapitre : une notion, une partie, un schéma, une méthode, la différence entre deux choses… Il en fait un audio, en s'appuyant sur ton cours.</p>
+          <textarea id="pdem" rows="5" maxlength="1500" placeholder="Ex. : Explique-moi la différence entre datation relative et absolue, avec les principes de superposition et de recoupement.">${esc(persoDraft || (persoForm && pq ? "" : ""))}</textarea>
+          ${G.err ? `<div class="err" role="alert">${esc((G.err && G.err.message) || "L'audio n'a pas pu être préparé.")}</div>` : ""}
+          <div class="row"><button class="btn grow" id="mkperso">${I.spark}Créer mon audio</button>${parts.perso.length ? `<button class="btn ghost" id="backperso">Réécouter le dernier</button>` : ""}</div></div>`);
+        wire();
+        if ($("mkperso")) $("mkperso").onclick = () => { const q = $("pdem").value.trim(); if (q.length < 5) { toast("Écris ce que tu veux que le prof t'explique."); $("pdem").focus(); return; } G.err = null; makePerso(q); };
+        if ($("pdem")) $("pdem").oninput = e => { persoDraft = e.target.value; };
+        if ($("backperso")) $("backperso").onclick = () => { persoForm = false; L.i = 0; draw(); };
+        return;
+      }
       if (L.what === "expl" && !parts.expl.length) {
         app.innerHTML = head + `<h1>${esc(ch.name)}</h1>${chips}` + (G.busy ? genHtml() : `<div class="card pad stack"><h2>Le cours expliqué</h2><p class="muted">Un prof reprend tout ton cours dans l'ordre et te l'explique à voix haute : il décortique les notions, les formules et les schémas, avec des exemples et des liens entre les idées. Ce n'est pas une simple lecture de ton texte.</p>${G.err ? `<div id="xerr">${errHtml(G.err)}</div>` : ""}<button class="btn" id="mkexpl">${G.err ? "Réessayer" : "Préparer le cours expliqué"}</button><p class="note">Utilise l'IA (1 appel par tranche de cours, 1 à 3 en général), puis c'est gardé sur tous tes appareils.</p></div>`);
         wire(); if ($("mkexpl")) $("mkexpl").onclick = makeExpl; return;
       }
-      const ex = L.what === "expl", sk = ex ? secOf(L.i) : 0, words = ex ? parts.expl.join(" ").split(/\s+/).length : 0;
+      const ex = L.what === "expl" || L.what === "perso", S = curSecs(), sk = ex ? secOf(L.i) : 0, words = ex ? list.join(" ").split(/\s+/).length : 0;
       app.innerHTML = head + `<h1>${esc(ch.name)}</h1>
         ${chips}
-        ${ex ? `<div class="chips secchips" aria-label="Parties du cours">${secs.map((s, k) => `<button class="chip" data-sec="${k}" aria-pressed="${k === sk}">${esc(s.h || "Partie " + (k + 1))}</button>`).join("")}</div>` : ""}
-        <div class="card pad stack">${ex ? `<p class="explsec">${esc((secs[sk] && secs[sk].h) || "")}</p>` : ""}<p class="small muted">${list.length ? (L.i + 1) + " sur " + list.length + (ex ? " · environ " + Math.max(1, Math.round(words / 150 / L.rate)) + " min d'écoute" : "") : "Rien à lire"}</p><p class="qtxt" aria-live="polite">${esc(list[L.i] || "")}</p><div class="bar"><i style="width:${list.length ? (L.i / list.length * 100) : 0}%"></i></div>
+        ${L.what === "perso" ? `<div class="card pad persoq"><span class="small muted">Ta demande</span><p>${esc(pq)}</p><button class="linkbtn" id="newperso">${I.plus}Nouvelle demande</button></div>` : ""}
+        ${ex ? `<div class="chips secchips" aria-label="Parties">${S.map((s, k) => `<button class="chip" data-sec="${k}" aria-pressed="${k === sk}">${esc(s.h || "Partie " + (k + 1))}</button>`).join("")}</div>` : ""}
+        <div class="card pad stack">${ex ? `<p class="explsec">${esc((S[sk] && S[sk].h) || "")}</p>` : ""}<p class="small muted">${list.length ? (L.i + 1) + " sur " + list.length + (ex ? " · environ " + Math.max(1, Math.round(words / 150 / L.rate)) + " min d'écoute" : "") : "Rien à lire"}</p><p class="qtxt" aria-live="polite">${esc(list[L.i] || "")}</p><div class="bar"><i style="width:${list.length ? (L.i / list.length * 100) : 0}%"></i></div>
           <div class="row" style="justify-content:center"><button class="btn ghost sm" id="prevp">Précédent</button><button class="btn" id="play">${L.playing ? "Pause" : "Lire"}</button><button class="btn ghost sm" id="nextp">Suivant</button></div></div>
         <div class="field"><span class="label">Vitesse</span><div class="chips">${[0.75, 1, 1.25, 1.5, 2].map(r => `<button class="chip" data-r="${r}" aria-pressed="${L.rate === r}">${String(r).replace(".", ",")}x</button>`).join("")}</div></div>
         <div class="field"><span class="label">Arrêt automatique</span><div class="chips">${[[0, "Jamais"], [15, "15 min"], [30, "30 min"]].map(t => `<button class="chip" data-sl="${t[0]}" aria-pressed="${L.sleep === t[0]}">${t[1]}</button>`).join("")}</div></div>
-        ${ex ? '<button class="linkbtn" id="rgexpl" style="align-self:flex-start">Refaire le cours expliqué (IA)</button>' : ""}
+        ${L.what === "expl" ? '<button class="linkbtn" id="rgexpl" style="align-self:flex-start">Refaire le cours expliqué (IA)</button>' : ""}
         <p class="note">${neuralWanted() ? "Lecture avec la voix Merge (la voix de ton appareil prend le relais hors ligne)." : "Lecture avec la voix de ton appareil."} Elle reprend là où tu t'es arrêté.</p>`;
       app.querySelectorAll("[data-sl]").forEach(b => b.onclick = () => { L.sleep = +b.dataset.sl; L.sleepAt = L.sleep ? Date.now() + L.sleep * 60000 : 0; draw(); });
       $("play").onclick = () => { L.playing = !L.playing; if (L.playing) speak(); else { stopSpeak(); draw(); } };
@@ -4337,6 +4370,7 @@
       $("nextp").onclick = () => { L.i = Math.min(Math.max(0, list.length - 1), L.i + 1); L.playing ? speak() : draw(); };
       wire();
       app.querySelectorAll("[data-sec]").forEach(b => b.onclick = () => { L.i = secFirst(+b.dataset.sec); L.playing ? speak() : draw(); });
+      if ($("newperso")) $("newperso").onclick = () => { stopSpeak(); L.playing = false; persoForm = true; persoDraft = ""; G.err = null; draw(); setTimeout(() => $("pdem") && $("pdem").focus(), 50); };
       if ($("rgexpl")) $("rgexpl").onclick = async () => { if (!(await askConfirm("Refaire le cours expliqué ?", "Le prof réécrit tout le cours expliqué (quelques appels IA). L'ancien est remplacé.", "Refaire"))) return; stopSpeak(); L.playing = false; setExpl(null); makeExpl(); };
       app.querySelectorAll("[data-r]").forEach(b => b.onclick = () => { L.rate = +b.dataset.r; safeSet("merge.rate", String(L.rate)); if (spk.el && !spk.el.paused) { spk.el.defaultPlaybackRate = spk.el.playbackRate = L.rate; draw(); } else if (L.playing) speak(); else draw(); });
     }

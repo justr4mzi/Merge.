@@ -1948,4 +1948,13 @@ mark.hl.user.ub,.ub{font-weight:900}
 .hldot.none{background:transparent;box-shadow:inset 0 0 0 2px var(--line)}
 .hltxt{min-width:0;overflow-wrap:anywhere}
 .secchips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}.secchips::-webkit-scrollbar{display:none}.secchips .chip{flex:none;max-width:70vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.explsec{font-weight:800;color:var(--accent-ink);margin:0}
+.explsec{font-weight:800;color:var(--accent-ink);margin:0}/* Écouter (26 nov.) : les parties du cours expliqué passent à la ligne au lieu de dépasser à droite (sur PC on ne pouvait
+   pas faire défiler, les dernières parties étaient coupées). Onglet « Sur mesure » : la demande de l'élève en haut. */
+.secchips{flex-wrap:wrap!important;overflow:visible!important}
+.secchips .chip{flex:0 1 auto!important;max-width:100%!important;min-width:0}
+.lwhat{flex-wrap:wrap}
+.persoq{display:flex;flex-direction:column;gap:4px}
+.persoq p{margin:0;font-weight:700;white-space:pre-wrap;overflow-wrap:anywhere}
+.persoq .linkbtn{align-self:flex-start;min-height:44px}
+#pdem{width:100%;min-height:120px;resize:vertical;font:inherit;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+.secchips .chip{white-space:normal!important;text-align:left;height:auto;min-height:44px;padding-top:8px;padding-bottom:8px;line-height:1.25;overflow:visible!important;text-overflow:clip!important}

@@ -210,6 +210,21 @@ Deno.serve(async (req) => {
         ? "équilibré (250 à 500 mots : une ou deux phrases sur le but du chapitre, puis les définitions principales et les notions clés)"
         : "plus court (150 à 250 mots, seulement l'essentiel : le but du chapitre, les définitions principales et les notions clés)";
       out.summary = await run([{ text: cours(text) + `${REGLE}\nÉcris un résumé ${mode} en Markdown (titres ## et listes -).` }], false, 0.2);
+    } else if (body.action === "audio" && String(body.demande ?? "").trim()) {
+      // « Sur mesure » (26 nov.) : l'élève écrit ce qu'il veut qu'on lui explique ; le prof l'explique à l'oral à partir du cours.
+      if (!needText()) return short();
+      const demande = clip(body.demande, 1500), titre = clip(body.titre, 160);
+      out.script = await run([{
+        text: cours(text) + `${REGLE}\nDemande de l'élève pour le cours « ${titre} » :\n<<<\n${demande}\n>>>\n\n` +
+          "Rédige le texte d'une EXPLICATION AUDIO qui répond exactement à cette demande, destinée à être lue à voix haute par un professeur bienveillant et pédagogue à un lycéen (façon podcast de révision).\n" +
+          "RÈGLES STRICTES :\n" +
+          "- Traite TOUT ce que l'élève demande, et seulement cela (s'il demande plusieurs points, traite-les tous, dans l'ordre de sa demande). Va en profondeur : explique et décortique au lieu de réciter, étape par étape, avec les exemples du cours, les liens entre les idées et les pièges classiques évoqués dans le cours.\n" +
+          "- Si une partie de la demande n'est pas dans le cours, dis-le simplement à l'oral (« ça, ce n'est pas dans ton cours ») et n'invente rien.\n" +
+          "- STYLE ORAL NATUREL : tutoie l'élève, phrases fluides, transitions claires. Zéro puce, zéro liste, zéro tableau, zéro astérisque.\n" +
+          "- FORMULES À L'ORAL : jamais de LaTeX ni de symboles bruts ; écris les formules et unités en toutes lettres comme on les prononce.\n" +
+          "- Commence par une phrase qui annonce ce que tu vas expliquer, termine par une courte récapitulation.\n" +
+          "- STRUCTURE : sections avec un titre court précédé de ## sur sa propre ligne, puis des paragraphes parlés de 3 à 5 phrases (50 à 90 mots), séparés par une ligne vide."
+      }], false, 0.35);
     } else if (body.action === "audio") {
       if (!needText()) return short();
       const idx = Math.max(1, Math.min(20, Number(body.i) || 1));
