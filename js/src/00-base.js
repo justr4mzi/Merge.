@@ -10,7 +10,7 @@
   const toastEl = document.getElementById("toast");
   const state = { user: null, profile: null, subjects: [], groups: [], chapters: [], cards: [], sessions: [], legacy: false };
 
-  const CLASSES = ["Terminale générale", "Terminale STI2D", "PASS (1re année de médecine)", "Médecine 2e année", "Médecine 3e année"];
+  const CLASSES = ["Terminale générale", "Terminale STI2D", "Première STD2A", "PASS (1re année de médecine)", "Médecine 2e année", "Médecine 3e année"];
   // Une classe choisie avant la réduction de la liste reste proposée à celui qui l'a.
   const classOpts = (cur) => (cur && !CLASSES.includes(cur) ? [cur] : []).concat(CLASSES).map(c => `<option${c === cur ? " selected" : ""}>${esc(c)}</option>`).join("") + '<option value="__autre">Autre formation (à écrire)…</option>';
   // Classe : liste + champ libre si « Autre formation » est choisi.
@@ -27,6 +27,8 @@
     "Terminale STI2D": ["Maths", "Physique-chimie", "2I2D", "SIN", "ITEC", "EE", "AC", "ETLV", "Grand oral"].concat(TRONC),
     "Terminale STMG": ["Maths", "Management, sciences de gestion et numérique", "Droit-économie", "Gestion-finance", "Mercatique", "Ressources humaines", "SIG", "ETLV", "Grand oral"].concat(TRONC),
     "Terminale ST2S": ["Maths", "STSS", "BPH", "Chimie", "Physique-chimie pour la santé", "ETLV", "Grand oral"].concat(TRONC),
+    // Première STD2A (design et arts appliqués) : les 3 spécialités de première, puis le tronc commun de la voie technologique.
+    "Première STD2A": ["Design et métiers d'art", "Outils et langages numériques", "Physique-chimie", "Français", "Maths", "Histoire-géo", "Anglais", "Espagnol", "Allemand", "ETLV", "EPS"],
     "Terminale STL": ["Maths", "Physique-chimie", "Biochimie-biologie", "Biotechnologies", "SPCL", "ETLV", "Grand oral"].concat(TRONC),
   };
   const MED = ["Sémiologie", "Cardiologie", "Pneumologie", "Appareil digestif", "Neurologie", "Néphrologie", "Hématologie", "Immunologie", "Bactériologie-virologie", "Pharmacologie", "Anatomie pathologique", "Génétique", "Endocrinologie-nutrition", "Anglais médical"];
